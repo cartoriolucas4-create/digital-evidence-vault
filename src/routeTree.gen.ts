@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AcessoIdRouteImport } from './routes/acesso.$id'
 import { Route as ApiPublicGeoRouteImport } from './routes/api/public/geo'
 import { Route as ApiPublicTrackRouteImport } from './routes/api/public/track'
 import { Route as ApiPublicUploadRouteImport } from './routes/api/public/upload'
@@ -17,6 +18,11 @@ import { Route as ApiPublicUploadRouteImport } from './routes/api/public/upload'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AcessoIdRoute = AcessoIdRouteImport.update({
+  id: '/acesso/$id',
+  path: '/acesso/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPublicGeoRoute = ApiPublicGeoRouteImport.update({
@@ -37,12 +43,14 @@ const ApiPublicUploadRoute = ApiPublicUploadRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/acesso/$id': typeof AcessoIdRoute
   '/api/public/geo': typeof ApiPublicGeoRoute
   '/api/public/track': typeof ApiPublicTrackRoute
   '/api/public/upload': typeof ApiPublicUploadRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/acesso/$id': typeof AcessoIdRoute
   '/api/public/geo': typeof ApiPublicGeoRoute
   '/api/public/track': typeof ApiPublicTrackRoute
   '/api/public/upload': typeof ApiPublicUploadRoute
@@ -50,6 +58,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/acesso/$id': typeof AcessoIdRoute
   '/api/public/geo': typeof ApiPublicGeoRoute
   '/api/public/track': typeof ApiPublicTrackRoute
   '/api/public/upload': typeof ApiPublicUploadRoute
@@ -57,12 +66,22 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/api/public/geo' | '/api/public/track' | '/api/public/upload'
+    | '/'
+    | '/acesso/$id'
+    | '/api/public/geo'
+    | '/api/public/track'
+    | '/api/public/upload'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/public/geo' | '/api/public/track' | '/api/public/upload'
+  to:
+    | '/'
+    | '/acesso/$id'
+    | '/api/public/geo'
+    | '/api/public/track'
+    | '/api/public/upload'
   id:
     | '__root__'
     | '/'
+    | '/acesso/$id'
     | '/api/public/geo'
     | '/api/public/track'
     | '/api/public/upload'
@@ -70,6 +89,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AcessoIdRoute: typeof AcessoIdRoute
   ApiPublicGeoRoute: typeof ApiPublicGeoRoute
   ApiPublicTrackRoute: typeof ApiPublicTrackRoute
   ApiPublicUploadRoute: typeof ApiPublicUploadRoute
@@ -82,6 +102,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/acesso/$id': {
+      id: '/acesso/$id'
+      path: '/acesso/$id'
+      fullPath: '/acesso/$id'
+      preLoaderRoute: typeof AcessoIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/geo': {
@@ -110,6 +137,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AcessoIdRoute: AcessoIdRoute,
   ApiPublicGeoRoute: ApiPublicGeoRoute,
   ApiPublicTrackRoute: ApiPublicTrackRoute,
   ApiPublicUploadRoute: ApiPublicUploadRoute,
