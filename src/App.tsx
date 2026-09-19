@@ -197,12 +197,20 @@ function App() {
     const correct = monthlyEntries.reduce((sum: number, entry: Entry) => sum + Number(entry.correct || 0), 0);
     const errors = questions - correct, accuracy = percent(correct, questions);
     const days = new Set(monthlyEntries.map((entry: Entry) => entry.study_date)).size;
-    const byDisciplineMonthly = disciplines.map((discipline) => {
-      const rows = monthlyEntries.filter((entry: Entry) => entry.discipline_id === discipline.id);
-      const total = rows.reduce((sum: number, row: Entry) => sum + Number(row.questions || 0), 0);
-      const hits = rows.reduce((sum: number, row: Entry) => sum + Number(row.correct || 0), 0);
-      return { name: discipline.name, questions: total, correct: hits, errors: total - hits, accuracy: percent(hits, total) };
-    }).filter((item) => item.questions > 0).sort((a, b) => b.accuracy - a.accuracy);
+    const monthlyGroups = new Map<string, any>();
+    monthlyEntries.forEach((entry: Entry) => {
+      const id = entry.discipline_id ?? "snapshot:" + (entry.discipline_name_snapshot ?? "Sem disciplina");
+      const name = entry.discipline_id
+        ? disciplines.find((discipline) => discipline.id === entry.discipline_id)?.name ?? entry.discipline_name_snapshot ?? "Disciplina removida"
+        : entry.discipline_name_snapshot ?? "Disciplina removida";
+      const current = monthlyGroups.get(id) ?? { name, questions: 0, correct: 0, errors: 0, accuracy: 0 };
+      current.questions += Number(entry.questions || 0);
+      current.correct += Number(entry.correct || 0);
+      current.errors = current.questions - current.correct;
+      current.accuracy = percent(current.correct, current.questions);
+      monthlyGroups.set(id, current);
+    });
+    const byDisciplineMonthly = [...monthlyGroups.values()].filter((item) => item.questions > 0).sort((a, b) => b.accuracy - a.accuracy);
 
     const doc = new jsPDF({ unit: "mm", format: "a4" });
     doc.setFillColor(214, 51, 132); doc.rect(0, 0, 210, 9, "F");
