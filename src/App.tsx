@@ -388,6 +388,8 @@ function Dashboard(props: any) {
         </div>
       </section>
 
+      <PerformanceCharts entries={props.entries} byDiscipline={props.byDiscipline} targetAccuracy={props.targetAccuracy} />
+
       <div className="grid2">
         <DataTable title="DESEMPENHO POR DISCIPLINA" headers={["Disciplina","Questões","Acertos","Erros","%","Status"]} rows={props.byDiscipline.map((x: any) => [x.name,x.questions,x.correct,x.errors,`${x.accuracy.toFixed(1)}%`,<Status key={x.id} value={x.accuracy} target={props.targetAccuracy}/>])} empty="Nenhum lançamento no período."/>
         <DataTable title="PONTOS QUE PRECISAM DE ATENÇÃO" headers={["Assunto","Disciplina","Questões","%","Prioridade"]} rows={props.attention.map((x: any) => [x.name,props.disciplines?.find?.((d: Discipline) => d.id === x.discipline_id)?.name ?? x.disciplineName,x.questions,`${x.accuracy.toFixed(1)}%`,<Status key={x.id} value={x.accuracy} target={props.targetAccuracy}/>])} empty="Nenhum assunto abaixo da meta."/>
