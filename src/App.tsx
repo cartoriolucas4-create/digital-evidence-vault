@@ -189,11 +189,7 @@ function App() {
     const { from, to } = monthBounds(referenceDate);
     const { data, error } = await (supabase as any).from("study_entries").select("*").gte("study_date", from).lte("study_date", to).order("study_date", { ascending: true });
     if (error) { notify(error.message); return; }
-    const monthlyEntries = (data ?? []).filter((entry: Entry) =>
-      (!applied.disciplineId || entry.discipline_id === applied.disciplineId) &&
-      (!applied.subjectId || entry.subject_id === applied.subjectId) &&
-      (!applied.sourceId || entry.source_id === applied.sourceId)
-    );
+    const monthlyEntries = (data ?? []) as Entry[];
     const questions = monthlyEntries.reduce((sum: number, entry: Entry) => sum + Number(entry.questions || 0), 0);
     const correct = monthlyEntries.reduce((sum: number, entry: Entry) => sum + Number(entry.correct || 0), 0);
     const errors = questions - correct, accuracy = percent(correct, questions);
