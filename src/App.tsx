@@ -3,6 +3,7 @@ import { BarChart3, BookOpen, CheckCircle2, Clipboard, Copy, LogOut, Plus, Setti
 import type { Discipline, Entry, Filters, QuestionType, Source, Subject } from "./types";
 import { supabase } from "./integrations/supabase/client";
 import type { Session } from "@supabase/supabase-js";
+import { MCR_LOGO } from "./mcrLogo";
 
 const STORE = {
   disciplines: "dev_disciplines",
@@ -78,8 +79,7 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error
       return (
         <div className="fatal">
           <div className="fatal-card">
-            <div className="brand-mark">D</div>
-            <h1>Digital Evidence Vault</h1>
+            <img className="mcr-logo mcr-logo-fatal" src={MCR_LOGO} alt="MCR — Meu Controle de Rendimento" />
             <p>O aplicativo encontrou um erro inesperado.</p>{this.state.error?.message && <div className="auth-error" style={{marginBottom:"14px",textAlign:"left"}}>{this.state.error.message}</div>}
             <button className="btn primary" onClick={() => window.location.reload()}>Recarregar aplicativo</button>
           </div>
@@ -124,8 +124,7 @@ function AuthScreen() {
 
   return <div className="auth-page">
     <div className="auth-card">
-      <div className="brand-mark">D</div>
-      <h1>MEU CONTROLE DE RENDIMENTO</h1>
+      <img className="mcr-logo mcr-logo-auth" src={MCR_LOGO} alt="MCR — Meu Controle de Rendimento" />
       <p>{mode === "login" ? "Sua preparação para concursos sob controle." : "Crie sua conta com e-mail e senha."}</p>
       <form onSubmit={submit} className="auth-form">
         <Field label="E-mail"><input required type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="voce@email.com" /></Field>
@@ -301,17 +300,14 @@ function App() {
     window.setTimeout(() => setToast(""), 2200);
   };
 
-  if (authLoading) return <div className="fatal"><div className="fatal-card"><div className="brand-mark">D</div><h1>Digital Evidence Vault</h1><p>Carregando sua sessão…</p></div></div>;
-  if (authError && !session) return <div className="fatal"><div className="fatal-card"><div className="brand-mark">D</div><h1>Digital Evidence Vault</h1><p>{authError}</p><button className="btn primary" onClick={() => window.location.reload()}>Tentar novamente</button></div></div>;
+  if (authLoading) return <div className="fatal"><div className="fatal-card"><img className="mcr-logo mcr-logo-fatal" src={MCR_LOGO} alt="MCR — Meu Controle de Rendimento" /><p>Carregando sua sessão…</p></div></div>;
+  if (authError && !session) return <div className="fatal"><div className="fatal-card"><img className="mcr-logo mcr-logo-fatal" src={MCR_LOGO} alt="MCR — Meu Controle de Rendimento" /><p>{authError}</p><button className="btn primary" onClick={() => window.location.reload()}>Tentar novamente</button></div></div>;
   if (!session) return <AuthScreen />;
 
   return (
     <div className="app">
       <header className="topbar">
-        <div className="brand">
-          <div className="brand-mark">D</div>
-          <div><strong>Digital Evidence Vault</strong><span>Controle de desempenho para concursos</span></div>
-        </div>
+        <div className="brand"><img className="mcr-logo mcr-logo-header" src={MCR_LOGO} alt="MCR — Meu Controle de Rendimento" /></div>
         <div className="top-actions"><span className="user">{session.user.email}</span><button className="btn small" onClick={logout}><LogOut size={14}/> Sair</button></div>
       </header>
 
