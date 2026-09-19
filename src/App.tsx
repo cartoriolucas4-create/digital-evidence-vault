@@ -224,6 +224,47 @@ function App() {
     setNotificationOpen(false); notify("PDF mensal exportado.");
   };
 
+  const exportAnnualBackup = async (referenceDate = new Date()) => {
+    if (!session?.user.id) return;
+    const client = supabase as any;
+    const tables = [
+      ["study_disciplines", "disciplinas"],
+      ["study_subjects", "assuntos"],
+      ["study_sources", "fontes"],
+      ["study_question_types", "tipos_questao"],
+      ["study_entries", "lancamentos"],
+      ["study_settings", "configuracoes"],
+    ] as const;
+    const results = await Promise.all(tables.map(async ([table, key]) => {
+      const { data, error } = await client.from(table).select("*");
+      return { key, data, error };
+    }));
+    const failed = results.find((result) => result.error);
+    if (failed?.error) {
+      notify("Não foi possível gerar o backup anual.");
+      return;
+    }
+    const backup = {
+      format: "MCR_BACKUP",
+      version: 1,
+      exported_at: new Date().toISOString(),
+      reference_year: referenceDate.getFullYear(),
+      user_id: session.user.id,
+      data: Object.fromEntries(results.map((result) => [result.key, result.data ?? []])),
+    };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "MCR-backup-" + referenceDate.getFullYear() + ".json";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setNotificationOpen(false);
+    notify("Backup anual exportado.");
+  };
+
   const logout = async () => {
     setToast("");
     const { error } = await supabase.auth.signOut();
@@ -358,7 +399,7 @@ function App() {
     <div className="app">
       <header className="topbar">
         <div className="brand"><img className="mcr-logo mcr-logo-header" src={MCR_LOGO} alt="MCR — Meu Controle de Rendimento" /></div>
-        <div className="top-actions"><div className="notification-wrap"><button className="notification-btn" aria-label="Notificações" onClick={() => setNotificationOpen((value) => !value)}><Bell size={17}/>{isLastDayOfMonth() && <span className="notification-badge">1</span>}</button>{notificationOpen && <div className="notification-panel"><div className="notification-panel-head"><strong>Notificações</strong><button onClick={() => setNotificationOpen(false)} aria-label="Fechar"><X size={14}/></button></div>{isLastDayOfMonth() ? <button className="monthly-notification" onClick={() => exportMonthlyPdf()}><span className="notification-icon"><FileDown size={15}/></span><span><strong>Seu rendimento mensal está pronto</strong><small>Exporte o resumo mensal em PDF.</small></span></button> : <div className="notification-empty">Nenhuma notificação nova.</div>}</div>}</div><span className="user">{session.user.email}</span><button className="btn small" onClick={logout}><LogOut size={14}/> Sair</button></div>
+        <div className="top-actions"><div className="notification-wrap"><button className="notification-btn" aria-label="Notificações" onClick={() => setNotificationOpen((value) => !value)}><Bell size={17}/>{isLastDayOfMonth() && <span className="notification-badge">1</span>}</button>{notificationOpen && <div className="notification-panel"><div className="notification-panel-head"><strong>Notificações</strong><button onClick={() => setNotificationOpen(false)} aria-label="Fechar"><X size={14}/></button></div>{isLastDayOfMonth() ? <><button className="monthly-notification" onClick={() => exportMonthlyPdf()}><span className="notification-icon"><FileDown size={15}/></span><span><strong>Seu rendimento mensal está pronto</strong><small>Exporte o resumo mensal em PDF.</small></span></button>{new Date().getMonth() === 11 && <button className="monthly-notification" onClick={() => exportAnnualBackup()}><span className="notification-icon"><Upload size={15}/></span><span><strong>Backup anual disponível</strong><small>Faça o backup dos seus dados antes de encerrar o ano.</small></span></button>}</> : <div className="notification-empty">Nenhuma notificação nova.</div>}</div>}</div><span className="user">{session.user.email}</span><button className="btn small" onClick={logout}><LogOut size={14}/> Sair</button></div>
       </header>
 
       <div className="layout">
