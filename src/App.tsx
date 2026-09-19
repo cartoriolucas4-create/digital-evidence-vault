@@ -80,7 +80,7 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error
           <div className="fatal-card">
             <div className="brand-mark">D</div>
             <h1>Digital Evidence Vault</h1>
-            <p>O aplicativo encontrou um erro inesperado ao carregar esta tela.</p>
+            <p>O aplicativo encontrou um erro inesperado.</p>{this.state.error?.message && <div className="auth-error" style={{marginBottom:"14px",textAlign:"left"}}>{this.state.error.message}</div>}
             <button className="btn primary" onClick={() => window.location.reload()}>Recarregar aplicativo</button>
           </div>
         </div>
@@ -102,14 +102,17 @@ function AuthScreen() {
     setError("");
     setBusy(true);
     try {
+      const client = supabase;
       const result = mode === "login"
-        ? await supabase.auth.signInWithPassword({ email: email.trim(), password })
-        : await supabase.auth.signUp({ email: email.trim(), password });
+        ? await client.auth.signInWithPassword({ email: email.trim(), password })
+        : await client.auth.signUp({ email: email.trim(), password });
 
       if (result.error) throw result.error;
       if (mode === "signup" && !result.data.session) {
         setMode("login");
-        setError("Conta criada. Faça login para entrar.");
+        setError("Conta criada. O projeto de autenticação está configurado para confirmação de e-mail; faça a confirmação antes de entrar.");
+      } else if (mode === "signup") {
+        setError("");
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Não foi possível autenticar.";
