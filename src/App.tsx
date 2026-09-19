@@ -821,7 +821,8 @@ function PerformanceCharts({ entries, byDiscipline, targetAccuracy }: any) {
       const dayEntries = entries.filter((item: Entry) => item.study_date === key);
       const questions = dayEntries.reduce((sum: number, item: Entry) => sum + Number(item.questions || 0), 0);
       const correct = dayEntries.reduce((sum: number, item: Entry) => sum + Number(item.correct || 0), 0);
-      return { date: key, label: date.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }).replace(".", ""), questions, correct };
+      const errors = Math.max(0, questions - correct);
+      return { date: key, label: date.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }).replace(".", ""), questions, correct, errors };
     });
     if (range <= 30) return rows;
     const weekly: any[] = [];
@@ -832,6 +833,7 @@ function PerformanceCharts({ entries, byDiscipline, targetAccuracy }: any) {
         label: "Sem. " + (weekly.length + 1),
         questions: group.reduce((sum, row) => sum + row.questions, 0),
         correct: group.reduce((sum, row) => sum + row.correct, 0),
+        errors: group.reduce((sum, row) => sum + row.errors, 0),
       });
     }
     return weekly;
@@ -852,14 +854,14 @@ function PerformanceCharts({ entries, byDiscipline, targetAccuracy }: any) {
         <div className="chart-card-head">
           <div>
             <div className="chart-eyebrow">ANÁLISE DE PERFORMANCE</div>
-            <h2>Questões × Acertos</h2>
-            <p>Volume de questões e desempenho no período selecionado.</p>
+            <h2>Acertos × Erros</h2>
+            <p>Comparação entre acertos e erros no período selecionado.</p>
           </div>
           <div className="chart-range">
             {[7, 30, 90].map((days) => <button key={days} className={range === days ? "active" : ""} onClick={() => setRange(days as 7 | 30 | 90)}>{days} dias</button>)}
           </div>
         </div>
-        <div className="chart-legend"><span><i className="legend-dot questions"/>Questões</span><span><i className="legend-dot correct"/>Acertos</span></div>
+        <div className="chart-legend"><span><i className="legend-dot questions"/>Erros</span><span><i className="legend-dot correct"/>Acertos</span></div>
         <div className="bar-chart-wrap">
           <svg viewBox={"0 0 " + width + " " + height} className="performance-svg" role="img" aria-label="Gráfico de questões e acertos">
             <defs>
@@ -873,11 +875,11 @@ function PerformanceCharts({ entries, byDiscipline, targetAccuracy }: any) {
             })}
             {chartData.map((item: any, index: number) => {
               const x = pad.left + slot * index + slot / 2;
-              const qH = (item.questions / maxQuestions) * innerH;
+              const eH = (item.errors / maxQuestions) * innerH;
               const cH = (item.correct / maxQuestions) * innerH;
               return <g key={item.date}>
-                <title>{item.label + " — " + item.questions + " questões, " + item.correct + " acertos"}</title>
-                <rect x={x - barW - 2} y={pad.top + innerH - qH} width={barW} height={qH} rx="5" fill="url(#mcrQuestions)" opacity=".95" filter="url(#mcrGlow)"/>
+                <title>{item.label + " — " + item.correct + " acertos, " + item.errors + " erros"}</title>
+                <rect x={x - barW - 2} y={pad.top + innerH - eH} width={barW} height={eH} rx="5" fill="url(#mcrQuestions)" opacity=".95" filter="url(#mcrGlow)"/>
                 <rect x={x + 2} y={pad.top + innerH - cH} width={barW} height={cH} rx="5" fill="url(#mcrCorrect)" opacity=".95"/>
                 <text x={x} y={height - 16} textAnchor="middle" className="chart-x-label">{item.label}</text>
               </g>;
