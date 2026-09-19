@@ -108,23 +108,23 @@ function Workspace({session}:{session:Session}){
 
 
   async function loadCatalog(){
-    try{const db=supabase!; const [d,s,so,t]=await Promise.all([
+    setLoading(true);
+    try{const db=supabase; const [d,s,so,t]=await Promise.all([
       db.from("disciplines").select("*").order("name"),db.from("subjects").select("*").order("name"),
       db.from("sources").select("*").order("name"),db.from("question_types").select("*").order("name")]);
       if(d.error)throw d.error;if(s.error)throw s.error;if(so.error)throw so.error;if(t.error)throw t.error;
-      setDisciplines(d.data||[]);setSubjects(s.data||[]);setSources(so.data||[]);setTypes(t.data||[]);
+      setDisciplines((d.data||[]) as Discipline[]);setSubjects((s.data||[]) as Subject[]);setSources((so.data||[]) as Source[]);setTypes((t.data||[]) as QuestionType[]);
       const {data:settings}=await db.from("user_settings").select("daily_goal,target_accuracy").maybeSingle();
       if(settings){setDailyGoal(settings.daily_goal);setTargetAccuracy(settings.target_accuracy);}
-    }catch(e){fail(e)}
+    }catch(e){fail(e)}finally{setLoading(false)}
   }
   async function loadEntries(){
-    try{const db=supabase!;let q=db.from("study_entries").select("*,discipline:disciplines(name),subject:subjects(name),source:sources(name),question_type:question_types(name)").gte("study_date",applied.from).lte("study_date",applied.to).order("study_date",{ascending:false}).limit(500);
+    try{const db=supabase;let q=db.from("study_entries").select("*,discipline:disciplines(name),subject:subjects(name),source:sources(name),question_type:question_types(name)").gte("study_date",applied.from).lte("study_date",applied.to).order("study_date",{ascending:false}).limit(500);
       if(applied.disciplineId)q=q.eq("discipline_id",applied.disciplineId);if(applied.subjectId)q=q.eq("subject_id",applied.subjectId);if(applied.sourceId)q=q.eq("source_id",applied.sourceId);
-      const {data,error}=await q;if(error)throw error;setEntries((data||[]) as Entry[]);}catch(e){fail(e)}
+      const {data,error}=await q;if(error)throw error;setEntries((data||[]) as unknown as Entry[]);}catch(e){fail(e)}
   }
-  if(loading)return <div className="auth"><div className="auth-card"><h1>Central de Desempenho</h1><p>Carregando…</p></div></div>;
-  if(!supabase)return <div className="auth"><div className="auth-card"><h1>Central de Desempenho</h1><p>O aplicativo está pronto, mas o projeto precisa das variáveis VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY.</p></div></div>;
-  if(!session)return <div className="auth"><div className="auth-card"><h1>Central de Desempenho</h1><p>Inicializando acesso direto…</p>{error&&<div className="error">{error}</div>}</div></div>;
+
+
 
   const filteredSubjects=filters.disciplineId?subjects.filter(s=>s.discipline_id===filters.disciplineId):subjects;
   const appliedSubjects=applied.disciplineId?subjects.filter(s=>s.discipline_id===applied.disciplineId):subjects;
