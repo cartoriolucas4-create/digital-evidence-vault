@@ -1,8 +1,8 @@
 import { Component, type ErrorInfo, type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
-import { BarChart3, Bell, BookOpen, CheckCircle2, Clipboard, Copy, FileDown, GripVertical, LogOut, Plus, Settings, Target, Trash2, Upload, X } from "lucide-react";
+import { AlertTriangle, BarChart3, Bell, BookOpen, CheckCircle2, Clipboard, Copy, FileDown, GripVertical, LogOut, Plus, Settings, Sparkles, Target, Trash2, Trophy, TrendingUp, Upload, X } from "lucide-react";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
-import type { Discipline, Entry, Filters, QuestionType, Source, Subject } from "./types";
+import type { Discipline, Entry, Filters, PerformanceNotification, QuestionType, Source, Subject } from "./types";
 import { supabase } from "./integrations/supabase/client";
 import type { Session } from "@supabase/supabase-js";
 import { MCR_LOGO } from "./mcrLogo";
@@ -164,6 +164,7 @@ function App() {
   const [targetAccuracy, setTargetAccuracy] = useState(80);
   const [toast, setToast] = useState("");
   const [notificationOpen, setNotificationOpen] = useState(false);
+  const [performanceNotifications, setPerformanceNotifications] = useState<PerformanceNotification[]>([]);
   const [catalogDeleteOpen, setCatalogDeleteOpen] = useState(false);
   const [catalogDeletePassword, setCatalogDeletePassword] = useState("");
   const [catalogDeleteBusy, setCatalogDeleteBusy] = useState(false);
@@ -330,6 +331,17 @@ function App() {
     }
   };
 
+  const loadPerformanceNotifications = async () => {
+    if (!session?.user.id) return;
+    const { data, error } = await (supabase as any)
+      .from("study_performance_notifications")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(20);
+    if (error) throw error;
+    setPerformanceNotifications((data ?? []) as PerformanceNotification[]);
+  };
+
   const loadEntries = async () => {
     if (!session?.user.id) return;
     const client = supabase as any;
@@ -350,7 +362,7 @@ function App() {
 
   useEffect(() => {
     if (!session) return;
-    Promise.all([loadCatalog(), loadEntries()]).catch((error) => {
+    Promise.all([loadCatalog(), loadEntries(), loadPerformanceNotifications()]).catch((error) => {
       setToast(error instanceof Error ? error.message : "Não foi possível carregar os dados da conta.");
     });
   }, [session?.user.id]);
@@ -441,6 +453,139 @@ function App() {
     window.setTimeout(() => setToast(""), 2200);
   };
 
+  const evaluatePerformanceEntry = async (entry: Entry) => {
+    if (!session?.user.id || !entry.subject_id || Number(entry.questions || 0) < 5) return;
+
+    try {
+      const client = supabase as any;
+      const { data: history, error } = await client
+        .from("study_entries")
+        .select("id, study_date, questions, correct, subject_id, discipline_id")
+        .eq("subject_id", entry.subject_id)
+        .neq("id", entry.id)
+        .order("study_date", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(10);
+      if (error) return;
+
+      const previous = (history ?? []) as Entry[];
+      if (previous.length < 3) return;
+
+      const currentAccuracy = percent(Number(entry.correct || 0), Number(entry.questions || 0));
+      const weighted = (items: Entry[]) => {
+        const questions = items.reduce((sum, item) => sum + Number(item.questions || 0), 0);
+        const correct = items.reduce((sum, item) => sum + Number(item.correct || 0), 0);
+        return percent(correct, questions);
+      };
+      const baseline = weighted(previous);
+      const recent3 = weighted(previous.slice(0, 3));
+      const prior3 = weighted(previous.slice(3, 6));
+      const priorBelowTarget = previous.slice(0, 3).every((item) => percent(Number(item.correct || 0), Number(item.questions || 0)) < targetAccuracy);
+      const previousBest = Math.max(...previous.map((item) => percent(Number(item.correct || 0), Number(item.questions || 0))));
+      const subject = subjects.find((item) => item.id === entry.subject_id);
+      const discipline = disciplines.find((item) => item.id === entry.discipline_id);
+      const subjectName = subject?.name ?? entry.subject_name_snapshot ?? "este assunto";
+      const disciplineName = discipline?.name ?? entry.discipline_name_snapshot ?? "—";
+
+      let notificationType: PerformanceNotification["notification_type"] | null = null;
+      let title = "";
+      let message = "";
+
+      if (currentAccuracy <= baseline - 25) {
+        notificationType = "drop_severe";
+        title = "⚠️ Queda forte detectada";
+        message = "Seu resultado em " + subjectName + " foi " + currentAccuracy.toFixed(0) + "%, enquanto seu padrão recente está em " + baseline.toFixed(0) + "%. Pode ser um bom momento para revisar esse assunto.";
+      } else if (currentAccuracy <= baseline - 15) {
+        notificationType = "drop";
+        title = "⚠️ Atenção em " + subjectName;
+        message = "Este lançamento ficou significativamente abaixo do seu padrão recente: " + currentAccuracy.toFixed(0) + "% agora contra " + baseline.toFixed(0) + "% de padrão.";
+      } else if (previous.length >= 4 && previous.slice(0, 4).every((item) => percent(Number(item.correct || 0), Number(item.questions || 0)) < targetAccuracy) && currentAccuracy < targetAccuracy) {
+        notificationType = "attention";
+        title = "📚 " + subjectName + " merece atenção";
+        message = "Seu desempenho vem ficando abaixo da sua meta nos últimos lançamentos. Priorize uma revisão antes de continuar avançando.";
+      } else if (priorBelowTarget && currentAccuracy >= targetAccuracy && currentAccuracy >= recent3 + 10) {
+        notificationType = "recovery";
+        title = "🔥 Boa recuperação em " + subjectName;
+        message = "Seu desempenho voltou a subir após uma sequência abaixo da meta: " + currentAccuracy.toFixed(0) + "% agora, contra " + recent3.toFixed(0) + "% nos lançamentos recentes anteriores.";
+      } else if (currentAccuracy >= previousBest + 5 || (currentAccuracy >= 95 && currentAccuracy > previousBest)) {
+        notificationType = "record";
+        title = "🏆 Novo recorde em " + subjectName;
+        message = "Você alcançou " + currentAccuracy.toFixed(0) + "%, seu melhor resultado registrado até aqui nesse assunto.";
+      } else if (currentAccuracy >= baseline + 10) {
+        notificationType = "exceptional";
+        title = "🎯 Excelente desempenho em " + subjectName;
+        message = "Você alcançou " + currentAccuracy.toFixed(0) + "%, acima do seu padrão recente de " + baseline.toFixed(0) + "%.";
+      } else if (previous.length >= 6 && recent3 >= prior3 + 10) {
+        notificationType = "evolution";
+        title = "📈 Evolução detectada em " + subjectName;
+        message = "Seu desempenho vem melhorando de forma consistente: os 3 lançamentos mais recentes estão em " + recent3.toFixed(0) + "%, contra " + prior3.toFixed(0) + "% nos anteriores.";
+      }
+
+      if (!notificationType) return;
+
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const { data: recentSameType } = await client
+        .from("study_performance_notifications")
+        .select("id")
+        .eq("subject_id", entry.subject_id)
+        .eq("notification_type", notificationType)
+        .gte("created_at", sevenDaysAgo)
+        .limit(1);
+      if ((recentSameType ?? []).length) return;
+
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+      const { count: todayCount } = await client
+        .from("study_performance_notifications")
+        .select("id", { count: "exact", head: true })
+        .gte("created_at", startOfDay.toISOString());
+      if (Number(todayCount || 0) >= 2) return;
+
+      const { data: inserted, error: insertError } = await client
+        .from("study_performance_notifications")
+        .insert({
+          user_id: session.user.id,
+          subject_id: entry.subject_id,
+          subject_name: subjectName,
+          discipline_name: disciplineName,
+          notification_type: notificationType,
+          title,
+          message,
+        })
+        .select("*")
+        .single();
+      if (insertError) return;
+
+      setPerformanceNotifications((current) => [inserted as PerformanceNotification, ...current].slice(0, 20));
+    } catch {
+      // Observações inteligentes nunca devem bloquear o lançamento de questões.
+    }
+  };
+
+  const markPerformanceNotificationRead = async (id: string) => {
+    const readAt = new Date().toISOString();
+    const { error } = await (supabase as any)
+      .from("study_performance_notifications")
+      .update({ read_at: readAt })
+      .eq("id", id);
+    if (!error) {
+      setPerformanceNotifications((current) => current.map((item) => item.id === id ? { ...item, read_at: readAt } : item));
+    }
+  };
+
+  const markAllPerformanceNotificationsRead = async () => {
+    const unread = performanceNotifications.filter((item) => !item.read_at);
+    if (!unread.length) return;
+    const readAt = new Date().toISOString();
+    const { error } = await (supabase as any)
+      .from("study_performance_notifications")
+      .update({ read_at: readAt })
+      .in("id", unread.map((item) => item.id));
+    if (!error) {
+      setPerformanceNotifications((current) => current.map((item) => item.read_at ? item : { ...item, read_at: readAt }));
+    }
+  };
+
   if (authLoading) return <div className="fatal"><div className="fatal-card"><img className="mcr-logo mcr-logo-fatal" src={MCR_LOGO} alt="MCR — Meu Controle de Rendimento" /><p>Carregando sua sessão…</p></div></div>;
   if (authError && !session) return <div className="fatal"><div className="fatal-card"><img className="mcr-logo mcr-logo-fatal" src={MCR_LOGO} alt="MCR — Meu Controle de Rendimento" /><p>{authError}</p><button className="btn primary" onClick={() => window.location.reload()}>Tentar novamente</button></div></div>;
   if (!session) return <AuthScreen />;
@@ -449,7 +594,34 @@ function App() {
     <div className="app">
       <header className="topbar">
         <div className="brand"><img className="mcr-logo mcr-logo-header" src={MCR_LOGO} alt="MCR — Meu Controle de Rendimento" /></div>
-        <div className="top-actions"><div className="notification-wrap"><button className="notification-btn" aria-label="Notificações" onClick={() => setNotificationOpen((value) => !value)}><Bell size={17}/>{isLastDayOfMonth() && <span className="notification-badge">1</span>}</button>{notificationOpen && <div className="notification-panel"><div className="notification-panel-head"><strong>Notificações</strong><button onClick={() => setNotificationOpen(false)} aria-label="Fechar"><X size={14}/></button></div>{isLastDayOfMonth() ? <><button className="monthly-notification" onClick={() => exportMonthlyPdf()}><span className="notification-icon"><FileDown size={15}/></span><span><strong>Seu rendimento mensal está pronto</strong><small>Exporte o resumo mensal em PDF.</small></span></button>{new Date().getMonth() === 11 && <button className="monthly-notification" onClick={() => exportAnnualBackup()}><span className="notification-icon"><Upload size={15}/></span><span><strong>Backup anual disponível</strong><small>Faça o backup dos seus dados antes de encerrar o ano.</small></span></button>}</> : <div className="notification-empty">Nenhuma notificação nova.</div>}</div>}</div><span className="user">{session.user.email}</span><button className="btn small" onClick={logout}><LogOut size={14}/> Sair</button></div>
+        <div className="top-actions">
+          <div className="notification-wrap">
+            <button className="notification-btn" aria-label="Notificações" onClick={() => setNotificationOpen((value) => !value)}>
+              <Bell size={17}/>
+              {(performanceNotifications.some((item) => !item.read_at) || isLastDayOfMonth()) && <span className="notification-badge">{performanceNotifications.filter((item) => !item.read_at).length + (isLastDayOfMonth() ? 1 : 0)}</span>}
+            </button>
+            {notificationOpen && <div className="notification-panel">
+              <div className="notification-panel-head">
+                <strong>Observações do seu desempenho</strong>
+                <div style={{display:"flex",alignItems:"center",gap:"7px"}}>
+                  {performanceNotifications.some((item) => !item.read_at) && <button className="notification-mark-all" onClick={markAllPerformanceNotificationsRead}>Marcar como lidas</button>}
+                  <button onClick={() => setNotificationOpen(false)} aria-label="Fechar"><X size={14}/></button>
+                </div>
+              </div>
+              {performanceNotifications.map((item) => <button key={item.id} className={"monthly-notification performance-notification " + (item.read_at ? "read" : "unread")} onClick={() => markPerformanceNotificationRead(item.id)}>
+                <span className={"notification-icon performance-" + item.notification_type}>
+                  {item.notification_type === "drop" || item.notification_type === "drop_severe" || item.notification_type === "attention" ? <AlertTriangle size={15}/> : item.notification_type === "record" ? <Trophy size={15}/> : item.notification_type === "evolution" ? <TrendingUp size={15}/> : item.notification_type === "recovery" ? <Sparkles size={15}/> : <Target size={15}/>}
+                </span>
+                <span><strong>{item.title}</strong><small>{item.message}</small><small className="notification-date">{new Date(item.created_at).toLocaleDateString("pt-BR")}</small></span>
+              </button>)}
+              {isLastDayOfMonth() && <button className="monthly-notification" onClick={() => exportMonthlyPdf()}><span className="notification-icon"><FileDown size={15}/></span><span><strong>Seu rendimento mensal está pronto</strong><small>Exporte o resumo mensal em PDF.</small></span></button>}
+              {isLastDayOfMonth() && new Date().getMonth() === 11 && <button className="monthly-notification" onClick={() => exportAnnualBackup()}><span className="notification-icon"><Upload size={15}/></span><span><strong>Backup anual disponível</strong><small>Faça o backup dos seus dados antes de encerrar o ano.</small></span></button>}
+              {!performanceNotifications.length && !isLastDayOfMonth() && <div className="notification-empty">Nenhuma observação importante por enquanto. O MCR só aparece quando identifica algo relevante.</div>}
+            </div>}
+          </div>
+          <span className="user">{session.user.email}</span>
+          <button className="btn small" onClick={logout}><LogOut size={14}/> Sair</button>
+        </div>
       </header>
 
       <div className="layout">
@@ -673,7 +845,7 @@ function Field({label,children}:{label:string,children:ReactNode}) {
   return <div className="field"><label>{label}</label>{children}</div>;
 }
 
-function Entries({disciplines,subjects,sources,types,entries,refresh,notify}:any) {
+function Entries({disciplines,subjects,sources,types,entries,refresh,notify,onPerformanceEntry}:any) {
   const [editing,setEditing] = useState<Entry | null>(null);
   const [open,setOpen] = useState(false);
 
@@ -689,12 +861,18 @@ function Entries({disciplines,subjects,sources,types,entries,refresh,notify}:any
       correct: Number(value.correct),
       notes: value.notes || null,
     };
-    const result = editing
-      ? await client.from("study_entries").update(payload).eq("id", editing.id)
-      : await client.from("study_entries").insert(payload);
+    let result: any;
+    let createdEntry: Entry | null = null;
+    if (editing) {
+      result = await client.from("study_entries").update(payload).eq("id", editing.id);
+    } else {
+      result = await client.from("study_entries").insert(payload).select("*").single();
+      createdEntry = result.data as Entry | null;
+    }
     if (result.error) return notify(result.error.message);
     notify(editing ? "Lançamento atualizado." : "Lançamento criado.");
     setOpen(false); setEditing(null); refresh();
+    if (createdEntry && onPerformanceEntry) void onPerformanceEntry(createdEntry);
   };
 
   const remove = async (id: string) => {
