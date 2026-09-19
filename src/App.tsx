@@ -764,7 +764,7 @@ EDITAL:
         if(dError) throw dError;
         let disciplineId=existingD?.id;
         if(!disciplineId){
-          const {data:newD,error}=await client.from("study_disciplines").insert({name:item.name}).select("id").single();
+          const {data:newD,error}=await client.from("study_disciplines").insert({name:item.name,created_at:new Date(Date.now() + createdD).toISOString()}).select("id").single();
           if(error) throw error;
           disciplineId=newD.id;
           createdD++;
