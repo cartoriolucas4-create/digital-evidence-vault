@@ -9,6 +9,10 @@ const firstDay=()=>{const d=new Date();d.setDate(d.getDate()-29);return d.toISOS
 const pct=(c:number,q:number)=>q?c/q*100:0;
 const fmt=(n:number)=>new Intl.NumberFormat("pt-BR").format(n);
 const emptyFilters=():Filters=>({disciplineId:"",subjectId:"",sourceId:"",from:firstDay(),to:today()});
+const STORE={disciplines:"cd_disciplines",subjects:"cd_subjects",sources:"cd_sources",types:"cd_types",entries:"cd_entries",settings:"cd_settings"};
+const readStore=<T,>(key:string,fallback:T):T=>{try{const raw=localStorage.getItem(key);return raw?JSON.parse(raw):fallback}catch{return fallback}};
+const writeStore=(key:string,value:unknown)=>localStorage.setItem(key,JSON.stringify(value));
+const uid=()=>crypto.randomUUID();
 
 function App(){
   const [session,setSession]=useState<any>({user:{email:"Acesso direto"}}); const [loading,setLoading]=useState(false);
@@ -22,26 +26,29 @@ function App(){
   const flash=(s:string)=>{setMessage(s);setTimeout(()=>setMessage(""),2600)}; const fail=(e:any)=>setError(e?.message||"Ocorreu um erro.");
 
   useEffect(()=>{ setLoading(false); },[]);
-  useEffect(()=>{ if(supabase && session?.access_token) loadCatalog(); },[session]);
-  useEffect(()=>{ if(supabase && session?.access_token) loadEntries(); },[session,applied]);
+  useEffect(()=>{ loadCatalog(); },[]);
+  useEffect(()=>{ loadEntries(); },[applied]);
 
-  async function loadCatalog(){
-    try{const db=supabase!; const [d,s,so,t]=await Promise.all([
-      db.from("disciplines").select("*").order("name"),db.from("subjects").select("*").order("name"),
-      db.from("sources").select("*").order("name"),db.from("question_types").select("*").order("name")]);
-      if(d.error)throw d.error;if(s.error)throw s.error;if(so.error)throw so.error;if(t.error)throw t.error;
-      setDisciplines(d.data||[]);setSubjects(s.data||[]);setSources(so.data||[]);setTypes(t.data||[]);
-      const {data:settings}=await db.from("user_settings").select("daily_goal,target_accuracy").maybeSingle();
-      if(settings){setDailyGoal(settings.daily_goal);setTargetAccuracy(settings.target_accuracy);}
-    }catch(e){fail(e)}
+  function loadCatalog(){
+    setDisciplines(readStore<Discipline[]>(STORE.disciplines,[]));
+    setSubjects(readStore<Subject[]>(STORE.subjects,[]));
+    setSources(readStore<Source[]>(STORE.sources,[]));
+    setTypes(readStore<QuestionType[]>(STORE.types,[]));
+    const settings=readStore<{daily_goal:number;target_accuracy:number}|null>(STORE.settings,null);
+    if(settings){setDailyGoal(settings.daily_goal);setTargetAccuracy(settings.target_accuracy);}
   }
-  async function loadEntries(){
-    try{const db=supabase!;let q=db.from("study_entries").select("*,discipline:disciplines(name),subject:subjects(name),source:sources(name),question_type:question_types(name)").gte("study_date",applied.from).lte("study_date",applied.to).order("study_date",{ascending:false}).limit(500);
-      if(applied.disciplineId)q=q.eq("discipline_id",applied.disciplineId);if(applied.subjectId)q=q.eq("subject_id",applied.subjectId);if(applied.sourceId)q=q.eq("source_id",applied.sourceId);
-      const {data,error}=await q;if(error)throw error;setEntries((data||[]) as Entry[]);}catch(e){fail(e)}
+  function loadEntries(){
+    const all=readStore<Entry[]>(STORE.entries,[]);
+    const filtered=all.filter(e=>
+      e.study_date>=applied.from&&e.study_date<=applied.to&&
+      (!applied.disciplineId||e.discipline_id===applied.disciplineId)&&
+      (!applied.subjectId||e.subject_id===applied.subjectId)&&
+      (!applied.sourceId||e.source_id===applied.sourceId)
+    ).sort((a,b)=>b.study_date.localeCompare(a.study_date));
+    setEntries(filtered);
   }
   if(loading)return <div className="auth"><div className="auth-card"><h1>Central de Desempenho</h1><p>Carregando…</p></div></div>;
-  if(!supabase)return <div className="auth"><div className="auth-card"><h1>Central de Desempenho</h1><p>O aplicativo está pronto, mas o projeto precisa das variáveis VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY.</p></div></div>;
+
   if(!session)return <div className="auth"><div className="auth-card"><h1>Central de Desempenho</h1><p>Inicializando acesso direto…</p>{error&&<div className="error">{error}</div>}</div></div>;
 
   const filteredSubjects=filters.disciplineId?subjects.filter(s=>s.discipline_id===filters.disciplineId):subjects;
@@ -93,8 +100,8 @@ function Status({value,target}:{value:number,target:number}){return <span classN
 
 function Entries({disciplines,subjects,sources,types,entries,refresh,flash,fail}:any){
  const [open,setOpen]=useState(false);const [edit,setEdit]=useState<Entry|null>(null);
- const save=async(v:any)=>{try{const db=supabase!;const payload={study_date:v.study_date,discipline_id:v.discipline_id,subject_id:v.subject_id,source_id:v.source_id||null,question_type_id:v.question_type_id||null,questions:Number(v.questions),correct:Number(v.correct),notes:v.notes||null};if(edit){const r=await db.from("study_entries").update(payload).eq("id",edit.id);if(r.error)throw r.error;flash("Lançamento atualizado.");}else{const r=await db.from("study_entries").insert(payload);if(r.error)throw r.error;flash("Lançamento criado.");}setOpen(false);setEdit(null);refresh();}catch(e){fail(e)}};
- const remove=async(id:string)=>{if(!confirm("Excluir este lançamento?"))return;try{const r=await supabase!.from("study_entries").delete().eq("id",id);if(r.error)throw r.error;flash("Lançamento excluído.");refresh();}catch(e){fail(e)}};
+ const save=async(v:any)=>{try{const all=readStore<Entry[]>(STORE.entries,[]);const payload:any={id:edit?.id||uid(),study_date:v.study_date,discipline_id:v.discipline_id,subject_id:v.subject_id,source_id:v.source_id||null,question_type_id:v.question_type_id||null,questions:Number(v.questions),correct:Number(v.correct),notes:v.notes||null,discipline:{name:disciplines.find((x:Discipline)=>x.id===v.discipline_id)?.name},subject:{name:subjects.find((x:Subject)=>x.id===v.subject_id)?.name},source:{name:sources.find((x:Source)=>x.id===v.source_id)?.name},question_type:{name:types.find((x:QuestionType)=>x.id===v.question_type_id)?.name}};const next=edit?all.map(x=>x.id===edit.id?payload:x):[payload,...all];writeStore(STORE.entries,next);flash(edit?"Lançamento atualizado.":"Lançamento criado.");setOpen(false);setEdit(null);refresh();}catch(e){fail(e)}};
+ const remove=async(id:string)=>{if(!confirm("Excluir este lançamento?"))return;try{writeStore(STORE.entries,readStore<Entry[]>(STORE.entries,[]).filter(x=>x.id!==id));flash("Lançamento excluído.");refresh();}catch(e){fail(e)}};
  return <><div className="toolbar"><div><h1 className="page-title">Lançamentos</h1><p className="subtitle">Tabela rápida para registrar sessões de questões.</p></div><button className="btn primary" onClick={()=>{setEdit(null);setOpen(true)}}><Plus size={15}/> Novo lançamento</button></div>
  <section className="section"><div className="table-wrap"><table className="table"><thead><tr><th>Data</th><th>Disciplina</th><th>Assunto</th><th>Banca/Origem</th><th>Tipo</th><th>Questões</th><th>Acertos</th><th>Erros</th><th>%</th><th>Observações</th><th></th></tr></thead><tbody>{entries.length?entries.map((e:Entry)=><tr key={e.id}><td>{new Date(e.study_date+"T00:00:00").toLocaleDateString("pt-BR")}</td><td>{e.discipline?.name}</td><td>{e.subject?.name}</td><td>{e.source?.name||"—"}</td><td>{e.question_type?.name||"—"}</td><td>{e.questions}</td><td>{e.correct}</td><td>{e.questions-e.correct}</td><td>{pct(e.correct,e.questions).toFixed(1)}%</td><td>{e.notes||"—"}</td><td><button className="btn small" onClick={()=>{setEdit(e);setOpen(true)}}>Editar</button> <button className="btn small danger" onClick={()=>remove(e.id)}><Trash2 size={13}/></button></td></tr>):<tr><td colSpan={11}><div className="empty">Nenhum lançamento no período atual.</div></td></tr>}</tbody></table></div></section>
  {open&&<LaunchModal initial={edit} disciplines={disciplines} subjects={subjects} sources={sources} types={types} onClose={()=>{setOpen(false);setEdit(null)}} onSave={save}/>}</>
@@ -110,14 +117,14 @@ function LaunchModal({initial,disciplines,subjects,sources,types,onClose,onSave}
 function Catalog({disciplines,subjects,sources,types,refresh,flash,fail}:any){
  const [kind,setKind]=useState<"discipline"|"subject"|"source"|"type">("discipline");const [name,setName]=useState("");const [disciplineId,setDisciplineId]=useState("");const [search,setSearch]=useState("");
  const list=kind==="discipline"?disciplines:kind==="subject"?subjects.filter((s:Subject)=>!disciplineId||s.discipline_id===disciplineId):kind==="source"?sources:types;
- const submit=async(e:React.FormEvent)=>{e.preventDefault();if(!name.trim())return;try{const db=supabase!;const table=kind==="discipline"?"disciplines":kind==="subject"?"subjects":kind==="source"?"sources":"question_types";const payload:any={name:name.trim()};if(kind==="subject")payload.discipline_id=disciplineId;if(kind==="subject"&&!disciplineId)throw new Error("Selecione a disciplina do assunto.");const r=await db.from(table).insert(payload);if(r.error)throw r.error;setName("");flash("Cadastro salvo.");refresh();}catch(e){fail(e)}};
- const remove=async(id:string)=>{if(!confirm("Excluir este item? Se houver vínculos, o banco poderá bloquear a operação para preservar integridade."))return;try{const table=kind==="discipline"?"disciplines":kind==="subject"?"subjects":kind==="source"?"sources":"question_types";const r=await supabase!.from(table).delete().eq("id",id);if(r.error)throw r.error;flash("Item excluído.");refresh();}catch(e){fail(e)}};
+ const submit=async(e:React.FormEvent)=>{e.preventDefault();if(!name.trim())return;try{if(kind==="subject"&&!disciplineId)throw new Error("Selecione a disciplina do assunto.");const item:any={id:uid(),name:name.trim()};if(kind==="subject")item.discipline_id=disciplineId;const key=kind==="discipline"?STORE.disciplines:kind==="subject"?STORE.subjects:kind==="source"?STORE.sources:STORE.types;const list=readStore<any[]>(key,[]);writeStore(key,[...list,item]);setName("");flash("Cadastro salvo.");refresh();}catch(e){fail(e)}};
+ const remove=async(id:string)=>{if(!confirm("Excluir este item?"))return;try{const key=kind==="discipline"?STORE.disciplines:kind==="subject"?STORE.subjects:kind==="source"?STORE.sources:STORE.types;writeStore(key,readStore<any[]>(key,[]).filter(x=>x.id!==id));flash("Item excluído.");refresh();}catch(e){fail(e)}};
  const shown=list.filter((x:any)=>x.name.toLowerCase().includes(search.toLowerCase()));
  return <><h1 className="page-title">Cadastro</h1><p className="subtitle">Estrutura ilimitada de disciplinas, assuntos, bancas e tipos.</p><div className="section"><div className="section-body"><div className="toolbar"><div style={{display:"flex",gap:7,flexWrap:"wrap"}}>{[["discipline","Disciplinas"],["subject","Assuntos"],["source","Bancas / Origens"],["type","Tipos"]].map(([k,l])=><button key={k} className={"btn "+(kind===k?"primary":"")} onClick={()=>{setKind(k as any);setSearch("");}}>{l}</button>)}</div></div>{kind==="subject"&&<div className="field" style={{maxWidth:420,marginBottom:10}}><label>Filtrar por disciplina</label><select value={disciplineId} onChange={e=>setDisciplineId(e.target.value)}><option value="">Todas</option>{disciplines.map((d:Discipline)=><option key={d.id} value={d.id}>{d.name}</option>)}</select></div>}<form onSubmit={submit} style={{display:"flex",gap:8,marginBottom:12}}>{kind==="subject"&&<select className="field" style={{width:240,padding:9,border:"1px solid var(--border)",borderRadius:6}} value={disciplineId} onChange={e=>setDisciplineId(e.target.value)} required><option value="">Disciplina</option>{disciplines.map((d:Discipline)=><option key={d.id} value={d.id}>{d.name}</option>)}</select>}<input style={{flex:1,border:"1px solid var(--border)",borderRadius:6,padding:9}} placeholder={"Novo "+(kind==="discipline"?"nome da disciplina":kind==="subject"?"nome do assunto":kind==="source"?"banca/origem":"tipo")} value={name} onChange={e=>setName(e.target.value)}/><button className="btn primary"><Plus size={15}/> Adicionar</button></form><input style={{width:"100%",border:"1px solid var(--border)",borderRadius:6,padding:9,marginBottom:10}} placeholder="Pesquisar…" value={search} onChange={e=>setSearch(e.target.value)}/><div className="table-wrap"><table className="table"><thead><tr><th>Nome</th>{kind==="subject"&&<th>Disciplina</th>}<th className="right">Ações</th></tr></thead><tbody>{shown.map((x:any)=><tr key={x.id}><td>{x.name}</td>{kind==="subject"&&<td>{disciplines.find((d:Discipline)=>d.id===x.discipline_id)?.name}</td>}<td className="right"><button className="btn small danger" onClick={()=>remove(x.id)}><Trash2 size={13}/> Excluir</button></td></tr>)}{!shown.length&&<tr><td colSpan={3}><div className="empty">Nenhum cadastro encontrado.</div></td></tr>}</tbody></table></div></div></div></>
 }
 
 function SettingsPage({dailyGoal,targetAccuracy,setDailyGoal,setTargetAccuracy,flash,fail}:any){
- const save=async()=>{try{const r=await supabase!.from("user_settings").upsert({daily_goal:Math.max(1,Number(dailyGoal)),target_accuracy:Math.min(100,Math.max(0,Number(targetAccuracy)))},{onConflict:"user_id"});if(r.error)throw r.error;flash("Configurações salvas.");}catch(e){fail(e)}};
+ const save=async()=>{try{writeStore(STORE.settings,{daily_goal:Math.max(1,Number(dailyGoal)),target_accuracy:Math.min(100,Math.max(0,Number(targetAccuracy)))});flash("Configurações salvas.");}catch(e){fail(e)}};
  return <><h1 className="page-title">Configurações</h1><p className="subtitle">Metas usadas pelo Dashboard.</p><section className="section"><div className="section-body"><div className="form-grid"><div className="field"><label>Meta diária de questões</label><input type="number" min="1" value={dailyGoal} onChange={e=>setDailyGoal(Number(e.target.value))}/></div><div className="field"><label>Meta de aproveitamento (%)</label><input type="number" min="0" max="100" value={targetAccuracy} onChange={e=>setTargetAccuracy(Number(e.target.value))}/></div></div><button className="btn primary" style={{marginTop:14}} onClick={save}><Target size={15}/> Salvar metas</button></div></section><section className="section"><div className="section-head">EXPORTAÇÃO</div><div className="section-body"><p style={{color:"var(--muted)",fontSize:13}}>A exportação respeita os dados carregados no período filtrado. Use a área de lançamentos para conferência antes de exportar.</p><button className="btn" disabled><FileDown size={15}/> Exportar CSV — próxima etapa</button></div></section></>
 }
 
