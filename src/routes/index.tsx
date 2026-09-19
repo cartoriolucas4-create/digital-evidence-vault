@@ -3,6 +3,7 @@ import App from "../App";
 import "../index.css";
 
 export const Route = createFileRoute("/")({
+  ssr: false,
   head: () => ({
     meta: [
       { title: "Central de Desempenho — Concursos" },
@@ -12,5 +13,13 @@ export const Route = createFileRoute("/")({
       },
     ],
   }),
+  pendingComponent: () => (
+    <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", fontFamily: "system-ui, sans-serif" }}>
+      <div style={{ textAlign: "center" }}>
+        <strong>Central de Desempenho</strong>
+        <div style={{ marginTop: 8, opacity: 0.65 }}>Carregando...</div>
+      </div>
+    </div>
+  ),
   component: App,
 });
