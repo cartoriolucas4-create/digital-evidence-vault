@@ -11,8 +11,89 @@ const pct=(c:number,q:number)=>q?c/q*100:0;
 const fmt=(n:number)=>new Intl.NumberFormat("pt-BR").format(n);
 const emptyFilters=():Filters=>({disciplineId:"",subjectId:"",sourceId:"",from:firstDay(),to:today()});
 
+async function uid(){
+  const {data,error}=await supabase.auth.getUser();
+  if(error||!data.user)throw new Error("Sua sessão expirou. Entre novamente.");
+  return data.user.id;
+}
+
 function App(){
-  const [session,setSession]=useState<any>({user:{email:"Acesso direto"}}); const [loading,setLoading]=useState(false);
+  const [status,setStatus]=useState<"loading"|"signedIn"|"signedOut">("loading");
+  const [session,setSession]=useState<Session|null>(null);
+  const [bootError,setBootError]=useState("");
+
+  useEffect(()=>{
+    let alive=true;
+    const {data:sub}=supabase.auth.onAuthStateChange((_e,s)=>{
+      if(!alive)return;
+      setSession(s); setStatus(s?"signedIn":"signedOut");
+    });
+    supabase.auth.getSession().then(({data,error})=>{
+      if(!alive)return;
+      if(error)setBootError(error.message||"Não foi possível verificar a sessão.");
+      setSession(data.session??null); setStatus(data.session?"signedIn":"signedOut");
+    }).catch((e)=>{ if(alive){setBootError(e?.message||"Não foi possível verificar a sessão.");setStatus("signedOut");} });
+    return ()=>{ alive=false; sub.subscription.unsubscribe(); };
+  },[]);
+
+  if(status==="loading")return <div className="auth"><div className="auth-card"><h1>Central de Desempenho</h1><p>Verificando sua sessão…</p></div></div>;
+  if(status==="signedOut"||!session)return <AuthScreen bootError={bootError}/>;
+  return <Workspace key={session.user.id} session={session}/>;
+}
+
+function AuthScreen({bootError}:{bootError?:string}){
+  const [mode,setMode]=useState<"signin"|"signup">("signin");
+  const [email,setEmail]=useState(""); const [password,setPassword]=useState("");
+  const [busy,setBusy]=useState(false); const [error,setError]=useState(""); const [info,setInfo]=useState("");
+
+  const submit=async(e:React.FormEvent)=>{
+    e.preventDefault(); setError(""); setInfo("");
+    const mail=email.trim().toLowerCase();
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(mail))return setError("Informe um e-mail válido.");
+    if(password.length<6)return setError("A senha deve ter pelo menos 6 caracteres.");
+    setBusy(true);
+    try{
+      if(mode==="signup"){
+        const {data,error}=await supabase.auth.signUp({email:mail,password});
+        if(error)throw error;
+        if(!data.session){
+          const r=await supabase.auth.signInWithPassword({email:mail,password});
+          if(r.error)throw r.error;
+        }
+      }else{
+        const {error}=await supabase.auth.signInWithPassword({email:mail,password});
+        if(error)throw error;
+      }
+    }catch(err:any){
+      const msg=String(err?.message||"");
+      if(/already registered|already exists|User already/i.test(msg)){setError("Este e-mail já tem conta. Use \"Entrar\".");setMode("signin");}
+      else if(/Invalid login credentials/i.test(msg))setError("E-mail ou senha incorretos.");
+      else if(/Password should be|weak|pwned|compromised/i.test(msg))setError("Senha muito fraca ou já exposta em vazamentos. Escolha outra.");
+      else if(/Email not confirmed/i.test(msg))setError("Confirmação de e-mail pendente. Tente entrar novamente em alguns instantes.");
+      else if(/rate limit|too many/i.test(msg))setError("Muitas tentativas. Aguarde um momento e tente de novo.");
+      else setError(msg||"Não foi possível concluir. Tente novamente.");
+    }finally{setBusy(false)}
+  };
+
+  return <div className="auth"><div className="auth-card">
+    <h1>Central de Desempenho</h1>
+    <p>{mode==="signin"?"Entre com seu e-mail e senha para acessar seus dados.":"Crie sua conta com e-mail e senha. Nada além disso."}</p>
+    <div style={{display:"flex",gap:8,margin:"14px 0"}}>
+      <button type="button" className={"btn "+(mode==="signin"?"primary":"")} style={{flex:1}} onClick={()=>{setMode("signin");setError("");setInfo("")}}>Entrar</button>
+      <button type="button" className={"btn "+(mode==="signup"?"primary":"")} style={{flex:1}} onClick={()=>{setMode("signup");setError("");setInfo("")}}>Criar conta</button>
+    </div>
+    {(error||bootError)&&<div className="error">{error||bootError}</div>}
+    {info&&<div className="notice">{info}</div>}
+    <form onSubmit={submit}>
+      <div className="field"><label>E-mail</label><input type="email" autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)} required/></div>
+      <div className="field"><label>Senha</label><input type="password" autoComplete={mode==="signup"?"new-password":"current-password"} minLength={6} value={password} onChange={e=>setPassword(e.target.value)} required/></div>
+      <button className="btn primary" disabled={busy}>{busy?"Aguarde…":mode==="signup"?"Criar conta e entrar":"Entrar"}</button>
+    </form>
+  </div></div>;
+}
+
+function Workspace({session}:{session:Session}){
+  const [loading,setLoading]=useState(false);
   const [tab,setTab]=useState<"dashboard"|"entries"|"catalog"|"settings">("dashboard");
   const [message,setMessage]=useState(""); const [error,setError]=useState("");
   const [disciplines,setDisciplines]=useState<Discipline[]>([]); const [subjects,setSubjects]=useState<Subject[]>([]);
@@ -22,9 +103,9 @@ function App(){
 
   const flash=(s:string)=>{setMessage(s);setTimeout(()=>setMessage(""),2600)}; const fail=(e:any)=>setError(e?.message||"Ocorreu um erro.");
 
-  useEffect(()=>{ setLoading(false); },[]);
-  useEffect(()=>{ if(supabase && session?.access_token) loadCatalog(); },[session]);
-  useEffect(()=>{ if(supabase && session?.access_token) loadEntries(); },[session,applied]);
+  useEffect(()=>{ loadCatalog(); },[]);
+  useEffect(()=>{ loadEntries(); },[applied]);
+
 
   async function loadCatalog(){
     try{const db=supabase!; const [d,s,so,t]=await Promise.all([
