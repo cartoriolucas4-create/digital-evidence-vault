@@ -160,6 +160,7 @@ function App() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [applied, setApplied] = useState<Filters>(emptyFilters);
+  const [studentName, setStudentName] = useState("");
   const [dailyGoal, setDailyGoal] = useState(100);
   const [weeklyGoal, setWeeklyGoal] = useState(500);
   const [monthlyGoal, setMonthlyGoal] = useState(2000);
@@ -336,11 +337,13 @@ function App() {
     setSources(sourcesResult.data ?? []);
     setTypes(typesResult.data ?? []);
     if (settingsResult.data) {
+      setStudentName(settingsResult.data.student_name ?? "");
       setDailyGoal(settingsResult.data.daily_goal);
       setWeeklyGoal(settingsResult.data.weekly_goal ?? 500);
       setMonthlyGoal(settingsResult.data.monthly_goal ?? 2000);
       setTargetAccuracy(settingsResult.data.target_accuracy);
     } else {
+      setStudentName("");
       setDailyGoal(100);
       setWeeklyGoal(500);
       setMonthlyGoal(2000);
@@ -440,6 +443,7 @@ function App() {
   const attention = bySubject.filter((item) => item.accuracy < targetAccuracy).slice(0, 10);
 
   const saveSettings = () => {
+    const nextStudentName = String(studentName || "").trim().slice(0, 80);
     const nextDailyGoal = Math.max(1, Number(dailyGoal) || 1);
     const nextWeeklyGoal = Math.max(1, Number(weeklyGoal) || 1);
     const nextMonthlyGoal = Math.max(1, Number(monthlyGoal) || 1);
@@ -448,6 +452,7 @@ function App() {
       const client = supabase as any;
       const { error } = await client.from("study_settings").upsert({
         user_id: session.user.id,
+        student_name: nextStudentName,
         daily_goal: nextDailyGoal,
         weekly_goal: nextWeeklyGoal,
         monthly_goal: nextMonthlyGoal,
@@ -659,11 +664,11 @@ function App() {
                 <span className={"notification-icon performance-" + item.notification_type}>
                   {item.notification_type === "drop" || item.notification_type === "drop_severe" || item.notification_type === "attention" ? <AlertTriangle size={15}/> : item.notification_type === "record" ? <Trophy size={15}/> : item.notification_type === "evolution" ? <TrendingUp size={15}/> : item.notification_type === "recovery" ? <Sparkles size={15}/> : <Target size={15}/>}
                 </span>
-                <span><strong>{item.title}</strong><small>{item.message}</small><small className="notification-date">{new Date(item.created_at).toLocaleDateString("pt-BR")}</small></span>
+                <span><strong>{personalizeNotificationTitle(item.title, studentName)}</strong><small>{personalizeNotificationText(item.message, studentName)}</small><small className="notification-date">{new Date(item.created_at).toLocaleDateString("pt-BR")}</small></span>
               </button>)}
-              {isLastDayOfMonth() && <button className="monthly-notification" onClick={() => exportMonthlyPdf()}><span className="notification-icon"><FileDown size={15}/></span><span><strong>Seu rendimento mensal está pronto</strong><small>Exporte o resumo mensal em PDF.</small></span></button>}
-              {isLastDayOfMonth() && new Date().getMonth() === 11 && <button className="monthly-notification" onClick={() => exportAnnualBackup()}><span className="notification-icon"><Upload size={15}/></span><span><strong>Backup anual disponível</strong><small>Faça o backup dos seus dados antes de encerrar o ano.</small></span></button>}
-              {!performanceNotifications.length && !isLastDayOfMonth() && <div className="notification-empty">Nenhuma observação importante por enquanto. O MCR só aparece quando identifica algo relevante.</div>}
+              {isLastDayOfMonth() && <button className="monthly-notification" onClick={() => exportMonthlyPdf()}><span className="notification-icon"><FileDown size={15}/></span><span><strong>{studentName ? studentName + ", seu rendimento mensal está pronto." : "Seu rendimento mensal está pronto"}</strong><small>{studentName ? "Exporte seu resumo mensal em PDF." : "Exporte o resumo mensal em PDF."}</small></span></button>}
+              {isLastDayOfMonth() && new Date().getMonth() === 11 && <button className="monthly-notification" onClick={() => exportAnnualBackup()}><span className="notification-icon"><Upload size={15}/></span><span><strong>{studentName ? studentName + ", seu backup anual está disponível." : "Backup anual disponível"}</strong><small>{studentName ? "Faça seu backup dos dados antes de encerrar o ano." : "Faça o backup dos seus dados antes de encerrar o ano."}</small></span></button>}
+              {!performanceNotifications.length && !isLastDayOfMonth() && <div className="notification-empty">{studentName ? studentName + ", nenhuma observação importante por enquanto. O MCR só aparece quando identifica algo relevante." : "Nenhuma observação importante por enquanto. O MCR só aparece quando identifica algo relevante."}</div>}
             </div>}
           </div>
           <span className="user">{session.user.email}</span>
@@ -684,6 +689,7 @@ function App() {
         <main className="content">
           {tab === "dashboard" && (
             <Dashboard
+              studentName={studentName}
               filters={filters} setFilter={setFilter} disciplines={disciplines} subjects={filteredSubjects} sources={sources}
               onApply={() => { setApplied(filters); notify("Filtros aplicados."); }}
               onClear={() => { const next = emptyFilters(); setFilters(next); setApplied(next); }}
@@ -696,6 +702,8 @@ function App() {
           {tab === "catalog" && <Catalog disciplines={disciplines} subjects={subjects} sources={sources} types={types} refresh={() => loadCatalog().catch((error) => notify(error instanceof Error ? error.message : "Não foi possível carregar o cadastro."))} notify={notify} catalogDeleteOpen={catalogDeleteOpen} setCatalogDeleteOpen={setCatalogDeleteOpen} catalogDeletePassword={catalogDeletePassword} setCatalogDeletePassword={setCatalogDeletePassword} catalogDeleteBusy={catalogDeleteBusy} deleteAllCatalogData={deleteAllCatalogData}/>}
           {tab === "settings" && (
             <SettingsPage
+              studentName={studentName}
+              setStudentName={setStudentName}
               dailyGoal={dailyGoal}
               weeklyGoal={weeklyGoal}
               monthlyGoal={monthlyGoal}
@@ -729,10 +737,22 @@ function App() {
   );
 }
 
+function personalizeNotificationText(text: string, name: string) {
+  const safeName = name.trim();
+  if (!safeName) return text;
+  return safeName + ", " + text.charAt(0).toLowerCase() + text.slice(1);
+}
+
+function personalizeNotificationTitle(title: string, name: string) {
+  const safeName = name.trim();
+  if (!safeName) return title;
+  return safeName + ", " + title;
+}
+
 function Dashboard(props: any) {
   return (
     <>
-      <h1 className="page-title">Dashboard</h1>
+      <h1 className="page-title">Olá, {props.studentName || "estudante"}.</h1>
       <div className="dashboard-heading"><p className="subtitle">Visão consolidada dos lançamentos reais do período selecionado.</p><button className="btn export-pdf-btn" onClick={props.onExportMonthly}><FileDown size={15}/> Exportar rendimento mensal</button></div>
 
       <section className="section">
@@ -1224,6 +1244,7 @@ function CatalogDeleteModal({password,setPassword,busy,onClose,onConfirm}:any) {
 }
 
 function SettingsPage({
+  studentName,setStudentName,
   dailyGoal,weeklyGoal,monthlyGoal,targetAccuracy,theme,setTheme,
   setDailyGoal,setWeeklyGoal,setMonthlyGoal,setTargetAccuracy,save,
   session,passwordModalOpen,setPasswordModalOpen,currentPassword,setCurrentPassword,
@@ -1233,6 +1254,15 @@ function SettingsPage({
   return <>
     <h1 className="page-title">Configurações</h1>
     <p className="subtitle">Personalize suas metas, aparência e segurança da conta.</p>
+    <section className="section">
+      <div className="section-head">👤 IDENTIFICAÇÃO</div>
+      <div className="section-body">
+        <div className="form-grid">
+          <Field label="Nome do aluno"><input type="text" maxLength={80} value={studentName} onChange={(e)=>setStudentName(e.target.value)} placeholder="Como você quer ser chamado?" /></Field>
+        </div>
+        <div className="notice">Esse nome será usado nas saudações do Dashboard e nas notificações personalizadas do MCR.</div>
+      </div>
+    </section>
     <section className="section">
       <div className="section-head">🎯 METAS DE ESTUDO</div>
       <div className="section-body">
