@@ -181,15 +181,6 @@ function App() {
     if (error) setToast("Não foi possível sair. Tente novamente.");
   };
 
-  if (authLoading) return <div className="fatal"><div className="fatal-card"><div className="brand-mark">D</div><h1>Digital Evidence Vault</h1><p>Carregando sua sessão…</p></div></div>;
-  if (authError && !session) return <div className="fatal"><div className="fatal-card"><div className="brand-mark">D</div><h1>Digital Evidence Vault</h1><p>{authError}</p><button className="btn primary" onClick={() => window.location.reload()}>Tentar novamente</button></div></div>;
-  if (!session) return <AuthScreen />;
-
-  const notify = (message: string) => {
-    setToast(message);
-    window.setTimeout(() => setToast(""), 2200);
-  };
-
   const reloadCatalog = () => {
     setDisciplines(readStore<Discipline[]>(STORE.disciplines, []));
     setSubjects(readStore<Subject[]>(STORE.subjects, []));
@@ -273,6 +264,15 @@ function App() {
       ...(key === "disciplineId" ? { subjectId: "" } : {}),
     }));
   };
+
+  const notify = (message: string) => {
+    setToast(message);
+    window.setTimeout(() => setToast(""), 2200);
+  };
+
+  if (authLoading) return <div className="fatal"><div className="fatal-card"><div className="brand-mark">D</div><h1>Digital Evidence Vault</h1><p>Carregando sua sessão…</p></div></div>;
+  if (authError && !session) return <div className="fatal"><div className="fatal-card"><div className="brand-mark">D</div><h1>Digital Evidence Vault</h1><p>{authError}</p><button className="btn primary" onClick={() => window.location.reload()}>Tentar novamente</button></div></div>;
+  if (!session) return <AuthScreen />;
 
   return (
     <div className="app">
