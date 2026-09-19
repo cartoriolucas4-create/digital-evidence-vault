@@ -137,7 +137,13 @@ function Workspace({session}:{session:Session}){
   const attention=bySubject.filter(x=>x.questions>0&&x.accuracy<targetAccuracy).slice(0,12);
   const setFilter=(k:keyof Filters,v:string)=>setFilters(f=>({...f,[k]:v,...(k==="disciplineId"?{subjectId:""}:{})}));
   const apply=()=>{setApplied(filters);flash("Filtros aplicados.");}; const clear=()=>{const f=emptyFilters();setFilters(f);setApplied(f);};
-  async function signout(){ setSession({user:{email:"Acesso direto"}}); }
+  async function signout(){
+    try{
+      setDisciplines([]);setSubjects([]);setSources([]);setTypes([]);setEntries([]);
+      const {error}=await supabase.auth.signOut();
+      if(error)throw error;
+    }catch(e){fail(e)}
+  }
 
   return <div className="app"><header className="topbar"><div className="brand"><div className="brand-mark">C</div><span>CENTRAL DE DESEMPENHO — CONCURSOS</span></div><div className="top-actions"><span className="user">{session.user.email}</span><button className="btn small" onClick={signout}><LogOut size={14}/> Sair</button></div></header><div className="layout"><aside className="sidebar"><nav className="nav">
     <button className={tab==="dashboard"?"active":""} onClick={()=>setTab("dashboard")}><BarChart3 size={16}/> Dashboard</button>
@@ -146,6 +152,7 @@ function Workspace({session}:{session:Session}){
     <button className={tab==="settings"?"active":""} onClick={()=>setTab("settings")}><Settings size={16}/> Configurações</button>
   </nav></aside><main className="content">
     {error&&<div className="error"><button className="btn small" style={{float:"right"}} onClick={()=>setError("")}><XCircle size={14}/></button>{error}</div>}
+    {loading&&<div className="notice">Carregando seus dados…</div>}
     {tab==="dashboard"&&<Dashboard entries={entries} filters={filters} setFilter={setFilter} disciplines={disciplines} subjects={filteredSubjects} sources={sources} apply={apply} clear={clear} totalQ={totalQ} totalC={totalC} totalE={totalE} accuracy={accuracy} days={days} avg={avg} todayQ={todayQ} todayC={todayC} dailyGoal={dailyGoal} byDisc={byDisc} daily={daily} attention={attention} targetAccuracy={targetAccuracy}/>}
     {tab==="entries"&&<Entries disciplines={disciplines} subjects={subjects} sources={sources} types={types} entries={entries} refresh={loadEntries} flash={flash} fail={fail}/>}
     {tab==="catalog"&&<Catalog disciplines={disciplines} subjects={subjects} sources={sources} types={types} refresh={loadCatalog} flash={flash} fail={fail}/>}
