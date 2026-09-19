@@ -363,26 +363,42 @@ function App() {
   const todayCorrect = todayEntries.reduce((sum, entry) => sum + Number(entry.correct || 0), 0);
   const daysStudied = new Set(entries.map((entry) => entry.study_date)).size;
 
-  const byDiscipline = useMemo(() => disciplines.map((discipline) => {
-    const rows = entries.filter((entry) => entry.discipline_id === discipline.id);
-    const questions = rows.reduce((sum, row) => sum + row.questions, 0);
-    const correct = rows.reduce((sum, row) => sum + row.correct, 0);
-    return { ...discipline, questions, correct, errors: questions - correct, accuracy: percent(correct, questions) };
-  }).filter((item) => item.questions > 0), [disciplines, entries]);
+  const byDiscipline = useMemo(() => {
+    const groups = new Map<string, any>();
+    entries.forEach((entry) => {
+      const id = entry.discipline_id ?? "snapshot:" + (entry.discipline_name_snapshot ?? "Sem disciplina");
+      const name = entry.discipline_id
+        ? disciplines.find((discipline) => discipline.id === entry.discipline_id)?.name ?? entry.discipline_name_snapshot ?? "Disciplina removida"
+        : entry.discipline_name_snapshot ?? "Disciplina removida";
+      const current = groups.get(id) ?? { id, name, questions: 0, correct: 0, errors: 0, accuracy: 0 };
+      current.questions += Number(entry.questions || 0);
+      current.correct += Number(entry.correct || 0);
+      current.errors = current.questions - current.correct;
+      current.accuracy = percent(current.correct, current.questions);
+      groups.set(id, current);
+    });
+    return [...groups.values()];
+  }, [disciplines, entries]);
 
-  const bySubject = useMemo(() => subjects.map((subject) => {
-    const rows = entries.filter((entry) => entry.subject_id === subject.id);
-    const questions = rows.reduce((sum, row) => sum + row.questions, 0);
-    const correct = rows.reduce((sum, row) => sum + row.correct, 0);
-    return {
-      ...subject,
-      questions,
-      correct,
-      errors: questions - correct,
-      accuracy: percent(correct, questions),
-      disciplineName: disciplines.find((d) => d.id === subject.discipline_id)?.name ?? "—",
-    };
-  }).filter((item) => item.questions > 0).sort((a, b) => a.accuracy - b.accuracy), [subjects, entries, disciplines]);
+  const bySubject = useMemo(() => {
+    const groups = new Map<string, any>();
+    entries.forEach((entry) => {
+      const id = entry.subject_id ?? "snapshot:" + (entry.subject_name_snapshot ?? "Sem assunto");
+      const name = entry.subject_id
+        ? subjects.find((subject) => subject.id === entry.subject_id)?.name ?? entry.subject_name_snapshot ?? "Assunto removido"
+        : entry.subject_name_snapshot ?? "Assunto removido";
+      const disciplineName = entry.discipline_id
+        ? disciplines.find((discipline) => discipline.id === entry.discipline_id)?.name ?? entry.discipline_name_snapshot ?? "—"
+        : entry.discipline_name_snapshot ?? "—";
+      const current = groups.get(id) ?? { id, name, disciplineName, questions: 0, correct: 0, errors: 0, accuracy: 0 };
+      current.questions += Number(entry.questions || 0);
+      current.correct += Number(entry.correct || 0);
+      current.errors = current.questions - current.correct;
+      current.accuracy = percent(current.correct, current.questions);
+      groups.set(id, current);
+    });
+    return [...groups.values()].sort((a, b) => a.accuracy - b.accuracy);
+  }, [subjects, entries, disciplines]);
 
   const attention = bySubject.filter((item) => item.accuracy < targetAccuracy).slice(0, 10);
 
