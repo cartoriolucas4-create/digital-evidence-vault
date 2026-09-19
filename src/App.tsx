@@ -1,5 +1,5 @@
 import { Component, type ErrorInfo, type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
-import { BarChart3, BookOpen, CheckCircle2, LogOut, Plus, Settings, Target, Trash2 } from "lucide-react";
+import { BarChart3, BookOpen, CheckCircle2, Clipboard, Copy, LogOut, Plus, Settings, Target, Trash2, Upload } from "lucide-react";
 import type { Discipline, Entry, Filters, QuestionType, Source, Subject } from "./types";
 import { supabase } from "./integrations/supabase/client";
 import type { Session } from "@supabase/supabase-js";
@@ -502,57 +502,162 @@ function LaunchModal({initial,disciplines,subjects,sources,types,onClose,onSave}
   </form></div></div>;
 }
 
+function BulkImportModal({onClose,onImported,notify}:any) {
+  const [text,setText]=useState("");
+  const [busy,setBusy]=useState(false);
+
+  const prompt = `Você é responsável por transformar um edital de concurso no padrão de importação do Digital Evidence Vault.
+
+REGRAS OBRIGATÓRIAS:
+1. Identifique todas as disciplinas/matérias do edital.
+2. Identifique todos os assuntos e subassuntos cobrados.
+3. Preserve fielmente o conteúdo do edital. NÃO invente assuntos.
+4. Agrupe cada assunto dentro da disciplina correta.
+5. Remova apenas numerações hierárquicas desnecessárias (1., 1.1, 1.1.1 etc.).
+6. Não inclua explicações, comentários, resumos ou observações.
+7. Retorne SOMENTE neste formato:
+
+DISCIPLINA: Nome da disciplina
+ASSUNTO: Nome do assunto
+ASSUNTO: Nome do assunto
+
+DISCIPLINA: Outra disciplina
+ASSUNTO: Nome do assunto
+ASSUNTO: Nome do assunto
+
+EDITAL:
+[COLE AQUI O EDITAL COMPLETO]`;
+
+  const copyPrompt=async()=>{
+    try {
+      await navigator.clipboard.writeText(prompt);
+      notify("Prompt copiado. Cole no ChatGPT junto com o edital.");
+    } catch {
+      notify("Não foi possível copiar automaticamente. Selecione e copie o prompt.");
+    }
+  };
+
+  const parse=()=>{
+    const disciplines:{name:string;subjects:string[]}[]=[];
+    let current:{name:string;subjects:string[]}|null=null;
+    for(const raw of text.split(/\\r?\\n/)){
+      const line=raw.trim();
+      if(!line) continue;
+      const dm=line.match(/^DISCIPLINA\\s*:\\s*(.+)$/i);
+      const sm=line.match(/^ASSUNTO\\s*:\\s*(.+)$/i);
+      if(dm){
+        current={name:dm[1].trim(),subjects:[]};
+        disciplines.push(current);
+      } else if(sm && current){
+        current.subjects.push(sm[1].trim());
+      }
+    }
+    return disciplines.filter(d=>d.name&&d.subjects.length);
+  };
+
+  const importAll=async()=>{
+    const parsed=parse();
+    if(!parsed.length) return notify("Cole o conteúdo no padrão DISCIPLINA:/ASSUNTO: antes de importar.");
+    setBusy(true);
+    try{
+      const client=supabase as any;
+      let createdD=0,createdS=0;
+      for(const item of parsed){
+        const {data:existingD,error:dError}=await client.from("study_disciplines").select("id,name").ilike("name",item.name).maybeSingle();
+        if(dError) throw dError;
+        let disciplineId=existingD?.id;
+        if(!disciplineId){
+          const {data:newD,error}=await client.from("study_disciplines").insert({name:item.name}).select("id").single();
+          if(error) throw error;
+          disciplineId=newD.id;
+          createdD++;
+        }
+        for(const subjectName of [...new Set(item.subjects)]){
+          const {data:existingS,error:sError}=await client.from("study_subjects").select("id").eq("discipline_id",disciplineId).ilike("name",subjectName).maybeSingle();
+          if(sError) throw sError;
+          if(existingS) continue;
+          const {error}=await client.from("study_subjects").insert({name:subjectName,discipline_id:disciplineId});
+          if(error) throw error;
+          createdS++;
+        }
+      }
+      notify(`Edital importado: ${createdD} disciplinas e ${createdS} assuntos adicionados. Duplicados foram ignorados.`);
+      await onImported();
+      onClose();
+    }catch(error){
+      notify(error instanceof Error ? error.message : "Não foi possível importar o edital.");
+    }finally{setBusy(false);}
+  };
+
+  const count=parse();
+  return <div className="modal-backdrop"><div className="modal" style={{maxWidth:"900px"}}>
+    <div className="toolbar"><div><h2>Adicionar edital em lote</h2><p className="subtitle">Use o ChatGPT para organizar o edital no padrão e cole o resultado abaixo.</p></div><button className="btn small" onClick={onClose}>Fechar</button></div>
+    <section className="section"><div className="section-head">1. COPIE O PROMPT PARA O CHATGPT</div><div className="section-body">
+      <div className="notice">O prompt instrui o ChatGPT a devolver somente disciplinas e assuntos no formato aceito pelo sistema.</div>
+      <textarea readOnly rows={12} value={prompt} style={{width:"100%",fontFamily:"monospace"}}/>
+      <button className="btn primary" onClick={copyPrompt}><Copy size={15}/> Copiar prompt para o ChatGPT</button>
+    </div></section>
+    <section className="section"><div className="section-head">2. COLE A RESPOSTA DO CHATGPT</div><div className="section-body">
+      <textarea rows={12} value={text} onChange={e=>setText(e.target.value)} placeholder={"DISCIPLINA: Direito Constitucional\\nASSUNTO: Princípios fundamentais\\nASSUNTO: Direitos e garantias fundamentais\\n\\nDISCIPLINA: Direito Administrativo\\nASSUNTO: Atos administrativos"}/>
+      <div className="toolbar"><span>{count.length} disciplinas · {count.reduce((n,d)=>n+d.subjects.length,0)} assuntos reconhecidos</span><button className="btn primary" disabled={busy||!count.length} onClick={importAll}><Upload size={15}/>{busy?"Importando...":"Importar edital"}</button></div>
+    </div></section>
+  </div></div>;
+}
+
 function Catalog({disciplines,subjects,sources,types,refresh,notify}:any) {
-  const [kind,setKind] = useState<"discipline"|"subject"|"source"|"type">("discipline");
-  const [name,setName] = useState("");
-  const [disciplineId,setDisciplineId] = useState("");
-  const [search,setSearch] = useState("");
+  const [kind,setKind]=useState<"discipline"|"subject"|"source"|"type">("discipline");
+  const [name,setName]=useState("");
+  const [disciplineId,setDisciplineId]=useState("");
+  const [search,setSearch]=useState("");
+  const [bulkOpen,setBulkOpen]=useState(false);
 
-  const table = kind === "discipline" ? "study_disciplines" : kind === "subject" ? "study_subjects" : kind === "source" ? "study_sources" : "study_question_types";
-  const list = (kind === "discipline" ? disciplines : kind === "subject" ? subjects : kind === "source" ? sources : types)
-    .filter((item: any) => !search || item.name.toLowerCase().includes(search.toLowerCase()))
-    .filter((item: any) => kind !== "subject" || !disciplineId || item.discipline_id === disciplineId);
+  const table=kind==="discipline"?"study_disciplines":kind==="subject"?"study_subjects":kind==="source"?"study_sources":"study_question_types";
+  const list=(kind==="discipline"?disciplines:kind==="subject"?subjects:kind==="source"?sources:types)
+    .filter((item:any)=>!search||item.name.toLowerCase().includes(search.toLowerCase()))
+    .filter((item:any)=>kind!=="subject"||!disciplineId||item.discipline_id===disciplineId);
 
-  const add = async (event: FormEvent) => {
+  const add=async(event:FormEvent)=>{
     event.preventDefault();
-    const clean = name.trim();
-    if (!clean) return;
-    if (kind === "subject" && !disciplineId) return notify("Selecione a disciplina do assunto.");
-    const client = supabase as any;
-    const payload: any = { name: clean };
-    if (kind === "subject") payload.discipline_id = disciplineId;
-    const { error } = await client.from(table).insert(payload);
-    if (error) return notify(error.message);
-    setName("");
-    notify("Cadastro adicionado.");
-    refresh();
+    const clean=name.trim();
+    if(!clean)return;
+    if(kind==="subject"&&!disciplineId)return notify("Selecione a disciplina do assunto.");
+    const client=supabase as any;
+    const payload:any={name:clean};
+    if(kind==="subject")payload.discipline_id=disciplineId;
+    const {error}=await client.from(table).insert(payload);
+    if(error)return notify(error.message);
+    setName(""); notify("Cadastro adicionado."); refresh();
   };
 
-  const remove = async (id: string) => {
-    if (!window.confirm("Excluir este item?")) return;
-    const client = supabase as any;
-    const { error } = await client.from(table).delete().eq("id", id);
-    notify(error ? error.message : "Cadastro excluído.");
-    if (!error) refresh();
+  const remove=async(id:string)=>{
+    if(!window.confirm("Excluir este item?"))return;
+    const client=supabase as any;
+    const {error}=await client.from(table).delete().eq("id",id);
+    notify(error?error.message:"Cadastro excluído.");
+    if(!error)refresh();
   };
 
-  const tabs = [["discipline","Disciplinas"],["subject","Assuntos"],["source","Bancas / Origens"],["type","Tipos"]] as const;
+  const tabs=[["discipline","Disciplinas"],["subject","Assuntos"],["source","Bancas / Origens"],["type","Tipos"]] as const;
 
   return <>
-    <h1 className="page-title">Cadastro</h1><p className="subtitle">Cadastre a estrutura usada nos lançamentos. Não há dados pré-preenchidos.</p>
+    <div className="toolbar">
+      <div><h1 className="page-title">Cadastro</h1><p className="subtitle">Cadastre a estrutura usada nos lançamentos. Não há dados pré-preenchidos.</p></div>
+      <button className="btn primary" onClick={()=>setBulkOpen(true)}><Clipboard size={15}/> Adicionar edital em lote</button>
+    </div>
     <section className="section"><div className="section-body">
-      <div className="catalog-tabs">{tabs.map(([id,label]) => <button key={id} className={kind===id ? "btn primary" : "btn"} onClick={()=>{setKind(id);setSearch("");}}>{label}</button>)}</div>
-      {kind === "subject" && <Field label="Disciplina para filtrar"><select value={disciplineId} onChange={(e)=>setDisciplineId(e.target.value)}><option value="">Todas</option>{disciplines.map((x: Discipline)=><option key={x.id} value={x.id}>{x.name}</option>)}</select></Field>}
+      <div className="catalog-tabs">{tabs.map(([id,label])=><button key={id} className={kind===id?"btn primary":"btn"} onClick={()=>{setKind(id);setSearch("");}}>{label}</button>)}</div>
+      {kind==="subject"&&<Field label="Disciplina para filtrar"><select value={disciplineId} onChange={e=>setDisciplineId(e.target.value)}><option value="">Todas</option>{disciplines.map((x:Discipline)=><option key={x.id} value={x.id}>{x.name}</option>)}</select></Field>}
       <form className="add-row" onSubmit={add}>
-        {kind === "subject" && <select value={disciplineId} onChange={(e)=>setDisciplineId(e.target.value)} required><option value="">Disciplina</option>{disciplines.map((x: Discipline)=><option key={x.id} value={x.id}>{x.name}</option>)}</select>}
-        <input value={name} onChange={(e)=>setName(e.target.value)} placeholder={kind==="discipline"?"Nova disciplina":kind==="subject"?"Novo assunto":kind==="source"?"Nova banca / origem":"Novo tipo"}/>
+        {kind==="subject"&&<select value={disciplineId} onChange={e=>setDisciplineId(e.target.value)} required><option value="">Disciplina</option>{disciplines.map((x:Discipline)=><option key={x.id} value={x.id}>{x.name}</option>)}</select>}
+        <input value={name} onChange={e=>setName(e.target.value)} placeholder={kind==="discipline"?"Nova disciplina":kind==="subject"?"Novo assunto":kind==="source"?"Nova banca / origem":"Novo tipo"}/>
         <button className="btn primary"><Plus size={15}/> Adicionar</button>
       </form>
-      <input className="search" value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Pesquisar cadastro..."/>
+      <input className="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Pesquisar cadastro..."/>
       <div className="table-wrap"><table className="table"><thead><tr><th>Nome</th>{kind==="subject"&&<th>Disciplina</th>}<th>Ações</th></tr></thead><tbody>
-        {list.length ? list.map((item: any)=><tr key={item.id}><td>{item.name}</td>{kind==="subject"&&<td>{disciplines.find((d: Discipline)=>d.id===item.discipline_id)?.name ?? "—"}</td>}<td><button className="btn small danger" onClick={()=>remove(item.id)}><Trash2 size={13}/> Excluir</button></td></tr>) : <tr><td colSpan={kind==="subject"?3:2}><div className="empty">Nenhum cadastro encontrado.</div></td></tr>}
+        {list.length?list.map((item:any)=><tr key={item.id}><td>{item.name}</td>{kind==="subject"&&<td>{disciplines.find((d:Discipline)=>d.id===item.discipline_id)?.name??"—"}</td>}<td><button className="btn small danger" onClick={()=>remove(item.id)}><Trash2 size={13}/> Excluir</button></td></tr>):<tr><td colSpan={kind==="subject"?3:2}><div className="empty">Nenhum cadastro encontrado.</div></td></tr>}
       </tbody></table></div>
     </div></section>
+    {bulkOpen&&<BulkImportModal onClose={()=>setBulkOpen(false)} onImported={refresh} notify={notify}/>}
   </>;
 }
 
