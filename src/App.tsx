@@ -540,7 +540,7 @@ EDITAL:
   const parse=()=>{
     const disciplines:{name:string;subjects:string[]}[]=[];
     let current:{name:string;subjects:string[]}|null=null;
-    for(const raw of text.split(/\\r?\\n/)){
+    for(const raw of text.split(/\r?\n/)){
       const line=raw.trim();
       if(!line) continue;
       const dm=line.match(/^DISCIPLINA\\s*:\\s*(.+)$/i);
@@ -598,7 +598,7 @@ EDITAL:
       <button className="btn primary" onClick={copyPrompt}><Copy size={15}/> Copiar prompt para o ChatGPT</button>
     </div></section>
     <section className="section"><div className="section-head">2. COLE A RESPOSTA DO CHATGPT</div><div className="section-body">
-      <textarea rows={12} value={text} onChange={e=>setText(e.target.value)} placeholder={"DISCIPLINA: Direito Constitucional\\nASSUNTO: Princípios fundamentais\\nASSUNTO: Direitos e garantias fundamentais\\n\\nDISCIPLINA: Direito Administrativo\\nASSUNTO: Atos administrativos"}/>
+      <textarea rows={12} value={text} onChange={e=>setText(e.target.value)} placeholder={"DISCIPLINA: Direito Constitucional\nASSUNTO: Princípios fundamentais\nASSUNTO: Direitos e garantias fundamentais\n\nDISCIPLINA: Direito Administrativo\nASSUNTO: Atos administrativos"}/>
       <div className="toolbar"><span>{count.length} disciplinas · {count.reduce((n,d)=>n+d.subjects.length,0)} assuntos reconhecidos</span><button className="btn primary" disabled={busy||!count.length} onClick={importAll}><Upload size={15}/>{busy?"Importando...":"Importar edital"}</button></div>
     </div></section>
   </div></div>;
