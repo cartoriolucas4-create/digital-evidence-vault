@@ -125,8 +125,8 @@ function AuthScreen() {
   return <div className="auth-page">
     <div className="auth-card">
       <div className="brand-mark">D</div>
-      <h1>Digital Evidence Vault</h1>
-      <p>{mode === "login" ? "Entre na sua conta para acessar seus estudos." : "Crie sua conta com e-mail e senha."}</p>
+      <h1>MEU CONTROLE DE RENDIMENTO</h1>
+      <p>{mode === "login" ? "Acesse sua central de estudos e acompanhe seu rendimento." : "Crie sua conta com e-mail e senha."}</p>
       <form onSubmit={submit} className="auth-form">
         <Field label="E-mail"><input required type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="voce@email.com" /></Field>
         <Field label="Senha"><input required minLength={6} type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" /></Field>
