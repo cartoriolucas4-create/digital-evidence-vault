@@ -1,5 +1,7 @@
 import { Component, type ErrorInfo, type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
-import { BarChart3, BookOpen, CheckCircle2, Clipboard, Copy, LogOut, Plus, Settings, Target, Trash2, Upload } from "lucide-react";
+import { BarChart3, Bell, BookOpen, CheckCircle2, Clipboard, Copy, FileDown, LogOut, Plus, Settings, Target, Trash2, Upload, X } from "lucide-react";
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
 import type { Discipline, Entry, Filters, QuestionType, Source, Subject } from "./types";
 import { supabase } from "./integrations/supabase/client";
 import type { Session } from "@supabase/supabase-js";
@@ -33,6 +35,13 @@ const dateMinus = (days: number) => {
 };
 
 const percent = (correct: number, questions: number) => questions > 0 ? (correct / questions) * 100 : 0;
+const monthBounds = (date = new Date()) => {
+  const year = date.getFullYear(), month = date.getMonth();
+  const format = (value: Date) => `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+  return { from: format(new Date(year, month, 1, 12)), to: format(new Date(year, month + 1, 0, 12)), year, month };
+};
+const isLastDayOfMonth = (date = new Date()) => date.getDate() === new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+const monthLabel = (date = new Date()) => date.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
 const uid = () => globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 function readStore<T>(key: string, fallback: T): T {
@@ -154,6 +163,7 @@ function App() {
   const [dailyGoal, setDailyGoal] = useState(100);
   const [targetAccuracy, setTargetAccuracy] = useState(80);
   const [toast, setToast] = useState("");
+  const [notificationOpen, setNotificationOpen] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -173,6 +183,50 @@ function App() {
     });
     return () => { mounted = false; listener.subscription.unsubscribe(); };
   }, []);
+
+  const exportMonthlyPdf = async (referenceDate = new Date()) => {
+    if (!session?.user.id) return;
+    const { from, to } = monthBounds(referenceDate);
+    const { data, error } = await (supabase as any).from("study_entries").select("*").gte("study_date", from).lte("study_date", to).order("study_date", { ascending: true });
+    if (error) { notify(error.message); return; }
+    const monthlyEntries = (data ?? []).filter((entry: Entry) =>
+      (!applied.disciplineId || entry.discipline_id === applied.disciplineId) &&
+      (!applied.subjectId || entry.subject_id === applied.subjectId) &&
+      (!applied.sourceId || entry.source_id === applied.sourceId)
+    );
+    const questions = monthlyEntries.reduce((sum: number, entry: Entry) => sum + Number(entry.questions || 0), 0);
+    const correct = monthlyEntries.reduce((sum: number, entry: Entry) => sum + Number(entry.correct || 0), 0);
+    const errors = questions - correct, accuracy = percent(correct, questions);
+    const days = new Set(monthlyEntries.map((entry: Entry) => entry.study_date)).size;
+    const byDisciplineMonthly = disciplines.map((discipline) => {
+      const rows = monthlyEntries.filter((entry: Entry) => entry.discipline_id === discipline.id);
+      const total = rows.reduce((sum: number, row: Entry) => sum + Number(row.questions || 0), 0);
+      const hits = rows.reduce((sum: number, row: Entry) => sum + Number(row.correct || 0), 0);
+      return { name: discipline.name, questions: total, correct: hits, errors: total - hits, accuracy: percent(hits, total) };
+    }).filter((item) => item.questions > 0).sort((a, b) => b.accuracy - a.accuracy);
+
+    const doc = new jsPDF({ unit: "mm", format: "a4" });
+    doc.setFillColor(214, 51, 132); doc.rect(0, 0, 210, 9, "F");
+    doc.setTextColor(42, 24, 35); doc.setFontSize(20); doc.setFont("helvetica", "bold");
+    doc.text("MCR — Meu Controle de Rendimento", 14, 25);
+    doc.setFontSize(12); doc.setFont("helvetica", "normal"); doc.setTextColor(105, 91, 100);
+    doc.text("Resumo mensal — " + monthLabel(referenceDate), 14, 33);
+    doc.setDrawColor(238, 221, 231); doc.line(14, 39, 196, 39);
+    const cards = [["Questões", questions.toLocaleString("pt-BR")], ["Acertos", correct.toLocaleString("pt-BR")], ["Erros", errors.toLocaleString("pt-BR")], ["Aproveitamento", accuracy.toFixed(1) + "%"], ["Dias estudados", String(days)], ["Meta", targetAccuracy + "%"]];
+    cards.forEach(([label, value], index) => {
+      const x = 14 + (index % 3) * 61, y = 47 + Math.floor(index / 3) * 25;
+      doc.setFillColor(252, 244, 248); doc.roundedRect(x, y, 57, 20, 3, 3, "F");
+      doc.setTextColor(120, 102, 113); doc.setFontSize(8); doc.text(label.toUpperCase(), x + 4, y + 7);
+      doc.setTextColor(42, 24, 35); doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.text(value, x + 4, y + 15); doc.setFont("helvetica", "normal");
+    });
+    autoTable(doc, { startY: 105, head: [["Disciplina", "Questões", "Acertos", "Erros", "Aproveitamento"]], body: byDisciplineMonthly.map((item) => [item.name, item.questions, item.correct, item.errors, item.accuracy.toFixed(1) + "%"]), theme: "grid", headStyles: { fillColor: [214, 51, 132], textColor: 255, fontStyle: "bold", fontSize: 8 }, bodyStyles: { fontSize: 8, textColor: [55, 65, 81] }, alternateRowStyles: { fillColor: [252, 249, 251] }, styles: { cellPadding: 3 } });
+    const finalY = (doc as any).lastAutoTable?.finalY ?? 120;
+    doc.setFontSize(9); doc.setTextColor(105, 91, 100);
+    doc.text("Diferença para a meta: " + (accuracy - targetAccuracy).toFixed(1) + " p.p.", 14, finalY + 12);
+    doc.text("Relatório gerado pelo MCR.", 14, finalY + 19);
+    doc.save("MCR-rendimento-" + referenceDate.getFullYear() + "-" + String(referenceDate.getMonth() + 1).padStart(2, "0") + ".pdf");
+    setNotificationOpen(false); notify("PDF mensal exportado.");
+  };
 
   const logout = async () => {
     setToast("");
@@ -308,7 +362,7 @@ function App() {
     <div className="app">
       <header className="topbar">
         <div className="brand"><img className="mcr-logo mcr-logo-header" src={MCR_LOGO} alt="MCR — Meu Controle de Rendimento" /></div>
-        <div className="top-actions"><span className="user">{session.user.email}</span><button className="btn small" onClick={logout}><LogOut size={14}/> Sair</button></div>
+        <div className="top-actions"><div className="notification-wrap"><button className="notification-btn" aria-label="Notificações" onClick={() => setNotificationOpen((value) => !value)}><Bell size={17}/>{isLastDayOfMonth() && <span className="notification-badge">1</span>}</button>{notificationOpen && <div className="notification-panel"><div className="notification-panel-head"><strong>Notificações</strong><button onClick={() => setNotificationOpen(false)} aria-label="Fechar"><X size={14}/></button></div>{isLastDayOfMonth() ? <button className="monthly-notification" onClick={() => exportMonthlyPdf()}><span className="notification-icon"><FileDown size={15}/></span><span><strong>Seu rendimento mensal está pronto</strong><small>Exporte o resumo mensal em PDF.</small></span></button> : <div className="notification-empty">Nenhuma notificação nova.</div>}</div>}</div><span className="user">{session.user.email}</span><button className="btn small" onClick={logout}><LogOut size={14}/> Sair</button></div>
       </header>
 
       <div className="layout">
@@ -329,7 +383,7 @@ function App() {
               onClear={() => { const next = emptyFilters(); setFilters(next); setApplied(next); }}
               totalQuestions={totalQuestions} totalCorrect={totalCorrect} totalErrors={totalErrors} accuracy={accuracy}
               daysStudied={daysStudied} todayQuestions={todayQuestions} todayCorrect={todayCorrect} dailyGoal={dailyGoal}
-              byDiscipline={byDiscipline} attention={attention} targetAccuracy={targetAccuracy} entries={entries}
+              byDiscipline={byDiscipline} attention={attention} targetAccuracy={targetAccuracy} entries={entries} onExportMonthly={() => exportMonthlyPdf()}
             />
           )}
           {tab === "entries" && <Entries disciplines={disciplines} subjects={subjects} sources={sources} types={types} entries={entries} refresh={() => loadEntries().catch((error) => notify(error instanceof Error ? error.message : "Não foi possível carregar os lançamentos."))} notify={notify}/>}
@@ -354,7 +408,7 @@ function Dashboard(props: any) {
   return (
     <>
       <h1 className="page-title">Dashboard</h1>
-      <p className="subtitle">Visão consolidada dos lançamentos reais do período selecionado.</p>
+      <div className="dashboard-heading"><p className="subtitle">Visão consolidada dos lançamentos reais do período selecionado.</p><button className="btn export-pdf-btn" onClick={props.onExportMonthly}><FileDown size={15}/> Exportar rendimento mensal</button></div>
 
       <section className="section">
         <div className="section-head">FILTROS DE ANÁLISE</div>
