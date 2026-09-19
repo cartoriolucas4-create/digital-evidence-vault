@@ -181,37 +181,62 @@ function App() {
     if (error) setToast("Não foi possível sair. Tente novamente.");
   };
 
-  const reloadCatalog = () => {
-    setDisciplines(readStore<Discipline[]>(STORE.disciplines, []));
-    setSubjects(readStore<Subject[]>(STORE.subjects, []));
-    setSources(readStore<Source[]>(STORE.sources, []));
-    setTypes(readStore<QuestionType[]>(STORE.types, []));
-    const settings = readStore<{ daily_goal?: number; target_accuracy?: number }>(STORE.settings, {});
-    if (typeof settings.daily_goal === "number") setDailyGoal(settings.daily_goal);
-    if (typeof settings.target_accuracy === "number") setTargetAccuracy(settings.target_accuracy);
+  const loadCatalog = async () => {
+    if (!session?.user.id) return;
+    const client = supabase as any;
+    const [disciplinesResult, subjectsResult, sourcesResult, typesResult, settingsResult] = await Promise.all([
+      client.from("study_disciplines").select("*").order("name"),
+      client.from("study_subjects").select("*").order("name"),
+      client.from("study_sources").select("*").order("name"),
+      client.from("study_question_types").select("*").order("name"),
+      client.from("study_settings").select("*").maybeSingle(),
+    ]);
+    const firstError = [disciplinesResult, subjectsResult, sourcesResult, typesResult, settingsResult].find((result) => result.error)?.error;
+    if (firstError) throw firstError;
+    setDisciplines(disciplinesResult.data ?? []);
+    setSubjects(subjectsResult.data ?? []);
+    setSources(sourcesResult.data ?? []);
+    setTypes(typesResult.data ?? []);
+    if (settingsResult.data) {
+      setDailyGoal(settingsResult.data.daily_goal);
+      setTargetAccuracy(settingsResult.data.target_accuracy);
+    } else {
+      setDailyGoal(100);
+      setTargetAccuracy(80);
+    }
   };
 
-  const reloadEntries = () => {
-    const all = readStore<Entry[]>(STORE.entries, []);
-    const filtered = all
-      .filter((entry) =>
-        entry.study_date >= applied.from &&
-        entry.study_date <= applied.to &&
-        (!applied.disciplineId || entry.discipline_id === applied.disciplineId) &&
-        (!applied.subjectId || entry.subject_id === applied.subjectId) &&
-        (!applied.sourceId || entry.source_id === applied.sourceId)
-      )
-      .sort((a, b) => b.study_date.localeCompare(a.study_date));
+  const loadEntries = async () => {
+    if (!session?.user.id) return;
+    const client = supabase as any;
+    const { data, error } = await client
+      .from("study_entries")
+      .select("*")
+      .gte("study_date", applied.from)
+      .lte("study_date", applied.to)
+      .order("study_date", { ascending: false });
+    if (error) throw error;
+    const filtered = (data ?? []).filter((entry: Entry) =>
+      (!applied.disciplineId || entry.discipline_id === applied.disciplineId) &&
+      (!applied.subjectId || entry.subject_id === applied.subjectId) &&
+      (!applied.sourceId || entry.source_id === applied.sourceId)
+    );
     setEntries(filtered);
   };
 
   useEffect(() => {
-    reloadCatalog();
-  }, []);
+    if (!session) return;
+    Promise.all([loadCatalog(), loadEntries()]).catch((error) => {
+      setToast(error instanceof Error ? error.message : "Não foi possível carregar os dados da conta.");
+    });
+  }, [session?.user.id]);
 
   useEffect(() => {
-    reloadEntries();
-  }, [applied]);
+    if (!session) return;
+    loadEntries().catch((error) => {
+      setToast(error instanceof Error ? error.message : "Não foi possível carregar os lançamentos.");
+    });
+  }, [session?.user.id, applied.from, applied.to, applied.disciplineId, applied.subjectId, applied.sourceId]);
 
   const totalQuestions = entries.reduce((sum, entry) => sum + Number(entry.questions || 0), 0);
   const totalCorrect = entries.reduce((sum, entry) => sum + Number(entry.correct || 0), 0);
@@ -246,11 +271,17 @@ function App() {
   const attention = bySubject.filter((item) => item.accuracy < targetAccuracy).slice(0, 10);
 
   const saveSettings = () => {
-    const ok = writeStore(STORE.settings, {
-      daily_goal: Math.max(1, Number(dailyGoal) || 1),
-      target_accuracy: Math.min(100, Math.max(0, Number(targetAccuracy) || 0)),
-    });
-    notify(ok ? "Configurações salvas." : "Não foi possível salvar as configurações.");
+    const nextDailyGoal = Math.max(1, Number(dailyGoal) || 1);
+    const nextTargetAccuracy = Math.min(100, Math.max(0, Number(targetAccuracy) || 0));
+    (async () => {
+      const client = supabase as any;
+      const { error } = await client.from("study_settings").upsert({
+        user_id: session.user.id,
+        daily_goal: nextDailyGoal,
+        target_accuracy: nextTargetAccuracy,
+      }, { onConflict: "user_id" });
+      notify(error ? error.message : "Configurações salvas.");
+    })();
   };
 
   const filteredSubjects = filters.disciplineId
@@ -400,14 +431,9 @@ function Entries({disciplines,subjects,sources,types,entries,refresh,notify}:any
   const [editing,setEditing] = useState<Entry | null>(null);
   const [open,setOpen] = useState(false);
 
-  const save = (value: any) => {
-    const all = readStore<Entry[]>(STORE.entries, []);
-    const discipline = disciplines.find((x: Discipline) => x.id === value.discipline_id);
-    const subject = subjects.find((x: Subject) => x.id === value.subject_id);
-    const source = sources.find((x: Source) => x.id === value.source_id);
-    const type = types.find((x: QuestionType) => x.id === value.question_type_id);
-    const record: Entry = {
-      id: editing?.id ?? uid(),
+  const save = async (value: any) => {
+    const client = supabase as any;
+    const payload = {
       study_date: value.study_date,
       discipline_id: value.discipline_id,
       subject_id: value.subject_id,
@@ -416,29 +442,27 @@ function Entries({disciplines,subjects,sources,types,entries,refresh,notify}:any
       questions: Number(value.questions),
       correct: Number(value.correct),
       notes: value.notes || null,
-      discipline: discipline ? { name: discipline.name } : undefined,
-      subject: subject ? { name: subject.name } : undefined,
-      source: source ? { name: source.name } : undefined,
-      question_type: type ? { name: type.name } : undefined,
     };
-    const next = editing ? all.map((item) => item.id === editing.id ? record : item) : [record, ...all];
-    if (!writeStore(STORE.entries, next)) return notify("Não foi possível salvar. Verifique o armazenamento do navegador.");
+    const result = editing
+      ? await client.from("study_entries").update(payload).eq("id", editing.id)
+      : await client.from("study_entries").insert(payload);
+    if (result.error) return notify(result.error.message);
     notify(editing ? "Lançamento atualizado." : "Lançamento criado.");
     setOpen(false); setEditing(null); refresh();
   };
 
-  const remove = (id: string) => {
-    const all = readStore<Entry[]>(STORE.entries, []);
+  const remove = async (id: string) => {
     if (!window.confirm("Excluir este lançamento?")) return;
-    writeStore(STORE.entries, all.filter((item) => item.id !== id));
-    notify("Lançamento excluído.");
-    refresh();
+    const client = supabase as any;
+    const { error } = await client.from("study_entries").delete().eq("id", id);
+    notify(error ? error.message : "Lançamento excluído.");
+    if (!error) refresh();
   };
 
   return <>
     <div className="toolbar"><div><h1 className="page-title">Lançamentos</h1><p className="subtitle">Registre suas sessões de questões na sua conta.</p></div><button className="btn primary" onClick={() => {setEditing(null);setOpen(true)}}><Plus size={15}/> Novo lançamento</button></div>
     <section className="section"><div className="table-wrap"><table className="table"><thead><tr><th>Data</th><th>Disciplina</th><th>Assunto</th><th>Origem</th><th>Tipo</th><th>Questões</th><th>Acertos</th><th>Erros</th><th>%</th><th>Observações</th><th>Ações</th></tr></thead><tbody>
-      {entries.length ? entries.map((entry: Entry) => <tr key={entry.id}><td>{new Date(`${entry.study_date}T12:00:00`).toLocaleDateString("pt-BR")}</td><td>{entry.discipline?.name ?? disciplines.find((x: Discipline)=>x.id===entry.discipline_id)?.name ?? "—"}</td><td>{entry.subject?.name ?? subjects.find((x: Subject)=>x.id===entry.subject_id)?.name ?? "—"}</td><td>{entry.source?.name ?? sources.find((x: Source)=>x.id===entry.source_id)?.name ?? "—"}</td><td>{entry.question_type?.name ?? types.find((x: QuestionType)=>x.id===entry.question_type_id)?.name ?? "—"}</td><td>{entry.questions}</td><td>{entry.correct}</td><td>{entry.questions-entry.correct}</td><td>{percent(entry.correct,entry.questions).toFixed(1)}%</td><td>{entry.notes ?? "—"}</td><td className="actions"><button className="btn small" onClick={() => {setEditing(entry);setOpen(true)}}>Editar</button><button className="btn small danger" onClick={() => remove(entry.id)}><Trash2 size={13}/></button></td></tr>) : <tr><td colSpan={11}><div className="empty">Nenhum lançamento encontrado.</div></td></tr>}
+      {entries.length ? entries.map((entry: Entry) => <tr key={entry.id}><td>{new Date(`${entry.study_date}T12:00:00`).toLocaleDateString("pt-BR")}</td><td>{disciplines.find((x: Discipline)=>x.id===entry.discipline_id)?.name ?? "—"}</td><td>{subjects.find((x: Subject)=>x.id===entry.subject_id)?.name ?? "—"}</td><td>{sources.find((x: Source)=>x.id===entry.source_id)?.name ?? "—"}</td><td>{types.find((x: QuestionType)=>x.id===entry.question_type_id)?.name ?? "—"}</td><td>{entry.questions}</td><td>{entry.correct}</td><td>{entry.questions-entry.correct}</td><td>{percent(entry.correct,entry.questions).toFixed(1)}%</td><td>{entry.notes ?? "—"}</td><td className="actions"><button className="btn small" onClick={() => {setEditing(entry);setOpen(true)}}>Editar</button><button className="btn small danger" onClick={() => remove(entry.id)}><Trash2 size={13}/></button></td></tr>) : <tr><td colSpan={11}><div className="empty">Nenhum lançamento encontrado.</div></td></tr>}
     </tbody></table></div></section>
     {open && <LaunchModal initial={editing} disciplines={disciplines} subjects={subjects} sources={sources} types={types} onClose={() => {setOpen(false);setEditing(null)}} onSave={save}/>}
   </>;
@@ -484,37 +508,32 @@ function Catalog({disciplines,subjects,sources,types,refresh,notify}:any) {
   const [disciplineId,setDisciplineId] = useState("");
   const [search,setSearch] = useState("");
 
-  const key = kind === "discipline" ? STORE.disciplines : kind === "subject" ? STORE.subjects : kind === "source" ? STORE.sources : STORE.types;
+  const table = kind === "discipline" ? "study_disciplines" : kind === "subject" ? "study_subjects" : kind === "source" ? "study_sources" : "study_question_types";
   const list = (kind === "discipline" ? disciplines : kind === "subject" ? subjects : kind === "source" ? sources : types)
     .filter((item: any) => !search || item.name.toLowerCase().includes(search.toLowerCase()))
     .filter((item: any) => kind !== "subject" || !disciplineId || item.discipline_id === disciplineId);
 
-  const add = (event: FormEvent) => {
+  const add = async (event: FormEvent) => {
     event.preventDefault();
     const clean = name.trim();
     if (!clean) return;
     if (kind === "subject" && !disciplineId) return notify("Selecione a disciplina do assunto.");
-    const all = readStore<any[]>(key, []);
-    const duplicate = all.some((item) => item.name.trim().toLowerCase() === clean.toLowerCase() && (kind !== "subject" || item.discipline_id === disciplineId));
-    if (duplicate) return notify("Esse cadastro já existe.");
-    const item: any = { id: uid(), name: clean };
-    if (kind === "subject") item.discipline_id = disciplineId;
-    if (!writeStore(key, [...all, item])) return notify("Não foi possível salvar o cadastro.");
+    const client = supabase as any;
+    const payload: any = { name: clean };
+    if (kind === "subject") payload.discipline_id = disciplineId;
+    const { error } = await client.from(table).insert(payload);
+    if (error) return notify(error.message);
     setName("");
     notify("Cadastro adicionado.");
     refresh();
   };
 
-  const remove = (id: string) => {
+  const remove = async (id: string) => {
     if (!window.confirm("Excluir este item?")) return;
-    const all = readStore<any[]>(key, []);
-    writeStore(key, all.filter((item) => item.id !== id));
-    if (kind === "discipline") {
-      const linkedSubjects = readStore<Subject[]>(STORE.subjects, []).filter((item) => item.discipline_id === id);
-      if (linkedSubjects.length) writeStore(STORE.subjects, readStore<Subject[]>(STORE.subjects, []).filter((item) => item.discipline_id !== id));
-    }
-    notify("Cadastro excluído.");
-    refresh();
+    const client = supabase as any;
+    const { error } = await client.from(table).delete().eq("id", id);
+    notify(error ? error.message : "Cadastro excluído.");
+    if (!error) refresh();
   };
 
   const tabs = [["discipline","Disciplinas"],["subject","Assuntos"],["source","Bancas / Origens"],["type","Tipos"]] as const;
