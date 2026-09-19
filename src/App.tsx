@@ -453,6 +453,9 @@ function App() {
     window.setTimeout(() => setToast(""), 2200);
   };
 
+  const unreadPerformanceCount = performanceNotifications.filter((item) => !item.read_at).length;
+  const notificationCount = unreadPerformanceCount + (isLastDayOfMonth() ? 1 : 0);
+
   const evaluatePerformanceEntry = async (entry: Entry) => {
     if (!session?.user.id || !entry.subject_id || Number(entry.questions || 0) < 5) return;
 
@@ -598,13 +601,13 @@ function App() {
           <div className="notification-wrap">
             <button className="notification-btn" aria-label="Notificações" onClick={() => setNotificationOpen((value) => !value)}>
               <Bell size={17}/>
-              {(performanceNotifications.some((item) => !item.read_at) || isLastDayOfMonth()) && <span className="notification-badge">{performanceNotifications.filter((item) => !item.read_at).length + (isLastDayOfMonth() ? 1 : 0)}</span>}
+              {notificationCount > 0 && <span className="notification-badge">{notificationCount}</span>}
             </button>
             {notificationOpen && <div className="notification-panel">
               <div className="notification-panel-head">
                 <strong>Observações do seu desempenho</strong>
                 <div style={{display:"flex",alignItems:"center",gap:"7px"}}>
-                  {performanceNotifications.some((item) => !item.read_at) && <button className="notification-mark-all" onClick={markAllPerformanceNotificationsRead}>Marcar como lidas</button>}
+                  {unreadPerformanceCount > 0 && <button className="notification-mark-all" onClick={markAllPerformanceNotificationsRead}>Marcar como lidas</button>}
                   <button onClick={() => setNotificationOpen(false)} aria-label="Fechar"><X size={14}/></button>
                 </div>
               </div>
