@@ -1,6 +1,8 @@
 import { Component, type ErrorInfo, type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { BarChart3, BookOpen, CheckCircle2, LogOut, Plus, Settings, Target, Trash2 } from "lucide-react";
 import type { Discipline, Entry, Filters, QuestionType, Source, Subject } from "./types";
+import { supabase } from "./integrations/supabase/client";
+import type { Session } from "@supabase/supabase-js";
 
 const STORE = {
   disciplines: "dev_disciplines",
@@ -88,7 +90,57 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error
   }
 }
 
+function AuthScreen() {
+  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setError("");
+    setBusy(true);
+    try {
+      const result = mode === "login"
+        ? await supabase.auth.signInWithPassword({ email: email.trim(), password })
+        : await supabase.auth.signUp({ email: email.trim(), password });
+
+      if (result.error) throw result.error;
+      if (mode === "signup" && !result.data.session) {
+        setMode("login");
+        setError("Conta criada. Faça login para entrar.");
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Não foi possível autenticar.";
+      setError(message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return <div className="auth-page">
+    <div className="auth-card">
+      <div className="brand-mark">D</div>
+      <h1>Digital Evidence Vault</h1>
+      <p>{mode === "login" ? "Entre na sua conta para acessar seus estudos." : "Crie sua conta com e-mail e senha."}</p>
+      <form onSubmit={submit} className="auth-form">
+        <Field label="E-mail"><input required type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="voce@email.com" /></Field>
+        <Field label="Senha"><input required minLength={6} type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" /></Field>
+        {error && <div className="auth-error">{error}</div>}
+        <button className="btn primary auth-submit" disabled={busy}>{busy ? "Aguarde..." : mode === "login" ? "Entrar" : "Criar conta"}</button>
+      </form>
+      <button className="auth-switch" onClick={() => { setMode(mode === "login" ? "signup" : "login"); setError(""); }}>
+        {mode === "login" ? "Ainda não tenho conta" : "Já tenho uma conta"}
+      </button>
+    </div>
+  </div>;
+}
+
 function App() {
+  const [session, setSession] = useState<Session | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authError, setAuthError] = useState("");
   const [tab, setTab] = useState<"dashboard" | "entries" | "catalog" | "settings">("dashboard");
   const [disciplines, setDisciplines] = useState<Discipline[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -100,6 +152,35 @@ function App() {
   const [dailyGoal, setDailyGoal] = useState(100);
   const [targetAccuracy, setTargetAccuracy] = useState(80);
   const [toast, setToast] = useState("");
+
+  useEffect(() => {
+    let mounted = true;
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (!mounted) return;
+      if (error) setAuthError(error.message);
+      setSession(data.session);
+      setAuthLoading(false);
+    }).catch((error) => {
+      if (!mounted) return;
+      setAuthError(error instanceof Error ? error.message : "Erro ao carregar a sessão.");
+      setAuthLoading(false);
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+      setAuthLoading(false);
+    });
+    return () => { mounted = false; listener.subscription.unsubscribe(); };
+  }, []);
+
+  const logout = async () => {
+    setToast("");
+    const { error } = await supabase.auth.signOut();
+    if (error) setToast("Não foi possível sair. Tente novamente.");
+  };
+
+  if (authLoading) return <div className="fatal"><div className="fatal-card"><div className="brand-mark">D</div><h1>Digital Evidence Vault</h1><p>Carregando sua sessão…</p></div></div>;
+  if (authError && !session) return <div className="fatal"><div className="fatal-card"><div className="brand-mark">D</div><h1>Digital Evidence Vault</h1><p>{authError}</p><button className="btn primary" onClick={() => window.location.reload()}>Tentar novamente</button></div></div>;
+  if (!session) return <AuthScreen />;
 
   const notify = (message: string) => {
     setToast(message);
@@ -197,7 +278,7 @@ function App() {
           <div className="brand-mark">D</div>
           <div><strong>Digital Evidence Vault</strong><span>Controle de desempenho para concursos</span></div>
         </div>
-        <div className="top-actions"><span className="user">Acesso direto</span><button className="btn small" onClick={() => notify("Sessão local ativa.")}><LogOut size={14}/> Sair</button></div>
+        <div className="top-actions"><span className="user">{session.user.email}</span><button className="btn small" onClick={logout}><LogOut size={14}/> Sair</button></div>
       </header>
 
       <div className="layout">
@@ -352,7 +433,7 @@ function Entries({disciplines,subjects,sources,types,entries,refresh,notify}:any
   };
 
   return <>
-    <div className="toolbar"><div><h1 className="page-title">Lançamentos</h1><p className="subtitle">Registre suas sessões de questões sem depender de servidor.</p></div><button className="btn primary" onClick={() => {setEditing(null);setOpen(true)}}><Plus size={15}/> Novo lançamento</button></div>
+    <div className="toolbar"><div><h1 className="page-title">Lançamentos</h1><p className="subtitle">Registre suas sessões de questões na sua conta.</p></div><button className="btn primary" onClick={() => {setEditing(null);setOpen(true)}}><Plus size={15}/> Novo lançamento</button></div>
     <section className="section"><div className="table-wrap"><table className="table"><thead><tr><th>Data</th><th>Disciplina</th><th>Assunto</th><th>Origem</th><th>Tipo</th><th>Questões</th><th>Acertos</th><th>Erros</th><th>%</th><th>Observações</th><th>Ações</th></tr></thead><tbody>
       {entries.length ? entries.map((entry: Entry) => <tr key={entry.id}><td>{new Date(`${entry.study_date}T12:00:00`).toLocaleDateString("pt-BR")}</td><td>{entry.discipline?.name ?? disciplines.find((x: Discipline)=>x.id===entry.discipline_id)?.name ?? "—"}</td><td>{entry.subject?.name ?? subjects.find((x: Subject)=>x.id===entry.subject_id)?.name ?? "—"}</td><td>{entry.source?.name ?? sources.find((x: Source)=>x.id===entry.source_id)?.name ?? "—"}</td><td>{entry.question_type?.name ?? types.find((x: QuestionType)=>x.id===entry.question_type_id)?.name ?? "—"}</td><td>{entry.questions}</td><td>{entry.correct}</td><td>{entry.questions-entry.correct}</td><td>{percent(entry.correct,entry.questions).toFixed(1)}%</td><td>{entry.notes ?? "—"}</td><td className="actions"><button className="btn small" onClick={() => {setEditing(entry);setOpen(true)}}>Editar</button><button className="btn small danger" onClick={() => remove(entry.id)}><Trash2 size={13}/></button></td></tr>) : <tr><td colSpan={11}><div className="empty">Nenhum lançamento encontrado.</div></td></tr>}
     </tbody></table></div></section>
@@ -460,7 +541,7 @@ function SettingsPage({dailyGoal,targetAccuracy,setDailyGoal,setTargetAccuracy,s
       <Field label="Meta diária de questões"><input type="number" min="1" value={dailyGoal} onChange={(e)=>setDailyGoal(Number(e.target.value))}/></Field>
       <Field label="Meta de aproveitamento (%)"><input type="number" min="0" max="100" value={targetAccuracy} onChange={(e)=>setTargetAccuracy(Number(e.target.value))}/></Field>
     </div><button className="btn primary settings-save" onClick={save}><Target size={15}/> Salvar metas</button></div></section>
-    <section className="section"><div className="section-head">ARMAZENAMENTO</div><div className="section-body notice">Os dados desta versão ficam salvos no armazenamento local do navegador. O aplicativo inicia vazio e não depende de autenticação para abrir o painel.</div></section>
+    <section className="section"><div className="section-head">ARMAZENAMENTO</div><div className="section-body notice">Acesso protegido por conta individual. O logout encerra a sessão autenticada no navegador.</div></section>
   </>;
 }
 
