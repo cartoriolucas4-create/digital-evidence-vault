@@ -18,11 +18,10 @@ function App(){
   const [sources,setSources]=useState<Source[]>([]); const [types,setTypes]=useState<QuestionType[]>([]);
   const [entries,setEntries]=useState<Entry[]>([]); const [filters,setFilters]=useState<Filters>(emptyFilters()); const [applied,setApplied]=useState<Filters>(emptyFilters());
   const [dailyGoal,setDailyGoal]=useState(100); const [targetAccuracy,setTargetAccuracy]=useState(80);
-  const [authEmail,setAuthEmail]=useState(""); const [authPassword,setAuthPassword]=useState(""); const [authMode,setAuthMode]=useState<"signin"|"signup">("signin");
 
   const flash=(s:string)=>{setMessage(s);setTimeout(()=>setMessage(""),2600)}; const fail=(e:any)=>setError(e?.message||"Ocorreu um erro.");
 
-  useEffect(()=>{ if(!supabase){setLoading(false);return;} supabase.auth.getSession().then(({data})=>{setSession(data.session);setLoading(false)}); const {data}=supabase.auth.onAuthStateChange((_e,s)=>setSession(s)); return()=>data.subscription.unsubscribe(); },[]);
+  useEffect(()=>{ if(!supabase){setLoading(false);return;} let active=true; supabase.auth.getSession().then(async({data})=>{ if(!active)return; if(data.session){setSession(data.session);setLoading(false);return;} const r=await supabase.auth.signInAnonymously(); if(r.error){fail(r.error);setLoading(false);return;} if(active){setSession(r.data.session);setLoading(false);} }); const {data}=supabase.auth.onAuthStateChange((_e,s)=>{if(active&&s)setSession(s)}); return()=>{active=false;data.subscription.unsubscribe()}; },[]);
   useEffect(()=>{if(session) loadCatalog();},[session]);
   useEffect(()=>{if(session) loadEntries();},[session,applied]);
 
@@ -41,10 +40,9 @@ function App(){
       if(applied.disciplineId)q=q.eq("discipline_id",applied.disciplineId);if(applied.subjectId)q=q.eq("subject_id",applied.subjectId);if(applied.sourceId)q=q.eq("source_id",applied.sourceId);
       const {data,error}=await q;if(error)throw error;setEntries((data||[]) as Entry[]);}catch(e){fail(e)}
   }
-  async function auth(e:React.FormEvent){e.preventDefault();setError("");try{if(!supabase)throw new Error("Supabase não configurado.");const r=authMode==="signin"?await supabase.auth.signInWithPassword({email:authEmail,password:authPassword}):await supabase.auth.signUp({email:authEmail,password:authPassword});if(r.error)throw r.error;if(authMode==="signup")flash("Conta criada. Verifique seu e-mail se a confirmação estiver ativa.");}catch(e){fail(e)}}
   if(loading)return <div className="auth"><div className="auth-card"><h1>Central de Desempenho</h1><p>Carregando…</p></div></div>;
   if(!supabase)return <div className="auth"><div className="auth-card"><h1>Central de Desempenho</h1><p>O aplicativo está pronto, mas o projeto precisa das variáveis VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY.</p></div></div>;
-  if(!session)return <div className="auth"><div className="auth-card"><div className="brand"><div className="brand-mark">C</div> CENTRAL DE DESEMPENHO</div><h1>{authMode==="signin"?"Entrar":"Criar conta"}</h1><p>Controle de questões e desempenho para concursos.</p>{error&&<div className="error">{error}</div>}<form onSubmit={auth}><div className="field"><label>E-mail</label><input type="email" required value={authEmail} onChange={e=>setAuthEmail(e.target.value)}/></div><div className="field"><label>Senha</label><input type="password" required minLength={6} value={authPassword} onChange={e=>setAuthPassword(e.target.value)}/></div><button className="btn primary">{authMode==="signin"?"Entrar":"Criar conta"}</button></form><button className="btn" style={{marginTop:10,width:"100%"}} onClick={()=>setAuthMode(authMode==="signin"?"signup":"signin")}>{authMode==="signin"?"Ainda não tenho conta":"Já tenho conta"}</button></div></div>;
+  if(!session)return <div className="auth"><div className="auth-card"><h1>Central de Desempenho</h1><p>Inicializando acesso direto…</p>{error&&<div className="error">{error}</div>}</div></div>;
 
   const filteredSubjects=filters.disciplineId?subjects.filter(s=>s.discipline_id===filters.disciplineId):subjects;
   const appliedSubjects=applied.disciplineId?subjects.filter(s=>s.discipline_id===applied.disciplineId):subjects;
