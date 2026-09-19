@@ -903,7 +903,59 @@ function Catalog({disciplines,subjects,sources,types,refresh,notify}:any) {
       </tbody></table></div>
     </div></section>
     {bulkOpen&&<BulkImportModal onClose={()=>setBulkOpen(false)} onImported={refresh} notify={notify}/>}
+    {catalogDeleteOpen&&<CatalogDeleteModal
+      password={catalogDeletePassword}
+      setPassword={setCatalogDeletePassword}
+      busy={catalogDeleteBusy}
+      onClose={()=>{if(!catalogDeleteBusy){setCatalogDeleteOpen(false);setCatalogDeletePassword("");}}}
+      onConfirm={deleteAllCatalogData}
+    />}
   </>;
+}
+
+function CatalogDeleteModal({password,setPassword,busy,onClose,onConfirm}:any) {
+  const [step,setStep]=useState<"warning"|"password">("warning");
+
+  return <div className="modal-backdrop">
+    <div className="modal catalog-delete-modal">
+      {step==="warning" ? <>
+        <div className="catalog-delete-icon"><Trash2 size={24}/></div>
+        <h2>Excluir todo o cadastro?</h2>
+        <p className="catalog-delete-lead">Esta ação vai apagar <strong>somente a estrutura cadastrada</strong> para que você não precise excluir item por item.</p>
+        <div className="catalog-delete-list">
+          <strong>Será apagado:</strong>
+          <span>• Todas as disciplinas / matérias</span>
+          <span>• Todos os assuntos</span>
+          <span>• Todas as bancas / origens</span>
+          <span>• Todos os tipos de questão</span>
+        </div>
+        <div className="catalog-delete-preserve">
+          <strong>Não será apagado:</strong>
+          <span>✓ Seus lançamentos de questões</span>
+          <span>✓ Seu rendimento e histórico</span>
+          <span>✓ Suas metas e configurações</span>
+          <span>✓ Sua conta e seus dados de acesso</span>
+        </div>
+        <div className="warning-box">Essa operação não pode ser desfeita pelo sistema. Confira as informações acima antes de continuar.</div>
+        <div className="modal-actions">
+          <button className="btn" onClick={onClose}>Cancelar</button>
+          <button className="btn danger catalog-confirm-btn" onClick={()=>setStep("password")}>Continuar para exclusão</button>
+        </div>
+      </> : <>
+        <div className="catalog-delete-icon"><Trash2 size={24}/></div>
+        <h2>Confirme sua senha</h2>
+        <p className="catalog-delete-lead">Por segurança, digite sua senha para autorizar a exclusão do cadastro.</p>
+        <Field label="Senha da conta">
+          <input autoFocus type="password" autoComplete="current-password" value={password} onChange={(e)=>setPassword(e.target.value)} placeholder="Digite sua senha" onKeyDown={(e)=>{if(e.key==="Enter"&&!busy&&password)onConfirm();}} />
+        </Field>
+        <div className="warning-box">A senha será usada apenas para confirmar sua identidade. Ela não será armazenada pelo MCR.</div>
+        <div className="modal-actions">
+          <button className="btn" disabled={busy} onClick={()=>setStep("warning")}>Voltar</button>
+          <button className="btn danger catalog-confirm-btn" disabled={busy||!password} onClick={onConfirm}>{busy?"Excluindo...":"Confirmar e apagar cadastro"}</button>
+        </div>
+      </>}
+    </div>
+  </div>;
 }
 
 function SettingsPage({dailyGoal,targetAccuracy,setDailyGoal,setTargetAccuracy,save}:any) {
