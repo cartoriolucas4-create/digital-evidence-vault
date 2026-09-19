@@ -164,6 +164,9 @@ function App() {
   const [targetAccuracy, setTargetAccuracy] = useState(80);
   const [toast, setToast] = useState("");
   const [notificationOpen, setNotificationOpen] = useState(false);
+  const [catalogDeleteOpen, setCatalogDeleteOpen] = useState(false);
+  const [catalogDeletePassword, setCatalogDeletePassword] = useState("");
+  const [catalogDeleteBusy, setCatalogDeleteBusy] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -263,6 +266,32 @@ function App() {
     URL.revokeObjectURL(url);
     setNotificationOpen(false);
     notify("Backup anual exportado.");
+  };
+
+  const deleteAllCatalogData = async () => {
+    if (!session?.user.email || !catalogDeletePassword) return;
+    setCatalogDeleteBusy(true);
+    try {
+      const client = supabase;
+      const authResult = await client.auth.signInWithPassword({ email: session.user.email, password: catalogDeletePassword });
+      if (authResult.error) {
+        notify("Senha incorreta. O cadastro não foi alterado.");
+        return;
+      }
+      const tables = ["study_subjects", "study_disciplines", "study_sources", "study_question_types"];
+      for (const table of tables) {
+        const { error } = await (client as any).from(table).delete().not("id", "is", null);
+        if (error) throw error;
+      }
+      writeStore("mcr_discipline_order", []);
+      setDisciplines([]); setSubjects([]); setSources([]); setTypes([]);
+      setCatalogDeletePassword(""); setCatalogDeleteOpen(false);
+      notify("Cadastro zerado. Seus lançamentos e rendimento foram preservados.");
+    } catch (error) {
+      notify(error instanceof Error ? "Não foi possível zerar o cadastro: " + error.message : "Não foi possível zerar o cadastro.");
+    } finally {
+      setCatalogDeleteBusy(false);
+    }
   };
 
   const logout = async () => {
@@ -858,7 +887,7 @@ function Catalog({disciplines,subjects,sources,types,refresh,notify}:any) {
   return <>
     <div className="toolbar">
       <div><h1 className="page-title">Cadastro</h1><p className="subtitle">Cadastre a estrutura usada nos lançamentos. Não há dados pré-preenchidos.</p></div>
-      <button className="btn primary" onClick={()=>setBulkOpen(true)}><Clipboard size={15}/> Adicionar edital em lote</button>
+      <div className="catalog-actions"><button className="btn primary" onClick={()=>setBulkOpen(true)}><Clipboard size={15}/> Adicionar edital em lote</button><button className="btn danger catalog-danger-btn" onClick={()=>setCatalogDeleteOpen(true)}>Zerar cadastro</button></div>
     </div>
     <section className="section"><div className="section-body">
       <div className="catalog-tabs">{tabs.map(([id,label])=><button key={id} className={kind===id?"btn primary":"btn"} onClick={()=>{setKind(id);setSearch("");}}>{label}</button>)}</div>
