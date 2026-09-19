@@ -9,3 +9,39 @@
 
 .auth-page{min-height:100vh;display:grid;place-items:center;padding:24px;background:#f7f8fa}.auth-card{width:min(430px,100%);background:#fff;border:1px solid var(--border);border-radius:14px;padding:30px;box-shadow:0 12px 40px rgba(0,0,0,.08)}.auth-card .brand-mark{margin:0 auto 14px}.auth-card h1{text-align:center;margin:0 0 7px;font-size:22px}.auth-card>p{text-align:center;color:var(--muted);font-size:13px;margin:0 0 22px}.auth-form{display:grid;gap:13px}.auth-submit{width:100%;margin-top:4px}.auth-error{padding:10px;border-radius:7px;background:var(--danger);color:#8b1e1e;font-size:12px}.auth-switch{display:block;margin:16px auto 0;border:0;background:none;color:var(--accent-2);font-size:12px;font-weight:800;cursor:pointer}
 .mcr-logo{display:block;height:auto;object-fit:contain}.mcr-logo-header{width:220px;max-height:54px}.mcr-logo-auth{width:min(360px,100%);margin:0 auto 18px}.mcr-logo-fatal{width:min(320px,100%);margin:0 auto 18px}.auth-card>p{text-align:center}.fatal-card p{margin:0 0 18px}@media(max-width:760px){.mcr-logo-header{width:185px}.mcr-logo-auth{width:min(330px,100%)}}
+
+.performance-charts{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(360px,.9fr);gap:16px;margin-bottom:16px}
+.chart-card{min-width:0;background:linear-gradient(145deg,#fff 0%,#fffafe 100%);border:1px solid #e7dce3;border-radius:14px;padding:18px;box-shadow:0 8px 28px rgba(122,20,77,.06);overflow:hidden}
+.chart-card-wide{min-width:0}
+.chart-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.chart-card-head.compact{display:block}
+.chart-eyebrow{font-size:9px;letter-spacing:.13em;font-weight:900;color:#b4236d;margin-bottom:5px}
+.chart-card h2{font-size:17px;margin:0;color:#17202a;letter-spacing:-.01em}
+.chart-card p{font-size:11px;color:#7a838e;margin:5px 0 0}
+.chart-range{display:flex;gap:4px;padding:4px;background:#f5edf2;border:1px solid #eadde5;border-radius:9px}
+.chart-range button{border:0;background:transparent;color:#7b6872;font-size:10px;font-weight:850;padding:7px 9px;border-radius:6px}
+.chart-range button:hover{color:#b4236d}
+.chart-range button.active{background:#fff;color:#b4236d;box-shadow:0 2px 8px rgba(180,35,109,.13)}
+.chart-legend{display:flex;gap:15px;margin:15px 0 3px;font-size:10px;font-weight:750;color:#68717d}
+.chart-legend span{display:inline-flex;align-items:center;gap:6px}
+.legend-dot{display:inline-block;width:8px;height:8px;border-radius:50%}
+.legend-dot.questions{background:#d63384;box-shadow:0 0 8px rgba(214,51,132,.35)}
+.legend-dot.correct{background:#37b87a;box-shadow:0 0 8px rgba(55,184,122,.3)}
+.bar-chart-wrap{width:100%;overflow-x:auto}
+.performance-svg{display:block;width:100%;min-width:500px;height:280px}
+.chart-grid-line{stroke:#edf0f3;stroke-width:1}
+.chart-axis-label,.chart-x-label{fill:#8a929c;font-size:10px;font-family:Inter,ui-sans-serif,system-ui,sans-serif}
+.discipline-chart{display:grid;gap:15px;margin-top:20px}
+.discipline-row{display:grid;gap:6px}
+.discipline-meta{display:flex;justify-content:space-between;gap:12px;align-items:center;font-size:11px;color:#374151;font-weight:750}
+.discipline-meta span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.discipline-meta strong{font-size:13px;color:#9f165f}
+.discipline-track{height:11px;position:relative;border-radius:99px;background:#f0edf0;overflow:visible}
+.discipline-fill{position:absolute;left:0;top:0;height:100%;border-radius:99px;background:linear-gradient(90deg,#e83c8b,#9f165f);box-shadow:0 2px 8px rgba(214,51,132,.2);transition:width .45s cubic-bezier(.22,1,.36,1)}
+.discipline-target{position:absolute;top:-4px;width:2px;height:19px;border-radius:2px;background:#27313b;box-shadow:0 0 0 2px rgba(255,255,255,.8)}
+.discipline-foot{display:flex;justify-content:space-between;gap:10px;color:#8a929c;font-size:9px}
+.discipline-foot span:last-child{font-weight:800;color:#6b2144}
+.target-note{display:flex;align-items:center;gap:7px;margin-top:17px;padding-top:11px;border-top:1px solid #edf0f3;color:#7b6872;font-size:10px;font-weight:750}
+.target-marker{width:2px;height:13px;background:#27313b;border-radius:2px}
+@media(max-width:1150px){.performance-charts{grid-template-columns:1fr}.chart-card-wide{min-height:0}}
+@media(max-width:760px){.chart-card{padding:14px}.chart-card-head{display:grid}.chart-range{width:max-content}.performance-svg{min-width:520px;height:250px}.discipline-foot{font-size:8px}}
