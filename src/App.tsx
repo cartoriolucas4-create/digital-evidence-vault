@@ -329,7 +329,7 @@ function App() {
               onClear={() => { const next = emptyFilters(); setFilters(next); setApplied(next); }}
               totalQuestions={totalQuestions} totalCorrect={totalCorrect} totalErrors={totalErrors} accuracy={accuracy}
               daysStudied={daysStudied} todayQuestions={todayQuestions} todayCorrect={todayCorrect} dailyGoal={dailyGoal}
-              byDiscipline={byDiscipline} attention={attention} targetAccuracy={targetAccuracy}
+              byDiscipline={byDiscipline} attention={attention} targetAccuracy={targetAccuracy} entries={entries}
             />
           )}
           {tab === "entries" && <Entries disciplines={disciplines} subjects={subjects} sources={sources} types={types} entries={entries} refresh={() => loadEntries().catch((error) => notify(error instanceof Error ? error.message : "Não foi possível carregar os lançamentos."))} notify={notify}/>}
@@ -403,6 +403,113 @@ function Dashboard(props: any) {
         </div>
       </section>
     </>
+  );
+}
+
+function PerformanceCharts({ entries, byDiscipline, targetAccuracy }: any) {
+  const [range, setRange] = useState<7 | 30 | 90>(7);
+  const chartData = useMemo(() => {
+    const end = entries.length ? entries.reduce((latest: string, item: Entry) => item.study_date > latest ? item.study_date : latest, entries[0].study_date) : localDate();
+    const endDate = new Date(end + "T12:00:00");
+    const startDate = new Date(endDate);
+    startDate.setDate(startDate.getDate() - range + 1);
+    const rows = Array.from({ length: range }, (_, index) => {
+      const date = new Date(startDate);
+      date.setDate(startDate.getDate() + index);
+      const key = date.toISOString().slice(0, 10);
+      const dayEntries = entries.filter((item: Entry) => item.study_date === key);
+      const questions = dayEntries.reduce((sum: number, item: Entry) => sum + Number(item.questions || 0), 0);
+      const correct = dayEntries.reduce((sum: number, item: Entry) => sum + Number(item.correct || 0), 0);
+      return { date: key, label: date.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }).replace(".", ""), questions, correct };
+    });
+    if (range <= 30) return rows;
+    const weekly: any[] = [];
+    for (let i = 0; i < rows.length; i += 7) {
+      const group = rows.slice(i, i + 7);
+      weekly.push({
+        date: group[0].date,
+        label: "Sem. " + (weekly.length + 1),
+        questions: group.reduce((sum, row) => sum + row.questions, 0),
+        correct: group.reduce((sum, row) => sum + row.correct, 0),
+      });
+    }
+    return weekly;
+  }, [entries, range]);
+
+  const maxQuestions = Math.max(1, ...chartData.map((item: any) => item.questions));
+  const width = 900;
+  const height = 280;
+  const pad = { top: 28, right: 18, bottom: 44, left: 48 };
+  const innerW = width - pad.left - pad.right;
+  const innerH = height - pad.top - pad.bottom;
+  const slot = innerW / Math.max(1, chartData.length);
+  const barW = Math.min(20, slot * 0.30);
+
+  return (
+    <div className="performance-charts">
+      <section className="chart-card chart-card-wide">
+        <div className="chart-card-head">
+          <div>
+            <div className="chart-eyebrow">ANÁLISE DE PERFORMANCE</div>
+            <h2>Questões × Acertos</h2>
+            <p>Volume de questões e desempenho no período selecionado.</p>
+          </div>
+          <div className="chart-range">
+            {[7, 30, 90].map((days) => <button key={days} className={range === days ? "active" : ""} onClick={() => setRange(days as 7 | 30 | 90)}>{days} dias</button>)}
+          </div>
+        </div>
+        <div className="chart-legend"><span><i className="legend-dot questions"/>Questões</span><span><i className="legend-dot correct"/>Acertos</span></div>
+        <div className="bar-chart-wrap">
+          <svg viewBox={"0 0 " + width + " " + height} className="performance-svg" role="img" aria-label="Gráfico de questões e acertos">
+            <defs>
+              <linearGradient id="mcrQuestions" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#d63384"/><stop offset="100%" stopColor="#9f165f"/></linearGradient>
+              <linearGradient id="mcrCorrect" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#37b87a"/><stop offset="100%" stopColor="#16865a"/></linearGradient>
+              <filter id="mcrGlow"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+            </defs>
+            {[0, .25, .5, .75, 1].map((step) => {
+              const y = pad.top + innerH * (1 - step);
+              return <g key={step}><line x1={pad.left} x2={width - pad.right} y1={y} y2={y} className="chart-grid-line"/><text x={pad.left - 9} y={y + 4} textAnchor="end" className="chart-axis-label">{Math.round(maxQuestions * step)}</text></g>;
+            })}
+            {chartData.map((item: any, index: number) => {
+              const x = pad.left + slot * index + slot / 2;
+              const qH = (item.questions / maxQuestions) * innerH;
+              const cH = (item.correct / maxQuestions) * innerH;
+              return <g key={item.date}>
+                <title>{item.label + " — " + item.questions + " questões, " + item.correct + " acertos"}</title>
+                <rect x={x - barW - 2} y={pad.top + innerH - qH} width={barW} height={qH} rx="5" fill="url(#mcrQuestions)" opacity=".95" filter="url(#mcrGlow)"/>
+                <rect x={x + 2} y={pad.top + innerH - cH} width={barW} height={cH} rx="5" fill="url(#mcrCorrect)" opacity=".95"/>
+                <text x={x} y={height - 16} textAnchor="middle" className="chart-x-label">{item.label}</text>
+              </g>;
+            })}
+          </svg>
+        </div>
+      </section>
+
+      <section className="chart-card">
+        <div className="chart-card-head compact">
+          <div>
+            <div className="chart-eyebrow">PERFORMANCE ACADÊMICA</div>
+            <h2>Desempenho por disciplina</h2>
+            <p>Compare seu aproveitamento com a meta configurada.</p>
+          </div>
+        </div>
+        <div className="discipline-chart">
+          {byDiscipline.length ? byDiscipline.slice().sort((a: any, b: any) => b.accuracy - a.accuracy).map((item: any) => {
+            const value = Math.min(100, Math.max(0, item.accuracy));
+            const target = Math.min(100, Math.max(0, targetAccuracy));
+            return <div className="discipline-row" key={item.id} title={item.name + ": " + value.toFixed(1) + "% — " + item.questions + " questões"}>
+              <div className="discipline-meta"><span>{item.name}</span><strong>{value.toFixed(1)}%</strong></div>
+              <div className="discipline-track">
+                <span className="discipline-fill" style={{ width: value + "%" }} />
+                <span className="discipline-target" style={{ left: target + "%" }} />
+              </div>
+              <div className="discipline-foot"><span>{item.questions.toLocaleString("pt-BR")} questões · {item.correct.toLocaleString("pt-BR")} acertos</span><span>{value >= target ? "Acima da meta" : (target - value).toFixed(1) + " p.p. abaixo"}</span></div>
+            </div>;
+          }) : <div className="empty">Nenhum lançamento no período.</div>}
+        </div>
+        {byDiscipline.length > 0 && <div className="target-note"><span className="target-marker"/> Meta: {targetAccuracy}%</div>}
+      </section>
+    </div>
   );
 }
 
