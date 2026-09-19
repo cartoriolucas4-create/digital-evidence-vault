@@ -161,13 +161,26 @@ function App() {
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [applied, setApplied] = useState<Filters>(emptyFilters);
   const [dailyGoal, setDailyGoal] = useState(100);
+  const [weeklyGoal, setWeeklyGoal] = useState(500);
+  const [monthlyGoal, setMonthlyGoal] = useState(2000);
   const [targetAccuracy, setTargetAccuracy] = useState(80);
+  const [theme, setTheme] = useState<"light" | "dark">(() => readStore<"light" | "dark">("mcr_theme", "light"));
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordBusy, setPasswordBusy] = useState(false);
   const [toast, setToast] = useState("");
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [performanceNotifications, setPerformanceNotifications] = useState<PerformanceNotification[]>([]);
   const [catalogDeleteOpen, setCatalogDeleteOpen] = useState(false);
   const [catalogDeletePassword, setCatalogDeletePassword] = useState("");
   const [catalogDeleteBusy, setCatalogDeleteBusy] = useState(false);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    writeStore("mcr_theme", theme);
+  }, [theme]);
 
   useEffect(() => {
     let mounted = true;
@@ -324,9 +337,13 @@ function App() {
     setTypes(typesResult.data ?? []);
     if (settingsResult.data) {
       setDailyGoal(settingsResult.data.daily_goal);
+      setWeeklyGoal(settingsResult.data.weekly_goal ?? 500);
+      setMonthlyGoal(settingsResult.data.monthly_goal ?? 2000);
       setTargetAccuracy(settingsResult.data.target_accuracy);
     } else {
       setDailyGoal(100);
+      setWeeklyGoal(500);
+      setMonthlyGoal(2000);
       setTargetAccuracy(80);
     }
   };
@@ -424,16 +441,43 @@ function App() {
 
   const saveSettings = () => {
     const nextDailyGoal = Math.max(1, Number(dailyGoal) || 1);
+    const nextWeeklyGoal = Math.max(1, Number(weeklyGoal) || 1);
+    const nextMonthlyGoal = Math.max(1, Number(monthlyGoal) || 1);
     const nextTargetAccuracy = Math.min(100, Math.max(0, Number(targetAccuracy) || 0));
     (async () => {
       const client = supabase as any;
       const { error } = await client.from("study_settings").upsert({
         user_id: session.user.id,
         daily_goal: nextDailyGoal,
+        weekly_goal: nextWeeklyGoal,
+        monthly_goal: nextMonthlyGoal,
         target_accuracy: nextTargetAccuracy,
       }, { onConflict: "user_id" });
       notify(error ? error.message : "Configurações salvas.");
     })();
+  };
+
+  const changePassword = async () => {
+    if (!session?.user.email || !currentPassword || !newPassword || !confirmPassword) return;
+    if (newPassword.length < 6) { notify("A nova senha deve ter pelo menos 6 caracteres."); return; }
+    if (newPassword !== confirmPassword) { notify("A confirmação da nova senha não confere."); return; }
+    setPasswordBusy(true);
+    try {
+      const authResult = await supabase.auth.signInWithPassword({ email: session.user.email, password: currentPassword });
+      if (authResult.error) { notify("Senha atual incorreta. A senha não foi alterada."); return; }
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+      setCurrentPassword(""); setNewPassword(""); setConfirmPassword("");
+      setPasswordModalOpen(false);
+      notify("Senha alterada com sucesso.");
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Não foi possível alterar a senha.");
+    } finally { setPasswordBusy(false); }
+  };
+
+  const signOutOtherSessions = async () => {
+    const { error } = await supabase.auth.signOut({ scope: "others" });
+    notify(error ? error.message : "As outras sessões foram encerradas.");
   };
 
   const filteredSubjects = filters.disciplineId
@@ -653,10 +697,29 @@ function App() {
           {tab === "settings" && (
             <SettingsPage
               dailyGoal={dailyGoal}
+              weeklyGoal={weeklyGoal}
+              monthlyGoal={monthlyGoal}
               targetAccuracy={targetAccuracy}
+              theme={theme}
+              setTheme={setTheme}
               setDailyGoal={setDailyGoal}
+              setWeeklyGoal={setWeeklyGoal}
+              setMonthlyGoal={setMonthlyGoal}
               setTargetAccuracy={setTargetAccuracy}
               save={saveSettings}
+              session={session}
+              passwordModalOpen={passwordModalOpen}
+              setPasswordModalOpen={setPasswordModalOpen}
+              currentPassword={currentPassword}
+              setCurrentPassword={setCurrentPassword}
+              newPassword={newPassword}
+              setNewPassword={setNewPassword}
+              confirmPassword={confirmPassword}
+              setConfirmPassword={setConfirmPassword}
+              passwordBusy={passwordBusy}
+              changePassword={changePassword}
+              signOutOtherSessions={signOutOtherSessions}
+              logout={logout}
             />
           )}
         </main>
@@ -1160,14 +1223,74 @@ function CatalogDeleteModal({password,setPassword,busy,onClose,onConfirm}:any) {
   </div>;
 }
 
-function SettingsPage({dailyGoal,targetAccuracy,setDailyGoal,setTargetAccuracy,save}:any) {
+function SettingsPage({
+  dailyGoal,weeklyGoal,monthlyGoal,targetAccuracy,theme,setTheme,
+  setDailyGoal,setWeeklyGoal,setMonthlyGoal,setTargetAccuracy,save,
+  session,passwordModalOpen,setPasswordModalOpen,currentPassword,setCurrentPassword,
+  newPassword,setNewPassword,confirmPassword,setConfirmPassword,passwordBusy,
+  changePassword,signOutOtherSessions,logout
+}:any) {
   return <>
-    <h1 className="page-title">Configurações</h1><p className="subtitle">Defina as metas utilizadas pelo dashboard.</p>
-    <section className="section"><div className="section-body"><div className="form-grid">
-      <Field label="Meta diária de questões"><input type="number" min="1" value={dailyGoal} onChange={(e)=>setDailyGoal(Number(e.target.value))}/></Field>
-      <Field label="Meta de aproveitamento (%)"><input type="number" min="0" max="100" value={targetAccuracy} onChange={(e)=>setTargetAccuracy(Number(e.target.value))}/></Field>
-    </div><button className="btn primary settings-save" onClick={save}><Target size={15}/> Salvar metas</button></div></section>
-    <section className="section"><div className="section-head">ARMAZENAMENTO</div><div className="section-body notice">Acesso protegido por conta individual. O logout encerra a sessão autenticada no navegador.</div></section>
+    <h1 className="page-title">Configurações</h1>
+    <p className="subtitle">Personalize suas metas, aparência e segurança da conta.</p>
+    <section className="section">
+      <div className="section-head">🎯 METAS DE ESTUDO</div>
+      <div className="section-body">
+        <div className="form-grid">
+          <Field label="Meta diária de questões"><input type="number" min="1" value={dailyGoal} onChange={(e)=>setDailyGoal(Number(e.target.value))}/></Field>
+          <Field label="Meta semanal de questões"><input type="number" min="1" value={weeklyGoal} onChange={(e)=>setWeeklyGoal(Number(e.target.value))}/></Field>
+          <Field label="Meta mensal de questões"><input type="number" min="1" value={monthlyGoal} onChange={(e)=>setMonthlyGoal(Number(e.target.value))}/></Field>
+          <Field label="Meta de aproveitamento (%)"><input type="number" min="0" max="100" value={targetAccuracy} onChange={(e)=>setTargetAccuracy(Number(e.target.value))}/></Field>
+        </div>
+        <button className="btn primary settings-save" onClick={save}><Target size={15}/> Salvar metas</button>
+      </div>
+    </section>
+    <section className="section">
+      <div className="section-head">🎨 APARÊNCIA</div>
+      <div className="section-body">
+        <div className="theme-choice-grid">
+          <button className={"theme-choice " + (theme === "light" ? "active" : "")} onClick={()=>setTheme("light")} aria-pressed={theme === "light"}>
+            <span className="theme-preview theme-preview-light"><span></span><i></i><i></i></span>
+            <span><strong>Tema claro</strong><small>Padrão do MCR</small></span>
+          </button>
+          <button className={"theme-choice " + (theme === "dark" ? "active" : "")} onClick={()=>setTheme("dark")} aria-pressed={theme === "dark"}>
+            <span className="theme-preview theme-preview-dark"><span></span><i></i><i></i></span>
+            <span><strong>Tema escuro</strong><small>Mais confortável em ambientes com pouca luz</small></span>
+          </button>
+        </div>
+        <div className="notice theme-note">O tema claro é o padrão. A preferência fica salva neste navegador e pode ser alterada a qualquer momento.</div>
+      </div>
+    </section>
+    <section className="section">
+      <div className="section-head">🔐 CONTA E SEGURANÇA</div>
+      <div className="section-body account-settings">
+        <div className="account-row">
+          <div><strong>Conta atual</strong><span>{session?.user.email ?? "—"}</span></div>
+          <span className="account-status">Sessão ativa</span>
+        </div>
+        <div className="account-actions">
+          <button className="btn" onClick={()=>setPasswordModalOpen(true)}>Alterar senha</button>
+          <button className="btn" onClick={signOutOtherSessions}>Encerrar outras sessões</button>
+          <button className="btn danger" onClick={logout}><LogOut size={15}/> Sair da conta</button>
+        </div>
+        <div className="notice">A alteração de senha exige a confirmação da senha atual. O encerramento de outras sessões não exclui seus dados.</div>
+      </div>
+    </section>
+    {passwordModalOpen && <div className="modal-backdrop" role="dialog" aria-modal="true">
+      <div className="modal password-modal">
+        <h2>Alterar senha</h2>
+        <p className="subtitle">Confirme sua senha atual e defina uma nova senha.</p>
+        <div className="form-grid password-grid">
+          <Field label="Senha atual"><input type="password" autoComplete="current-password" value={currentPassword} onChange={(e)=>setCurrentPassword(e.target.value)} /></Field>
+          <Field label="Nova senha"><input type="password" autoComplete="new-password" minLength={6} value={newPassword} onChange={(e)=>setNewPassword(e.target.value)} /></Field>
+          <Field label="Confirmar nova senha"><input type="password" autoComplete="new-password" minLength={6} value={confirmPassword} onChange={(e)=>setConfirmPassword(e.target.value)} /></Field>
+        </div>
+        <div className="modal-actions">
+          <button className="btn" disabled={passwordBusy} onClick={()=>setPasswordModalOpen(false)}>Cancelar</button>
+          <button className="btn primary" disabled={passwordBusy || !currentPassword || !newPassword || !confirmPassword} onClick={changePassword}>{passwordBusy ? "Alterando..." : "Alterar senha"}</button>
+        </div>
+      </div>
+    </div>}
   </>;
 }
 
