@@ -178,6 +178,27 @@ export type Database = {
         }
         Relationships: []
       }
+      disciplines: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       evidence_files: {
         Row: {
           camera_facing: string | null
@@ -244,6 +265,154 @@ export type Database = {
           },
         ]
       }
+      question_types: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      sources: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      study_entries: {
+        Row: {
+          correct: number
+          created_at: string
+          discipline_id: string
+          id: string
+          notes: string | null
+          question_type_id: string | null
+          questions: number
+          source_id: string | null
+          study_date: string
+          subject_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          correct?: number
+          created_at?: string
+          discipline_id: string
+          id?: string
+          notes?: string | null
+          question_type_id?: string | null
+          questions?: number
+          source_id?: string | null
+          study_date?: string
+          subject_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          correct?: number
+          created_at?: string
+          discipline_id?: string
+          id?: string
+          notes?: string | null
+          question_type_id?: string | null
+          questions?: number
+          source_id?: string | null
+          study_date?: string
+          subject_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "study_entries_discipline_id_fkey"
+            columns: ["discipline_id"]
+            isOneToOne: false
+            referencedRelation: "disciplines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "study_entries_question_type_id_fkey"
+            columns: ["question_type_id"]
+            isOneToOne: false
+            referencedRelation: "question_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "study_entries_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "sources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "study_entries_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      subjects: {
+        Row: {
+          created_at: string
+          discipline_id: string
+          id: string
+          name: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          discipline_id: string
+          id?: string
+          name: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          discipline_id?: string
+          id?: string
+          name?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subjects_discipline_id_fkey"
+            columns: ["discipline_id"]
+            isOneToOne: false
+            referencedRelation: "disciplines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -261,6 +430,27 @@ export type Database = {
           created_at?: string
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_settings: {
+        Row: {
+          daily_goal: number
+          target_accuracy: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          daily_goal?: number
+          target_accuracy?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          daily_goal?: number
+          target_accuracy?: number
+          updated_at?: string
           user_id?: string
         }
         Relationships: []
