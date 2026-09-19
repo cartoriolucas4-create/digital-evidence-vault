@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { BarChart3, BookOpen, CheckCircle2, FileDown, LogOut, Plus, Settings, Target, Trash2, XCircle } from "lucide-react";
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, Bar, BarChart } from "recharts";
-import { supabase } from "./lib/supabase";
+import { supabase } from "@/integrations/supabase/client";
+import type { Session } from "@supabase/supabase-js";
 import type { Discipline, Entry, Filters, QuestionType, Source, Subject } from "./types";
 
 const today=()=>new Date().toISOString().slice(0,10);
