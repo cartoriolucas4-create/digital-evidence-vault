@@ -543,8 +543,9 @@ EDITAL:
     for(const raw of text.split(/\r?\n/)){
       const line=raw.trim();
       if(!line) continue;
-      const dm=line.match(/^DISCIPLINA\\s*:\\s*(.+)$/i);
-      const sm=line.match(/^ASSUNTO\\s*:\\s*(.+)$/i);
+      const normalized=line.replace(/^[-*•\\s]+/, "").replace(/^\\*\\*(.*?)\\*\\*$/, "$1").trim();
+      const dm=normalized.match(/^DISCIPLINA\\s*:\\s*(.+)$/i);
+      const sm=normalized.match(/^ASSUNTO\\s*:\\s*(.+)$/i);
       if(dm){
         current={name:dm[1].trim(),subjects:[]};
         disciplines.push(current);
