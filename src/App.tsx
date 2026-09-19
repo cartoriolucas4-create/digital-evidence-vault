@@ -11,7 +11,7 @@ const fmt=(n:number)=>new Intl.NumberFormat("pt-BR").format(n);
 const emptyFilters=():Filters=>({disciplineId:"",subjectId:"",sourceId:"",from:firstDay(),to:today()});
 
 function App(){
-  const [session,setSession]=useState<any>(null); const [loading,setLoading]=useState(true);
+  const [session,setSession]=useState<any>({user:{email:"Acesso direto"}}); const [loading,setLoading]=useState(false);
   const [tab,setTab]=useState<"dashboard"|"entries"|"catalog"|"settings">("dashboard");
   const [message,setMessage]=useState(""); const [error,setError]=useState("");
   const [disciplines,setDisciplines]=useState<Discipline[]>([]); const [subjects,setSubjects]=useState<Subject[]>([]);
@@ -21,9 +21,9 @@ function App(){
 
   const flash=(s:string)=>{setMessage(s);setTimeout(()=>setMessage(""),2600)}; const fail=(e:any)=>setError(e?.message||"Ocorreu um erro.");
 
-  useEffect(()=>{ if(!supabase){setLoading(false);return;} let active=true; supabase.auth.getSession().then(async({data})=>{ if(!active)return; if(data.session){setSession(data.session);setLoading(false);return;} const r=await supabase.auth.signInAnonymously(); if(r.error){fail(r.error);setLoading(false);return;} if(active){setSession(r.data.session);setLoading(false);} }); const {data}=supabase.auth.onAuthStateChange((_e,s)=>{if(active&&s)setSession(s)}); return()=>{active=false;data.subscription.unsubscribe()}; },[]);
-  useEffect(()=>{if(session) loadCatalog();},[session]);
-  useEffect(()=>{if(session) loadEntries();},[session,applied]);
+  useEffect(()=>{ setLoading(false); },[]);
+  useEffect(()=>{ if(supabase && session?.access_token) loadCatalog(); },[session]);
+  useEffect(()=>{ if(supabase && session?.access_token) loadEntries(); },[session,applied]);
 
   async function loadCatalog(){
     try{const db=supabase!; const [d,s,so,t]=await Promise.all([
@@ -55,7 +55,7 @@ function App(){
   const attention=bySubject.filter(x=>x.questions>0&&x.accuracy<targetAccuracy).slice(0,12);
   const setFilter=(k:keyof Filters,v:string)=>setFilters(f=>({...f,[k]:v,...(k==="disciplineId"?{subjectId:""}:{})}));
   const apply=()=>{setApplied(filters);flash("Filtros aplicados.");}; const clear=()=>{const f=emptyFilters();setFilters(f);setApplied(f);};
-  async function signout(){await supabase!.auth.signOut();}
+  async function signout(){ setSession({user:{email:"Acesso direto"}}); }
 
   return <div className="app"><header className="topbar"><div className="brand"><div className="brand-mark">C</div><span>CENTRAL DE DESEMPENHO — CONCURSOS</span></div><div className="top-actions"><span className="user">{session.user.email}</span><button className="btn small" onClick={signout}><LogOut size={14}/> Sair</button></div></header><div className="layout"><aside className="sidebar"><nav className="nav">
     <button className={tab==="dashboard"?"active":""} onClick={()=>setTab("dashboard")}><BarChart3 size={16}/> Dashboard</button>
