@@ -1,4 +1,4 @@
-import { Component, type ErrorInfo, type ReactNode, useEffect, useMemo, useState } from "react";
+import { Component, type ErrorInfo, type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { BarChart3, BookOpen, CheckCircle2, LogOut, Plus, Settings, Target, Trash2 } from "lucide-react";
 import type { Discipline, Entry, Filters, QuestionType, Source, Subject } from "./types";
 
@@ -368,7 +368,7 @@ function LaunchModal({initial,disciplines,subjects,sources,types,onClose,onSave}
   const availableSubjects = subjects.filter((s: Subject) => s.discipline_id === value.discipline_id);
   const errors = Math.max(0, Number(value.questions || 0) - Number(value.correct || 0));
 
-  const submit = (event: React.FormEvent) => {
+  const submit = (event: FormEvent) => {
     event.preventDefault();
     const questions = Number(value.questions);
     const correct = Number(value.correct);
@@ -405,7 +405,7 @@ function Catalog({disciplines,subjects,sources,types,refresh,notify}:any) {
     .filter((item: any) => !search || item.name.toLowerCase().includes(search.toLowerCase()))
     .filter((item: any) => kind !== "subject" || !disciplineId || item.discipline_id === disciplineId);
 
-  const add = (event: React.FormEvent) => {
+  const add = (event: FormEvent) => {
     event.preventDefault();
     const clean = name.trim();
     if (!clean) return;
