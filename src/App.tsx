@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { BarChart3, BookOpen, CheckCircle2, FileDown, LogOut, Plus, Settings, Target, Trash2, XCircle } from "lucide-react";
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, Bar, BarChart } from "recharts";
-import { supabase } from "./lib/supabase";
 import type { Discipline, Entry, Filters, QuestionType, Source, Subject } from "./types";
 
 const today=()=>new Date().toISOString().slice(0,10);
@@ -15,7 +14,6 @@ const writeStore=(key:string,value:unknown)=>localStorage.setItem(key,JSON.strin
 const uid=()=>crypto.randomUUID();
 
 function App(){
-  const [session,setSession]=useState<any>({user:{email:"Acesso direto"}}); const [loading,setLoading]=useState(false);
   const [tab,setTab]=useState<"dashboard"|"entries"|"catalog"|"settings">("dashboard");
   const [message,setMessage]=useState(""); const [error,setError]=useState("");
   const [disciplines,setDisciplines]=useState<Discipline[]>([]); const [subjects,setSubjects]=useState<Subject[]>([]);
@@ -25,7 +23,6 @@ function App(){
 
   const flash=(s:string)=>{setMessage(s);setTimeout(()=>setMessage(""),2600)}; const fail=(e:any)=>setError(e?.message||"Ocorreu um erro.");
 
-  useEffect(()=>{ setLoading(false); },[]);
   useEffect(()=>{ loadCatalog(); },[]);
   useEffect(()=>{ loadEntries(); },[applied]);
 
@@ -47,10 +44,6 @@ function App(){
     ).sort((a,b)=>b.study_date.localeCompare(a.study_date));
     setEntries(filtered);
   }
-  if(loading)return <div className="auth"><div className="auth-card"><h1>Central de Desempenho</h1><p>Carregando…</p></div></div>;
-
-  if(!session)return <div className="auth"><div className="auth-card"><h1>Central de Desempenho</h1><p>Inicializando acesso direto…</p>{error&&<div className="error">{error}</div>}</div></div>;
-
   const filteredSubjects=filters.disciplineId?subjects.filter(s=>s.discipline_id===filters.disciplineId):subjects;
   const appliedSubjects=applied.disciplineId?subjects.filter(s=>s.discipline_id===applied.disciplineId):subjects;
   const totalQ=entries.reduce((a,e)=>a+e.questions,0), totalC=entries.reduce((a,e)=>a+e.correct,0), totalE=totalQ-totalC, accuracy=pct(totalC,totalQ);
@@ -62,9 +55,9 @@ function App(){
   const attention=bySubject.filter(x=>x.questions>0&&x.accuracy<targetAccuracy).slice(0,12);
   const setFilter=(k:keyof Filters,v:string)=>setFilters(f=>({...f,[k]:v,...(k==="disciplineId"?{subjectId:""}:{})}));
   const apply=()=>{setApplied(filters);flash("Filtros aplicados.");}; const clear=()=>{const f=emptyFilters();setFilters(f);setApplied(f);};
-  async function signout(){ setSession({user:{email:"Acesso direto"}}); }
+  function signout(){ flash("Acesso direto ativo."); }
 
-  return <div className="app"><header className="topbar"><div className="brand"><div className="brand-mark">C</div><span>CENTRAL DE DESEMPENHO — CONCURSOS</span></div><div className="top-actions"><span className="user">{session.user.email}</span><button className="btn small" onClick={signout}><LogOut size={14}/> Sair</button></div></header><div className="layout"><aside className="sidebar"><nav className="nav">
+  return <div className="app"><header className="topbar"><div className="brand"><div className="brand-mark">C</div><span>CENTRAL DE DESEMPENHO — CONCURSOS</span></div><div className="top-actions"><span className="user">Acesso direto</span><button className="btn small" onClick={signout}><LogOut size={14}/> Sair</button></div></header><div className="layout"><aside className="sidebar"><nav className="nav">
     <button className={tab==="dashboard"?"active":""} onClick={()=>setTab("dashboard")}><BarChart3 size={16}/> Dashboard</button>
     <button className={tab==="entries"?"active":""} onClick={()=>setTab("entries")}><CheckCircle2 size={16}/> Lançamentos</button>
     <button className={tab==="catalog"?"active":""} onClick={()=>setTab("catalog")}><BookOpen size={16}/> Cadastro</button>
