@@ -1,5 +1,5 @@
 import { Component, type ErrorInfo, type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
-import { BarChart3, Bell, BookOpen, CheckCircle2, Clipboard, Copy, FileDown, LogOut, Plus, Settings, Target, Trash2, Upload, X } from "lucide-react";
+import { BarChart3, Bell, BookOpen, CheckCircle2, Clipboard, Copy, FileDown, GripVertical, LogOut, Plus, Settings, Target, Trash2, Upload, X } from "lucide-react";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { Discipline, Entry, Filters, QuestionType, Source, Subject } from "./types";
@@ -275,8 +275,8 @@ function App() {
     if (!session?.user.id) return;
     const client = supabase as any;
     const [disciplinesResult, subjectsResult, sourcesResult, typesResult, settingsResult] = await Promise.all([
-      client.from("study_disciplines").select("*").order("name"),
-      client.from("study_subjects").select("*").order("name"),
+      client.from("study_disciplines").select("*").order("created_at", { ascending: true }),
+      client.from("study_subjects").select("*").order("created_at", { ascending: true }),
       client.from("study_sources").select("*").order("name"),
       client.from("study_question_types").select("*").order("name"),
       client.from("study_settings").select("*").maybeSingle(),
@@ -773,7 +773,7 @@ EDITAL:
           const {data:existingS,error:sError}=await client.from("study_subjects").select("id").eq("discipline_id",disciplineId).ilike("name",subjectName).maybeSingle();
           if(sError) throw sError;
           if(existingS) continue;
-          const {error}=await client.from("study_subjects").insert({name:subjectName,discipline_id:disciplineId});
+          const {error}=await client.from("study_subjects").insert({name:subjectName,discipline_id:disciplineId,created_at:new Date(Date.now() + createdS).toISOString()});
           if(error) throw error;
           createdS++;
         }
@@ -807,11 +807,30 @@ function Catalog({disciplines,subjects,sources,types,refresh,notify}:any) {
   const [disciplineId,setDisciplineId]=useState("");
   const [search,setSearch]=useState("");
   const [bulkOpen,setBulkOpen]=useState(false);
+  const [disciplineOrder,setDisciplineOrder]=useState<string[]>(() => readStore<string[]>("mcr_discipline_order", []));
+  const [draggingId,setDraggingId]=useState<string | null>(null);
 
   const table=kind==="discipline"?"study_disciplines":kind==="subject"?"study_subjects":kind==="source"?"study_sources":"study_question_types";
-  const list=(kind==="discipline"?disciplines:kind==="subject"?subjects:kind==="source"?sources:types)
+  const baseList=(kind==="discipline"?disciplines:kind==="subject"?subjects:kind==="source"?sources:types);
+  const orderedDisciplines = useMemo(() => {
+    const ids = new Set(baseList.map((item:any)=>item.id));
+    const saved = disciplineOrder.filter((id)=>ids.has(id));
+    const missing = baseList.filter((item:any)=>!saved.includes(item.id)).map((item:any)=>item.id);
+    return [...saved, ...missing].map((id)=>baseList.find((item:any)=>item.id===id)).filter(Boolean);
+  }, [baseList, disciplineOrder]);
+  const list=(kind==="discipline"?orderedDisciplines:baseList)
     .filter((item:any)=>!search||item.name.toLowerCase().includes(search.toLowerCase()))
     .filter((item:any)=>kind!=="subject"||!disciplineId||item.discipline_id===disciplineId);
+
+  const moveDiscipline = (sourceId:string,targetId:string) => {
+    if(sourceId===targetId) return;
+    const current=orderedDisciplines.map((item:any)=>item.id);
+    const from=current.indexOf(sourceId), to=current.indexOf(targetId);
+    if(from<0||to<0)return;
+    const next=[...current]; next.splice(from,1); next.splice(to,0,sourceId);
+    setDisciplineOrder(next); writeStore("mcr_discipline_order",next);
+    notify("Sequência das disciplinas salva.");
+  };
 
   const add=async(event:FormEvent)=>{
     event.preventDefault();
@@ -850,7 +869,7 @@ function Catalog({disciplines,subjects,sources,types,refresh,notify}:any) {
         <button className="btn primary"><Plus size={15}/> Adicionar</button>
       </form>
       <input className="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Pesquisar cadastro..."/>
-      <div className="table-wrap"><table className="table"><thead><tr><th>Nome</th>{kind==="subject"&&<th>Disciplina</th>}<th>Ações</th></tr></thead><tbody>
+      <div className="table-wrap"><table className="table"><thead><tr><th>{kind==="discipline"?"Nome · arraste para ordenar":"Nome"}</th>{kind==="subject"&&<th>Disciplina</th>}<th>Ações</th></tr></thead><tbody>
         {list.length?list.map((item:any)=><tr key={item.id}><td>{item.name}</td>{kind==="subject"&&<td>{disciplines.find((d:Discipline)=>d.id===item.discipline_id)?.name??"—"}</td>}<td><button className="btn small danger" onClick={()=>remove(item.id)}><Trash2 size={13}/> Excluir</button></td></tr>):<tr><td colSpan={kind==="subject"?3:2}><div className="empty">Nenhum cadastro encontrado.</div></td></tr>}
       </tbody></table></div>
     </div></section>
