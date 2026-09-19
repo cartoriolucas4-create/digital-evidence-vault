@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1789854767321,
+      "tag": "0000_create_study_tables_per_user",
+      "breakpoints": true
+    }
+  ]
+}
