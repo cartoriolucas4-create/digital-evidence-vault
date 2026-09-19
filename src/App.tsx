@@ -336,8 +336,8 @@ function App() {
               byDiscipline={byDiscipline} attention={attention} targetAccuracy={targetAccuracy}
             />
           )}
-          {tab === "entries" && <Entries disciplines={disciplines} subjects={subjects} sources={sources} types={types} entries={entries} refresh={reloadEntries} notify={notify}/>}
-          {tab === "catalog" && <Catalog disciplines={disciplines} subjects={subjects} sources={sources} types={types} refresh={reloadCatalog} notify={notify}/>}
+          {tab === "entries" && <Entries disciplines={disciplines} subjects={subjects} sources={sources} types={types} entries={entries} refresh={() => loadEntries().catch((error) => notify(error instanceof Error ? error.message : "Não foi possível carregar os lançamentos."))} notify={notify}/>}
+          {tab === "catalog" && <Catalog disciplines={disciplines} subjects={subjects} sources={sources} types={types} refresh={() => loadCatalog().catch((error) => notify(error instanceof Error ? error.message : "Não foi possível carregar o cadastro."))} notify={notify}/>}
           {tab === "settings" && (
             <SettingsPage
               dailyGoal={dailyGoal}
