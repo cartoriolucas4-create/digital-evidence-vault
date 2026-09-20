@@ -33,13 +33,18 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Build application
-        run: bun run build
+      - name: Build static application for GitHub Pages
+        run: bunx vite build --config vite.pages.config.ts
+
+      - name: Verify Pages artifact
+        run: |
+          test -f dist-pages/index.html
+          find dist-pages -maxdepth 2 -type f | sort | head -80
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:
-          path: .output/public
+          path: dist-pages
 
   deploy:
     runs-on: ubuntu-latest
