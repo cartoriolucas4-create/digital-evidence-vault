@@ -93,3 +93,9 @@ html[data-theme="dark"] .planner-content-bottom:focus{
     bottom:7px;
   }
 }
+
+/* Seleção independente: o bloco superior e o bloco inferior possuem formatação própria. */
+.planner-part-selected{
+  outline:2px solid rgba(214,51,132,.55);
+  outline-offset:-2px;
+}
