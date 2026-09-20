@@ -1,4 +1,4 @@
-import { Component, type ErrorInfo, type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
+import { Component, type ErrorInfo, type FormEvent, type ReactNode, type PointerEvent, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, BarChart3, Bell, BookOpen, CheckCircle2, Clipboard, Copy, FileDown, GripVertical, LogOut, Plus, Settings, Sparkles, Target, Trash2, Trophy, TrendingUp, Upload, X } from "lucide-react";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -1272,7 +1272,7 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
     });
   },[]);
 
-  useEffect(()=>{writeStore(key,data)},[key,data]);\n\n  const beginResize=(type:"col"|"row",index:number,event:React.PointerEvent)=>{\n    event.preventDefault(); event.stopPropagation();\n    const sizes=type==="col"?data.colWidths:data.rowHeights;\n    resizing.current={type,index,start:type==="col"?event.clientX:event.clientY,size:sizes[index]??(type==="col"?190:180)};\n    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);\n  };\n  const moveResize=(event:React.PointerEvent)=>{\n    const r=resizing.current; if(!r) return;\n    const delta=(r.type==="col"?event.clientX:event.clientY)-r.start;\n    const next=Math.max(r.type==="col"?120:90,Math.min(r.type==="col"?700:600,r.size+delta));\n    setData(prev=>r.type==="col"?({...prev,colWidths:prev.colWidths.map((v,i)=>i===r.index?next:v)}):({...prev,rowHeights:prev.rowHeights.map((v,i)=>i===r.index?next:v)}));\n  };\n  const endResize=()=>{resizing.current=null};
+  useEffect(()=>{writeStore(key,data)},[key,data]);\n\n  const beginResize=(type:"col"|"row",index:number,event:PointerEvent)=>{\n    event.preventDefault(); event.stopPropagation();\n    const sizes=type==="col"?data.colWidths:data.rowHeights;\n    resizing.current={type,index,start:type==="col"?event.clientX:event.clientY,size:sizes[index]??(type==="col"?190:180)};\n    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);\n  };\n  const moveResize=(event:React.PointerEvent)=>{\n    const r=resizing.current; if(!r) return;\n    const delta=(r.type==="col"?event.clientX:event.clientY)-r.start;\n    const next=Math.max(r.type==="col"?120:90,Math.min(r.type==="col"?700:600,r.size+delta));\n    setData(prev=>r.type==="col"?({...prev,colWidths:prev.colWidths.map((v,i)=>i===r.index?next:v)}):({...prev,rowHeights:prev.rowHeights.map((v,i)=>i===r.index?next:v)}));\n  };\n  const endResize=()=>{resizing.current=null};
 
   const weekStart=useMemo(()=>{
     const now=new Date(); now.setHours(12,0,0,0);
