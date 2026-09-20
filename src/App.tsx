@@ -2079,7 +2079,6 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
         })])}
       </div>
     </div>
-    <div className="planner-footer"><span>✓ Salvamento automático</span><span>{selected.length?selected.length+" célula(s) selecionada(s)":"Selecione células para edição em lote"}</span><button className="btn small" onClick={clearSelection}>Limpar seleção</button></div>
   </div>;
 }
 
