@@ -451,7 +451,7 @@ function App() {
     (async () => {
       const client = supabase as any;
       const { error } = await client.from("study_settings").upsert({
-        user_id: session.user.id,
+        user_id: session?.user?.id,
         student_name: nextStudentName,
         daily_goal: nextDailyGoal,
         weekly_goal: nextWeeklyGoal,
