@@ -2260,10 +2260,10 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
         cells[id]={
           ...cell,
           studiedWeek:undefined,
-          bg:defaultSmallColor,
+          bg:"#ffffff",
           subjectBg:defaultSmallColor,
           subjectStyle:{...(cell.subjectStyle??defaultPartStyle("subject")),bg:defaultSmallColor},
-          textStyle:{...(cell.textStyle??defaultPartStyle("text"))},
+          textStyle:{...(cell.textStyle??defaultPartStyle("text")),bg:"#ffffff"},
         };
       });
       return {...prev,weekOffset:prev.weekOffset+1,cells};
