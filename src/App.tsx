@@ -1268,6 +1268,10 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
   };
   const [data,setData]=useState<PlannerData>(()=>normalizePlanner(readStore<PlannerData>(key,makeInitial())));
   const [selected,setSelected]=useState<string[]>([]);
+  const [selectionMode,setSelectionMode]=useState<"cells"|"rows"|"cols">("cells");
+  const [selectedRows,setSelectedRows]=useState<number[]>([]);
+  const [selectedCols,setSelectedCols]=useState<number[]>([]);
+  const dragSelection=useRef<{anchorRow:number;anchorCol:number;dragging:boolean}|null>(null);
   const [textColor,setTextColor]=useState("#17202a");
   const [fillColor,setFillColor]=useState("#ffffff");
   const [subjectFillColor,setSubjectFillColor]=useState("#f7f8fa");
@@ -1364,14 +1368,68 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
       return {...prev,headers};
     });
   };
+  const cellsInRect=(r1:number,r2:number,c1:number,c2:number)=>{
+    const rows=[] as number[];
+    const cols=[] as number[];
+    for(let r=Math.min(r1,r2);r<=Math.max(r1,r2);r++) rows.push(r);
+    for(let col=Math.min(c1,c2);col<=Math.max(c1,c2);col++) cols.push(col);
+    return {rows,cols,ids:rows.flatMap(r=>cols.map(col=>cellId(r,col)))};
+  };
+  const selectRect=(r1:number,r2:number,c1:number,c2:number)=>{
+    const rect=cellsInRect(r1,r2,c1,c2);
+    setSelectionMode("cells");setSelectedRows([]);setSelectedCols([]);setSelected(rect.ids);
+  };
+  const startCellSelection=(row:number,col:number,event:React.PointerEvent)=>{
+    if(event.button!==0) return;
+    event.preventDefault();
+    const anchor=dragSelection.current={anchorRow:row,anchorCol:col,dragging:true};
+    selectRect(row,row,col,col);
+    const stop=()=>{if(dragSelection.current){dragSelection.current.dragging=false;dragSelection.current=null;}}
+    const move=(ev:PointerEvent)=>{
+      if(!dragSelection.current?.dragging) return;
+      const el=document.elementFromPoint(ev.clientX,ev.clientY)?.closest("[data-planner-row][data-planner-col]") as HTMLElement|null;
+      if(!el) return;
+      const rr=Number(el.dataset.plannerRow), cc=Number(el.dataset.plannerCol);
+      if(Number.isFinite(rr)&&Number.isFinite(cc)) selectRect(anchor.anchorRow,rr,anchor.anchorCol,cc);
+    };
+    window.addEventListener("pointermove",move);window.addEventListener("pointerup",stop,{once:true});
+  };
+  const selectRow=(row:number)=>{const rows=[row];setSelectionMode("rows");setSelectedRows(rows);setSelectedCols([]);setSelected(Array.from({length:data.cols},(_,col)=>cellId(row,col)));};
+  const selectCol=(col:number)=>{const cols=[col];setSelectionMode("cols");setSelectedRows([]);setSelectedCols(cols);setSelected(Array.from({length:data.rows},(_,row)=>cellId(row,col)));};
+  const selectAll=()=>{const ids=Array.from({length:data.rows*data.cols},(_,i)=>cellId(Math.floor(i/data.cols),i%data.cols));setSelectionMode("cells");setSelectedRows([]);setSelectedCols([]);setSelected(ids);};
   const toggleSelected=(id:string)=>{
+    setSelectionMode("cells");setSelectedRows([]);setSelectedCols([]);
     setSelected(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]);
   };
-  const selectAll=()=>setSelected(Array.from({length:data.rows*data.cols},(_,i)=>cellId(Math.floor(i/data.cols),i%data.cols)));
+  const deleteSelectedRows=()=>{
+    if(!selectedRows.length || data.rows<=1) return;
+    if(!window.confirm(`Excluir ${selectedRows.length} linha(s) selecionada(s)?`)) return;
+    const remove=new Set(selectedRows);
+    setData(prev=>{
+      const rowsToKeep=Array.from({length:prev.rows},(_,r)=>r).filter(r=>!remove.has(r));
+      const cells:Record<string,Cell>={};
+      rowsToKeep.forEach((oldR,newR)=>{for(let col=0;col<prev.cols;col++){const oldId=cellId(oldR,col);const value=prev.cells[oldId];if(value) cells[cellId(newR,col)]={...value,id:cellId(newR,col)};}});
+      return {...prev,rows:rowsToKeep.length,rowHeights:rowsToKeep.map(r=>prev.rowHeights[r]??180),cells};
+    });
+    setSelected([]);setSelectedRows([]);setSelectionMode("cells");
+  };
+  const deleteSelectedCols=()=>{
+    if(!selectedCols.length || data.cols<=1) return;
+    if(!window.confirm(`Excluir ${selectedCols.length} coluna(s) selecionada(s)?`)) return;
+    const remove=new Set(selectedCols);
+    setData(prev=>{
+      const colsToKeep=Array.from({length:prev.cols},(_,col)=>col).filter(col=>!remove.has(col));
+      const headers=colsToKeep.map(col=>prev.headers[col]??("COLUNA "+(col+1)));
+      const cells:Record<string,Cell>={};
+      for(let row=0;row<prev.rows;row++) colsToKeep.forEach((oldCol,newCol)=>{const oldId=cellId(row,oldCol);const value=prev.cells[oldId];if(value) cells[cellId(row,newCol)]={...value,id:cellId(row,newCol)};});
+      return {...prev,cols:colsToKeep.length,headers,colWidths:colsToKeep.map(col=>prev.colWidths[col]??190),cells};
+    });
+    setSelected([]);setSelectedCols([]);setSelectionMode("cells");
+  };
   const applyFill=()=>{setData(prev=>{const cells={...prev.cells};selected.forEach(id=>{cells[id]={...getCell(id),bg:fillColor}});return {...prev,cells}});notify("Cor aplicada.");};
   const applyText=()=>{setData(prev=>{const cells={...prev.cells};selected.forEach(id=>{cells[id]={...getCell(id),fg:textColor}});return {...prev,cells}});notify("Cor do texto das observações aplicada.");};
   const applySubjectFill=()=>{setData(prev=>{const cells={...prev.cells};selected.forEach(id=>{cells[id]={...getCell(id),subjectBg:subjectFillColor}});return {...prev,cells}});notify("Cor da matéria aplicada.");};
-  const clearSelection=()=>setSelected([]);
+  const clearSelection=()=>{setSelected([]);setSelectedRows([]);setSelectedCols([]);setSelectionMode("cells");};
   const addRow=()=>setData(prev=>({...prev,rows:prev.rows+1,rowHeights:[...prev.rowHeights,180]}));
   const addCol=()=>setData(prev=>{
     const headers=[...(prev.headers??[])];
@@ -1398,23 +1456,28 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
         <button className="planner-tool" onClick={selectAll}>Selecionar tudo</button>
         <button className="planner-tool" onClick={addCol}>+ Coluna</button>
         <button className="planner-tool" onClick={addRow}>+ Linha</button>
+        <button className="planner-tool planner-danger" onClick={deleteSelectedCols} disabled={!selectedCols.length || data.cols<=1}>− Coluna</button>
+        <button className="planner-tool planner-danger" onClick={deleteSelectedRows} disabled={!selectedRows.length || data.rows<=1}>− Linha</button>
         <button className="planner-tool" onClick={copyWeek}>Duplicar</button>
         <button className="planner-tool" onClick={()=>setFullscreen(v=>!v)}>{fullscreen?"⛶ Sair":"⛶ Tela cheia"}</button>
         <button className="planner-tool planner-danger" onClick={resetPlanner}>Limpar</button>
       </div>
     </div>
-    <div className="planner-hint">Arraste a divisão entre as colunas ↔ para mudar a largura e a divisão entre as linhas ↕ para mudar a altura, como no Excel. Em cada quadrado, informe a <strong>MATÉRIA</strong> e suas observações.</div>
+    <div className="planner-hint">Selecione como no Excel: clique e arraste o mouse pelos quadrados para selecionar um bloco. Clique no cabeçalho de uma coluna ou no número de uma linha para selecionar tudo. Use <strong>− Coluna</strong> ou <strong>− Linha</strong> para excluir. As divisões continuam redimensionáveis.</div>
     <div className="planner-grid-wrap">
-      <div className="planner-grid" style={{gridTemplateColumns:data.colWidths.map(w=>w+"px").join(" "),gridTemplateRows:["34px",...data.rowHeights.map(h=>h+"px")].join(" ")}}>
+      <div className="planner-grid" style={{gridTemplateColumns:["42px",...data.colWidths.map(w=>w+"px")].join(" "),gridTemplateRows:["34px",...data.rowHeights.map(h=>h+"px")].join(" ")}}>
+        <button className="planner-corner-selector" title="Selecionar toda a planilha" onClick={selectAll}>□</button>
         {Array.from({length:data.cols},(_,col)=>{
           const label=data.headers?.[col]??("COLUNA "+(col+1));
-          return <div className="planner-day" key={"head-"+col}>
-            <span className="planner-resize-handle planner-col-resize" onPointerDown={e=>beginResize("col",col,e)} aria-hidden="true"/><input value={label} onChange={e=>updateHeader(col,e.target.value)} aria-label={"Nome da coluna "+(col+1)} spellCheck={false}/>
+          return <div className={"planner-day "+(selectedCols.includes(col)?"axis-selected":"")} key={"head-"+col} onClick={()=>selectCol(col)}>
+            <span className="planner-resize-handle planner-col-resize" onPointerDown={e=>{e.stopPropagation();beginResize("col",col,e)}} aria-hidden="true"/><input onClick={e=>e.stopPropagation()} value={label} onChange={e=>updateHeader(col,e.target.value)} aria-label={"Nome da coluna "+(col+1)} spellCheck={false}/>
           </div>;
         })}
-        {Array.from({length:data.rows},(_,row)=>Array.from({length:data.cols},(_,col)=>{
+        {Array.from({length:data.rows},(_,row)=>[
+          <button key={"row-head-"+row} className={"planner-row-selector "+(selectedRows.includes(row)?"axis-selected":"")} onClick={()=>selectRow(row)}>{row+1}</button>,
+          ...Array.from({length:data.cols},(_,col)=>{
           const id=cellId(row,col), cell=getCell(id), active=selected.includes(id);
-          return <div key={id} className={"planner-cell "+(active?"selected":"")} style={{backgroundColor:cell.bg,color:cell.fg,fontSize:cell.size,fontWeight:cell.bold?800:500,fontStyle:cell.italic?"italic":"normal"}} onClick={(e)=>{if(e.ctrlKey||e.metaKey)toggleSelected(id);else setSelected([id]);}} onDoubleClick={()=>toggleSelected(id)}>
+          return <div key={id} data-planner-row={row} data-planner-col={col} className={"planner-cell "+(active?"selected":"")} style={{backgroundColor:cell.bg,color:cell.fg,fontSize:cell.size,fontWeight:cell.bold?800:500,fontStyle:cell.italic?"italic":"normal"}} onPointerDown={e=>startCellSelection(row,col,e)} onClick={(e)=>{if(e.ctrlKey||e.metaKey)toggleSelected(id);}}>
             <span className="planner-resize-handle planner-row-resize" onPointerDown={e=>beginResize("row",row,e)} />
             <div className="planner-cell-actions"><button title="Negrito" onClick={(e)=>{e.stopPropagation();updateCell(id,{bold:!cell.bold})}}>B</button><button title="Itálico" onClick={(e)=>{e.stopPropagation();updateCell(id,{italic:!cell.italic})}}>I</button><button title="Aumentar fonte" onClick={(e)=>{e.stopPropagation();updateCell(id,{size:Math.min(32,cell.size+2)})}}>A+</button><button title="Diminuir fonte" onClick={(e)=>{e.stopPropagation();updateCell(id,{size:Math.max(10,cell.size-2)})}}>A-</button></div>
             <div className="planner-subject-wrap" style={{backgroundColor:cell.subjectBg}}>
@@ -1426,7 +1489,7 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
               <input className="planner-mini-color planner-notes-color" type="color" value={cell.bg} title="Cor das observações" onChange={e=>{e.stopPropagation();updateCell(id,{bg:e.target.value})}} onClick={e=>e.stopPropagation()}/>
             </div>
           </div>;
-        }))}
+        })]}
       </div>
     </div>
     <div className="planner-footer"><span>✓ Salvamento automático</span><span>{selected.length?selected.length+" célula(s) selecionada(s)":"Selecione células para edição em lote"}</span><button className="btn small" onClick={clearSelection}>Limpar seleção</button></div>
