@@ -36,6 +36,8 @@ jobs:
       - name: Build static application for GitHub Pages
         run: bunx vite build --config vite.pages.config.ts
 
+      # Keep the Pages build tied to the current main branch revision.
+
       - name: Verify Pages artifact
         run: |
           test -f dist-pages/index.html
