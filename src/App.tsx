@@ -733,7 +733,7 @@ function App() {
               onClear={() => { const next = emptyFilters(); setFilters(next); setApplied(next); }}
               totalQuestions={totalQuestions} totalCorrect={totalCorrect} totalErrors={totalErrors} accuracy={accuracy}
               daysStudied={daysStudied} todayQuestions={todayQuestions} todayCorrect={todayCorrect} dailyGoal={dailyGoal}
-              byDiscipline={byDiscipline} attention={attention} targetAccuracy={targetAccuracy} entries={entries} onExportMonthly={() => exportMonthlyPdf()}
+              byDiscipline={byDiscipline} bySubject={bySubject} attention={attention} targetAccuracy={targetAccuracy} entries={entries} onExportMonthly={() => exportMonthlyPdf()}
             />
           )}
           {tab === "planner" && <Planner userId={session.user.id} notify={notify} defaultSmallColor={plannerDefaultColor} completedSmallColor={plannerCompletedColor}/>}
@@ -831,6 +831,8 @@ function Dashboard(props: any) {
       </section>
 
       <PerformanceCharts entries={props.entries} byDiscipline={props.byDiscipline} targetAccuracy={props.targetAccuracy} />
+
+      <SubjectPerformanceCharts bySubject={props.bySubject} />
 
       <div className="grid2">
         <DataTable title="DESEMPENHO POR DISCIPLINA" headers={["Disciplina","Questões","Acertos","Erros","%","Status"]} rows={props.byDiscipline.map((x: any) => [x.name,x.questions,x.correct,x.errors,`${x.accuracy.toFixed(1)}%`,<Status key={x.id} value={x.accuracy} target={props.targetAccuracy}/>])} empty="Nenhum lançamento no período."/>
@@ -957,6 +959,60 @@ function PerformanceCharts({ entries, byDiscipline, targetAccuracy }: any) {
       </section>
     </div>
   );
+}
+
+function SubjectPerformanceCharts({ bySubject }: { bySubject: any[] }) {
+  const minimumQuestions = 5;
+  const eligible = (bySubject ?? []).filter((item) => Number(item.questions || 0) >= minimumQuestions);
+  const bestSubjects = eligible.slice().sort((a, b) => b.accuracy - a.accuracy).slice(0, 8);
+  const attentionSubjects = eligible.slice().sort((a, b) => a.accuracy - b.accuracy).slice(0, 8);
+
+  const SubjectBars = ({ items, empty }: { items: any[]; empty: string }) => (
+    items.length ? <div className="subject-performance-list">
+      {items.map((item) => {
+        const value = Math.min(100, Math.max(0, Number(item.accuracy || 0)));
+        return <div className="subject-performance-row" key={item.id} title={item.name + ": " + value.toFixed(1) + "% — " + item.questions + " questões"}>
+          <div className="subject-performance-meta">
+            <div className="subject-performance-name">
+              <strong>{item.name}</strong>
+              <span>{item.disciplineName || "—"}</span>
+            </div>
+            <strong className="subject-performance-value">{value.toFixed(1)}%</strong>
+          </div>
+          <div className="subject-performance-track" aria-hidden="true">
+            <span className="subject-performance-fill" style={{ width: value + "%" }} />
+          </div>
+          <div className="subject-performance-foot">
+            <span>{Number(item.questions || 0).toLocaleString("pt-BR")} questões · {Number(item.correct || 0).toLocaleString("pt-BR")} acertos · {Number(item.errors || 0).toLocaleString("pt-BR")} erros</span>
+          </div>
+        </div>;
+      })}
+    </div> : <div className="empty">{empty}</div>
+  );
+
+  return <div className="performance-charts subject-performance-charts">
+    <section className="chart-card">
+      <div className="chart-card-head compact">
+        <div>
+          <div className="chart-eyebrow">ANÁLISE POR ASSUNTO</div>
+          <h2>Melhores assuntos</h2>
+          <p>Assuntos com maior aproveitamento, considerando apenas aqueles com pelo menos 5 questões.</p>
+        </div>
+      </div>
+      <SubjectBars items={bestSubjects} empty="Nenhum assunto com pelo menos 5 questões no período." />
+    </section>
+
+    <section className="chart-card">
+      <div className="chart-card-head compact">
+        <div>
+          <div className="chart-eyebrow">ANÁLISE POR ASSUNTO</div>
+          <h2>Assuntos que precisam de atenção</h2>
+          <p>Assuntos com menor aproveitamento, ordenados do pior para o melhor resultado.</p>
+        </div>
+      </div>
+      <SubjectBars items={attentionSubjects} empty="Nenhum assunto com pelo menos 5 questões no período." />
+    </section>
+  </div>;
 }
 
 function Metric({label,value,suffix="",tone=""}:{label:string,value:number,suffix?:string,tone?:string}) {
