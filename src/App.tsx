@@ -1281,7 +1281,11 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
   const [textColor,setTextColor]=useState("#17202a");
   const [fillColor,setFillColor]=useState("#ffffff");
   const [subjectFillColor,setSubjectFillColor]=useState("#f7f8fa");
-  const [fullscreen,setFullscreen]=useState(false);\n  const [shortcutHelpOpen,setShortcutHelpOpen]=useState(false);\n  const plannerHistory=useRef<{past:PlannerData[];future:PlannerData[]}>({past:[],future:[]});\n  const plannerHistoryMode=useRef<"undo"|"redo"|null>(null);\n  const plannerPreviousData=useRef<PlannerData>(data);
+  const [fullscreen,setFullscreen]=useState(false);
+  const [shortcutHelpOpen,setShortcutHelpOpen]=useState(false);
+  const plannerHistory=useRef<{past:PlannerData[];future:PlannerData[]}>({past:[],future:[]});
+  const plannerHistoryMode=useRef<"undo"|"redo"|null>(null);
+  const plannerPreviousData=useRef<PlannerData>(data);
   const resizing=useRef<{type:"col"|"row";index:number;start:number;size:number}|null>(null);
 
   useEffect(()=>{
@@ -1306,7 +1310,16 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
     });
   },[]);
 
-  useEffect(()=>{writeStore(key,data)},[key,data]);\n  useEffect(()=>{\n    if(plannerPreviousData.current!==data){\n      if(plannerHistoryMode.current){plannerHistoryMode.current=null;}\n      else{plannerHistory.current.past=[...plannerHistory.current.past.slice(-49),plannerPreviousData.current];plannerHistory.current.future=[];}\n      plannerPreviousData.current=data;\n    }\n  },[data]);\n\n  const plannerUndo=()=>{const previous=plannerHistory.current.past.pop();if(!previous)return;plannerHistory.current.future.push(data);plannerHistoryMode.current="undo";plannerPreviousData.current=previous;setData(previous);};\n  const plannerRedo=()=>{const next=plannerHistory.current.future.pop();if(!next)return;plannerHistory.current.past.push(data);plannerHistoryMode.current="redo";plannerPreviousData.current=next;setData(next);};\n\n
+  useEffect(()=>{writeStore(key,data)},[key,data]);
+  useEffect(()=>{
+    if(plannerPreviousData.current!==data){
+      if(plannerHistoryMode.current){plannerHistoryMode.current=null;}
+      else{plannerHistory.current.past=[...plannerHistory.current.past.slice(-49),plannerPreviousData.current];plannerHistory.current.future=[];}
+      plannerPreviousData.current=data;
+    }
+  },[data]);\n
+  const plannerUndo=()=>{const previous=plannerHistory.current.past.pop();if(!previous)return;plannerHistory.current.future.push(data);plannerHistoryMode.current="undo";plannerPreviousData.current=previous;setData(previous);};
+  const plannerRedo=()=>{const next=plannerHistory.current.future.pop();if(!next)return;plannerHistory.current.past.push(data);plannerHistoryMode.current="redo";plannerPreviousData.current=next;setData(next);};\n\n
 
   const beginResize=(type:"col"|"row",index:number,event:PointerEvent)=>{
     event.preventDefault();
@@ -1403,7 +1416,139 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
   const selectRow=(row:number)=>{const rows=[row];setSelectionMode("rows");setSelectedRows(rows);setSelectedCols([]);setSelected(Array.from({length:data.cols},(_,col)=>cellId(row,col)));};
   const selectCol=(col:number)=>{const cols=[col];setSelectionMode("cols");setSelectedRows([]);setSelectedCols(cols);setSelected(Array.from({length:data.rows},(_,row)=>cellId(row,col)));};
   const selectAll=()=>{const ids=Array.from({length:data.rows*data.cols},(_,i)=>cellId(Math.floor(i/data.cols),i%data.cols));setSelectionMode("cells");setSelectedRows([]);setSelectedCols([]);setSelected(ids);};
-  const plannerSelectionBounds=()=>{\n    const ids=selected.length?selected:[cellId(0,0)];\n    const coords=ids.map(id=>{const [r,col]=id.split("-").map(Number);return {r,col};}).filter(v=>Number.isFinite(v.r)&&Number.isFinite(v.col));\n    return {\n      minRow:selectionMode==="rows"&&selectedRows.length?Math.min(...selectedRows):Math.min(...coords.map(v=>v.r)),\n      maxRow:selectionMode==="rows"&&selectedRows.length?Math.max(...selectedRows):Math.max(...coords.map(v=>v.r)),\n      minCol:selectionMode==="cols"&&selectedCols.length?Math.min(...selectedCols):Math.min(...coords.map(v=>v.col)),\n      maxCol:selectionMode==="cols"&&selectedCols.length?Math.max(...selectedCols):Math.max(...coords.map(v=>v.col)),\n    };\n  };\n  const plannerCellClipboard=()=>{\n    const {minRow,maxRow,minCol,maxCol}=plannerSelectionBounds();\n    return Array.from({length:maxRow-minRow+1},(_,rowOffset)=>\n      Array.from({length:maxCol-minCol+1},(_,colOffset)=>{\n        const cell=getCell(cellId(minRow+rowOffset,minCol+colOffset));\n        return [cell.subject,cell.text].filter(Boolean).join("\\n");\n      }).join("\\t")\n    ).join("\\n");\n  };\n  const writePlannerClipboard=async(cut=false)=>{\n    const text=plannerCellClipboard();\n    try{await navigator.clipboard.writeText(text);}catch{\n      const area=document.createElement("textarea"); area.value=text; area.style.position="fixed"; area.style.opacity="0";\n      document.body.appendChild(area); area.select(); document.execCommand("copy"); area.remove();\n    }\n    if(cut){\n      setData(prev=>{\n        const cells={...prev.cells};\n        selected.forEach(id=>{cells[id]={...getCell(id),subject:"",text:""};});\n        return {...prev,cells};\n      });\n    }\n    notify(cut?"Células recortadas.":"Células copiadas.");\n  };\n  const pastePlannerText=async(text?:string)=>{\n    const value=typeof text==="string"?text:await navigator.clipboard.readText();\n    if(!value) return;\n    const rows=value.replace(/\\r/g,"").split("\\n");\n    if(rows.length&&rows[rows.length-1]==="") rows.pop();\n    const matrix=rows.map(row=>row.split("\\t"));\n    const {minRow,minCol}=plannerSelectionBounds();\n    setData(prev=>{\n      const cells={...prev.cells};\n      matrix.forEach((row,rowOffset)=>row.forEach((raw,colOffset)=>{\n        const r=minRow+rowOffset,col=minCol+colOffset;\n        if(r>=prev.rows||col>=prev.cols) return;\n        const id=cellId(r,col);\n        const parts=raw.split("\\n");\n        const current=getCell(id);\n        cells[id]={...current,subject:parts.shift()??"",text:parts.join("\\n")};\n      }));\n      return {...prev,cells};\n    });\n    notify("Conteúdo colado.");\n  };\n  const clearPlannerSelection=()=>{\n    if(!selected.length) return;\n    setData(prev=>{const cells={...prev.cells};selected.forEach(id=>{cells[id]={...getCell(id),subject:"",text:""};});return {...prev,cells};});\n  };\n  const togglePlannerFormat=(format:"bold"|"italic")=>{\n    if(!selected.length) return;\n    setData(prev=>{const cells={...prev.cells};const next=selected.some(id=>!getCell(id)[format]);selected.forEach(id=>{cells[id]={...getCell(id),[format]:next};});return {...prev,cells};});\n  };\n  const fillPlannerDirection=(direction:"down"|"right")=>{\n    if(selected.length<2) return;\n    const {minRow,maxRow,minCol,maxCol}=plannerSelectionBounds();\n    const source=getCell(cellId(minRow,minCol));\n    setData(prev=>{\n      const cells={...prev.cells};\n      if(direction==="down"){for(let r=minRow+1;r<=maxRow;r++) cells[cellId(r,minCol)]={...getCell(cellId(r,minCol)),subject:source.subject,text:source.text};}\n      else{for(let col=minCol+1;col<=maxCol;col++) cells[cellId(minRow,col)]={...getCell(cellId(minRow,col)),subject:source.subject,text:source.text};}\n      return {...prev,cells};\n    });\n  };\n  useEffect(()=>{\n    const onKeyDown=(event:KeyboardEvent)=>{\n      const target=event.target as HTMLElement|null;\n      const editing=!!target?.closest("input,textarea,[contenteditable=\\\"true\\\"]");\n      const mod=event.ctrlKey||event.metaKey;\n      if(editing) return;\n\n      if(event.shiftKey&&event.code==="Space"&&!mod){\n        event.preventDefault();\n        selectRow(selected.length?Number(selected[0].split("-")[0]):0);\n        return;\n      }\n      if(!mod){\n        if(event.key==="Delete"||event.key==="Backspace"){\n          event.preventDefault();\n          if(selectedRows.length){deleteSelectedRows();return;}\n          if(selectedCols.length){deleteSelectedCols();return;}\n          clearPlannerSelection();\n          return;\n        }\n        const arrows:any={ArrowUp:[-1,0],ArrowDown:[1,0],ArrowLeft:[0,-1],ArrowRight:[0,1]};\n        const delta=arrows[event.key];\n        if(delta){\n          event.preventDefault();\n          const first=selected[0]??"0-0";const [row,col]=first.split("-").map(Number);\n          const nextRow=Math.max(0,Math.min(data.rows-1,row+delta[0]));const nextCol=Math.max(0,Math.min(data.cols-1,col+delta[1]));\n          selectRect(nextRow,nextRow,nextCol,nextCol);\n        }\n        return;\n      }\n      const key=event.key.toLowerCase();\n      if(key==="c"){event.preventDefault();void writePlannerClipboard(false);}\n      else if(key==="x"){event.preventDefault();void writePlannerClipboard(true);}\n      else if(key==="v"){event.preventDefault();void pastePlannerText();}\n      else if(key==="a"){event.preventDefault();selectAll();}\n      else if(key==="b"){event.preventDefault();togglePlannerFormat("bold");}\n      else if(key==="i"){event.preventDefault();togglePlannerFormat("italic");}\n      else if(key==="d"){event.preventDefault();fillPlannerDirection("down");}\n      else if(key==="r"){event.preventDefault();fillPlannerDirection("right");}\n      else if(key==="enter"){event.preventDefault();const first=selected[0];if(first){const source=getCell(first);setData(prev=>{const cells={...prev.cells};selected.forEach(id=>{cells[id]={...getCell(id),subject:source.subject,text:source.text};});return {...prev,cells};});}}\n      else if(key==="s"){event.preventDefault();notify("Planejamento salvo automaticamente.");}\n      else if(key==="z"&&!event.shiftKey){event.preventDefault();plannerUndo();}\n      else if((key==="z"&&event.shiftKey)||key==="y"){event.preventDefault();plannerRedo();}\n      else if(key==="/" ){event.preventDefault();setShortcutHelpOpen(true);}\n      else if(key==="f"){event.preventDefault();notify("Use Ctrl+F para localizar no planejamento.");}\n      else if(key==="h"){event.preventDefault();notify("Use Ctrl+H para localizar e substituir no planejamento.");}\n      else if(event.code==="Space"){event.preventDefault();selectCol(selected.length?Number(selected[0].split("-")[1]):0);}\n    };\n    const onPaste=(event:ClipboardEvent)=>{\n      const target=event.target as HTMLElement|null;\n      if(target?.closest("input,textarea,[contenteditable=\\\"true\\\"]")) return;\n      const text=event.clipboardData?.getData("text/plain");\n      if(!text) return;\n      event.preventDefault();void pastePlannerText(text);\n    };\n    window.addEventListener("keydown",onKeyDown);\n    window.addEventListener("paste",onPaste);\n    return()=>{window.removeEventListener("keydown",onKeyDown);window.removeEventListener("paste",onPaste);};\n  },[data,selected,selectionMode,selectedRows,selectedCols]);\n\n  const toggleSelected=(id:string)=>{
+  const plannerSelectionBounds=()=>{
+    const ids=selected.length?selected:[cellId(0,0)];
+    const coords=ids.map(id=>{const [r,col]=id.split("-").map(Number);return {r,col};}).filter(v=>Number.isFinite(v.r)&&Number.isFinite(v.col));
+    return {
+      minRow:selectionMode==="rows"&&selectedRows.length?Math.min(...selectedRows):Math.min(...coords.map(v=>v.r)),
+      maxRow:selectionMode==="rows"&&selectedRows.length?Math.max(...selectedRows):Math.max(...coords.map(v=>v.r)),
+      minCol:selectionMode==="cols"&&selectedCols.length?Math.min(...selectedCols):Math.min(...coords.map(v=>v.col)),
+      maxCol:selectionMode==="cols"&&selectedCols.length?Math.max(...selectedCols):Math.max(...coords.map(v=>v.col)),
+    };
+  };
+  const plannerCellClipboard=()=>{
+    const {minRow,maxRow,minCol,maxCol}=plannerSelectionBounds();
+    return Array.from({length:maxRow-minRow+1},(_,rowOffset)=>
+      Array.from({length:maxCol-minCol+1},(_,colOffset)=>{
+        const cell=getCell(cellId(minRow+rowOffset,minCol+colOffset));
+        return [cell.subject,cell.text].filter(Boolean).join("\\n");
+      }).join("\\t")
+    ).join("\\n");
+  };
+  const writePlannerClipboard=async(cut=false)=>{
+    const text=plannerCellClipboard();
+    try{await navigator.clipboard.writeText(text);}catch{
+      const area=document.createElement("textarea"); area.value=text; area.style.position="fixed"; area.style.opacity="0";
+      document.body.appendChild(area); area.select(); document.execCommand("copy"); area.remove();
+    }
+    if(cut){
+      setData(prev=>{
+        const cells={...prev.cells};
+        selected.forEach(id=>{cells[id]={...getCell(id),subject:"",text:""};});
+        return {...prev,cells};
+      });
+    }
+    notify(cut?"Células recortadas.":"Células copiadas.");
+  };
+  const pastePlannerText=async(text?:string)=>{
+    const value=typeof text==="string"?text:await navigator.clipboard.readText();
+    if(!value) return;
+    const rows=value.replace(/\\r/g,"").split("\\n");
+    if(rows.length&&rows[rows.length-1]==="") rows.pop();
+    const matrix=rows.map(row=>row.split("\\t"));
+    const {minRow,minCol}=plannerSelectionBounds();
+    setData(prev=>{
+      const cells={...prev.cells};
+      matrix.forEach((row,rowOffset)=>row.forEach((raw,colOffset)=>{
+        const r=minRow+rowOffset,col=minCol+colOffset;
+        if(r>=prev.rows||col>=prev.cols) return;
+        const id=cellId(r,col);
+        const parts=raw.split("\\n");
+        const current=getCell(id);
+        cells[id]={...current,subject:parts.shift()??"",text:parts.join("\\n")};
+      }));
+      return {...prev,cells};
+    });
+    notify("Conteúdo colado.");
+  };
+  const clearPlannerSelection=()=>{
+    if(!selected.length) return;
+    setData(prev=>{const cells={...prev.cells};selected.forEach(id=>{cells[id]={...getCell(id),subject:"",text:""};});return {...prev,cells};});
+  };
+  const togglePlannerFormat=(format:"bold"|"italic")=>{
+    if(!selected.length) return;
+    setData(prev=>{const cells={...prev.cells};const next=selected.some(id=>!getCell(id)[format]);selected.forEach(id=>{cells[id]={...getCell(id),[format]:next};});return {...prev,cells};});
+  };
+  const fillPlannerDirection=(direction:"down"|"right")=>{
+    if(selected.length<2) return;
+    const {minRow,maxRow,minCol,maxCol}=plannerSelectionBounds();
+    const source=getCell(cellId(minRow,minCol));
+    setData(prev=>{
+      const cells={...prev.cells};
+      if(direction==="down"){for(let r=minRow+1;r<=maxRow;r++) cells[cellId(r,minCol)]={...getCell(cellId(r,minCol)),subject:source.subject,text:source.text};}
+      else{for(let col=minCol+1;col<=maxCol;col++) cells[cellId(minRow,col)]={...getCell(cellId(minRow,col)),subject:source.subject,text:source.text};}
+      return {...prev,cells};
+    });
+  };
+  useEffect(()=>{
+    const onKeyDown=(event:KeyboardEvent)=>{
+      const target=event.target as HTMLElement|null;
+      const editing=!!target?.closest("input,textarea,[contenteditable=\\\"true\\\"]");
+      const mod=event.ctrlKey||event.metaKey;
+      if(editing) return;\n
+      if(event.shiftKey&&event.code==="Space"&&!mod){
+        event.preventDefault();
+        selectRow(selected.length?Number(selected[0].split("-")[0]):0);
+        return;
+      }
+      if(!mod){
+        if(event.key==="Delete"||event.key==="Backspace"){
+          event.preventDefault();
+          if(selectedRows.length){deleteSelectedRows();return;}
+          if(selectedCols.length){deleteSelectedCols();return;}
+          clearPlannerSelection();
+          return;
+        }
+        const arrows:any={ArrowUp:[-1,0],ArrowDown:[1,0],ArrowLeft:[0,-1],ArrowRight:[0,1]};
+        const delta=arrows[event.key];
+        if(delta){
+          event.preventDefault();
+          const first=selected[0]??"0-0";const [row,col]=first.split("-").map(Number);
+          const nextRow=Math.max(0,Math.min(data.rows-1,row+delta[0]));const nextCol=Math.max(0,Math.min(data.cols-1,col+delta[1]));
+          selectRect(nextRow,nextRow,nextCol,nextCol);
+        }
+        return;
+      }
+      const key=event.key.toLowerCase();
+      if(key==="c"){event.preventDefault();void writePlannerClipboard(false);}
+      else if(key==="x"){event.preventDefault();void writePlannerClipboard(true);}
+      else if(key==="v"){event.preventDefault();void pastePlannerText();}
+      else if(key==="a"){event.preventDefault();selectAll();}
+      else if(key==="b"){event.preventDefault();togglePlannerFormat("bold");}
+      else if(key==="i"){event.preventDefault();togglePlannerFormat("italic");}
+      else if(key==="d"){event.preventDefault();fillPlannerDirection("down");}
+      else if(key==="r"){event.preventDefault();fillPlannerDirection("right");}
+      else if(key==="enter"){event.preventDefault();const first=selected[0];if(first){const source=getCell(first);setData(prev=>{const cells={...prev.cells};selected.forEach(id=>{cells[id]={...getCell(id),subject:source.subject,text:source.text};});return {...prev,cells};});}}
+      else if(key==="s"){event.preventDefault();notify("Planejamento salvo automaticamente.");}
+      else if(key==="z"&&!event.shiftKey){event.preventDefault();plannerUndo();}
+      else if((key==="z"&&event.shiftKey)||key==="y"){event.preventDefault();plannerRedo();}
+      else if(key==="/" ){event.preventDefault();setShortcutHelpOpen(true);}
+      else if(key==="f"){event.preventDefault();notify("Use Ctrl+F para localizar no planejamento.");}
+      else if(key==="h"){event.preventDefault();notify("Use Ctrl+H para localizar e substituir no planejamento.");}
+      else if(event.code==="Space"){event.preventDefault();selectCol(selected.length?Number(selected[0].split("-")[1]):0);}
+    };
+    const onPaste=(event:ClipboardEvent)=>{
+      const target=event.target as HTMLElement|null;
+      if(target?.closest("input,textarea,[contenteditable=\\\"true\\\"]")) return;
+      const text=event.clipboardData?.getData("text/plain");
+      if(!text) return;
+      event.preventDefault();void pastePlannerText(text);
+    };
+    window.addEventListener("keydown",onKeyDown);
+    window.addEventListener("paste",onPaste);
+    return()=>{window.removeEventListener("keydown",onKeyDown);window.removeEventListener("paste",onPaste);};
+  },[data,selected,selectionMode,selectedRows,selectedCols]);\n
+  const toggleSelected=(id:string)=>{
     setSelectionMode("cells");setSelectedRows([]);setSelectedCols([]);
     setSelected(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]);
   };
@@ -1445,7 +1590,15 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
   const resetPlanner=()=>{if(window.confirm("Limpar todo o conteúdo desta semana?")){setData(prev=>({...prev,cells:{}}));setSelected([]);}};
   const copyWeek=()=>{setData(prev=>{const cells:{[key:string]:Cell}={...prev.cells};for(let r=0;r<prev.rows;r++)for(let col=0;col<prev.cols;col++){const id=cellId(r,col);cells[id]={...getCell(id),id:uid()};}return {...prev,cells}});notify("Semana duplicada.");};
 
-  return <div className={"planner-shell "+(fullscreen?"planner-fullscreen":"")}>\n    {shortcutHelpOpen&&<div className="planner-shortcuts-backdrop" role="dialog" aria-modal="true" onClick={()=>setShortcutHelpOpen(false)}>\n      <div className="planner-shortcuts-modal" onClick={e=>e.stopPropagation()}>\n        <div className="planner-shortcuts-head"><strong>Atalhos do Planejamento</strong><button className="planner-tool" onClick={()=>setShortcutHelpOpen(false)}>×</button></div>\n        <div className="planner-shortcuts-grid">\n          <span>Ctrl/Cmd + C</span><span>Copiar células</span><span>Ctrl/Cmd + X</span><span>Recortar células</span><span>Ctrl/Cmd + V</span><span>Colar células</span><span>Ctrl/Cmd + Shift + V</span><span>Colar valores</span><span>Ctrl/Cmd + Z</span><span>Desfazer</span><span>Ctrl/Cmd + Shift + Z</span><span>Refazer</span><span>Ctrl/Cmd + A</span><span>Selecionar tudo</span><span>Ctrl + Espaço</span><span>Selecionar coluna</span><span>Shift + Espaço</span><span>Selecionar linha</span><span>Ctrl/Cmd + B</span><span>Negrito</span><span>Ctrl/Cmd + I</span><span>Itálico</span><span>Ctrl/Cmd + D</span><span>Preencher abaixo</span><span>Ctrl/Cmd + R</span><span>Preencher à direita</span><span>Delete / Backspace</span><span>Limpar conteúdo</span><span>Ctrl/Cmd + S</span><span>Salvar (automático)</span><span>Ctrl/Cmd + /</span><span>Mostrar atalhos</span><span>Ctrl/Cmd + F</span><span>Localizar</span><span>Ctrl/Cmd + H</span><span>Localizar e substituir</span>\n        </div>\n      </div>\n    </div>\n
+  return <div className={"planner-shell "+(fullscreen?"planner-fullscreen":"")}>
+    {shortcutHelpOpen&&<div className="planner-shortcuts-backdrop" role="dialog" aria-modal="true" onClick={()=>setShortcutHelpOpen(false)}>
+      <div className="planner-shortcuts-modal" onClick={e=>e.stopPropagation()}>
+        <div className="planner-shortcuts-head"><strong>Atalhos do Planejamento</strong><button className="planner-tool" onClick={()=>setShortcutHelpOpen(false)}>×</button></div>
+        <div className="planner-shortcuts-grid">
+          <span>Ctrl/Cmd + C</span><span>Copiar células</span><span>Ctrl/Cmd + X</span><span>Recortar células</span><span>Ctrl/Cmd + V</span><span>Colar células</span><span>Ctrl/Cmd + Shift + V</span><span>Colar valores</span><span>Ctrl/Cmd + Z</span><span>Desfazer</span><span>Ctrl/Cmd + Shift + Z</span><span>Refazer</span><span>Ctrl/Cmd + A</span><span>Selecionar tudo</span><span>Ctrl + Espaço</span><span>Selecionar coluna</span><span>Shift + Espaço</span><span>Selecionar linha</span><span>Ctrl/Cmd + B</span><span>Negrito</span><span>Ctrl/Cmd + I</span><span>Itálico</span><span>Ctrl/Cmd + D</span><span>Preencher abaixo</span><span>Ctrl/Cmd + R</span><span>Preencher à direita</span><span>Delete / Backspace</span><span>Limpar conteúdo</span><span>Ctrl/Cmd + S</span><span>Salvar (automático)</span><span>Ctrl/Cmd + /</span><span>Mostrar atalhos</span><span>Ctrl/Cmd + F</span><span>Localizar</span><span>Ctrl/Cmd + H</span><span>Localizar e substituir</span>
+        </div>
+      </div>
+    </div>\n
     <div className="planner-toolbar">
       <div className="planner-title-wrap"><div className="planner-eyebrow">PLANEJAMENTO LIVRE</div><h1>Minha semana</h1><span>{weekLabel}</span></div>
       <div className="planner-tools">
