@@ -1064,7 +1064,7 @@ function Field({label,children}:{label:string,children:ReactNode}) {
   return <div className="field"><label>{label}</label>{children}</div>;
 }
 
-function Entries({disciplines,subjects,sources,types,entries,refresh,notify,onPerformanceEntry}:any) {
+function Entries({disciplines,subjects=[],sources,types,entries,refresh,notify,onPerformanceEntry}:any) {
   const [editing,setEditing] = useState<Entry | null>(null);
   const [open,setOpen] = useState(false);
 
@@ -1111,7 +1111,7 @@ function Entries({disciplines,subjects,sources,types,entries,refresh,notify,onPe
   </>;
 }
 
-function LaunchModal({initial,disciplines,subjects,sources,types,onClose,onSave}:any) {
+function LaunchModal({initial,disciplines,subjects=[],sources=[],types=[],onClose,onSave}:any) {
   const [value,setValue] = useState<any>({
     study_date: initial?.study_date ?? localDate(), discipline_id: initial?.discipline_id ?? "", subject_id: initial?.subject_id ?? "",
     source_id: initial?.source_id ?? "", question_type_id: initial?.question_type_id ?? "", questions: initial?.questions ?? "", correct: initial?.correct ?? "", notes: initial?.notes ?? "",
