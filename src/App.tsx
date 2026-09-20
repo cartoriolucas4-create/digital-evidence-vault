@@ -2263,7 +2263,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
           bg:defaultSmallColor,
           subjectBg:defaultSmallColor,
           subjectStyle:{...(cell.subjectStyle??defaultPartStyle("subject")),bg:defaultSmallColor},
-          textStyle:{...(cell.textStyle??defaultPartStyle("text")),bg:"#ffffff"},
+          textStyle:{...(cell.textStyle??defaultPartStyle("text"))},
         };
       });
       return {...prev,weekOffset:prev.weekOffset+1,cells};
@@ -2392,7 +2392,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
               onClick={e=>{e.stopPropagation();selectCellPart(id,"text",e.ctrlKey||e.metaKey)}}
               onPointerDown={e=>e.stopPropagation()}
               onFocus={()=>selectCellPart(id,"text",false)}
-              style={{backgroundColor:getPartStyle(id,"text").bg,color:getPartStyle(id,"text").fg,fontSize:getPartStyle(id,"text").size,fontWeight:getPartStyle(id,"text").bold?"700":"400",fontStyle:getPartStyle(id,"text").italic?"italic":"normal",fontFamily:getPartStyle(id,"text").fontFamily,textAlign:getPartStyle(id,"text").align,textDecoration:[getPartStyle(id,"text").underline?"underline":"",getPartStyle(id,"text").strike?"line-through":""] .filter(Boolean).join(" "),whiteSpace:getPartStyle(id,"text").wrap==="wrap"?"normal":getPartStyle(id,"text").wrap==="clip"?"nowrap":"pre-wrap",padding:getPartStyle(id,"text").vertical==="bottom"?"28px 8px 8px":getPartStyle(id,"text").vertical==="middle"?"18px 8px":"8px"}}
+              style={{backgroundColor:"#ffffff",color:getPartStyle(id,"text").fg,fontSize:getPartStyle(id,"text").size,fontWeight:getPartStyle(id,"text").bold?"700":"400",fontStyle:getPartStyle(id,"text").italic?"italic":"normal",fontFamily:getPartStyle(id,"text").fontFamily,textAlign:getPartStyle(id,"text").align,textDecoration:[getPartStyle(id,"text").underline?"underline":"",getPartStyle(id,"text").strike?"line-through":""] .filter(Boolean).join(" "),whiteSpace:getPartStyle(id,"text").wrap==="wrap"?"normal":getPartStyle(id,"text").wrap==="clip"?"nowrap":"pre-wrap",padding:getPartStyle(id,"text").vertical==="bottom"?"28px 8px 8px":getPartStyle(id,"text").vertical==="middle"?"18px 8px":"8px"}}
               spellCheck={false}
             />
           </div>;
