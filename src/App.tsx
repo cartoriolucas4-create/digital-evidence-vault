@@ -1317,9 +1317,11 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
       else{plannerHistory.current.past=[...plannerHistory.current.past.slice(-49),plannerPreviousData.current];plannerHistory.current.future=[];}
       plannerPreviousData.current=data;
     }
-  },[data]);\n
+  },[data]);
+
   const plannerUndo=()=>{const previous=plannerHistory.current.past.pop();if(!previous)return;plannerHistory.current.future.push(data);plannerHistoryMode.current="undo";plannerPreviousData.current=previous;setData(previous);};
-  const plannerRedo=()=>{const next=plannerHistory.current.future.pop();if(!next)return;plannerHistory.current.past.push(data);plannerHistoryMode.current="redo";plannerPreviousData.current=next;setData(next);};\n\n
+  const plannerRedo=()=>{const next=plannerHistory.current.future.pop();if(!next)return;plannerHistory.current.past.push(data);plannerHistoryMode.current="redo";plannerPreviousData.current=next;setData(next);};
+
 
   const beginResize=(type:"col"|"row",index:number,event:PointerEvent)=>{
     event.preventDefault();
@@ -1495,7 +1497,8 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
       const target=event.target as HTMLElement|null;
       const editing=!!target?.closest("input,textarea,[contenteditable=\\\"true\\\"]");
       const mod=event.ctrlKey||event.metaKey;
-      if(editing) return;\n
+      if(editing) return;
+
       if(event.shiftKey&&event.code==="Space"&&!mod){
         event.preventDefault();
         selectRow(selected.length?Number(selected[0].split("-")[0]):0);
@@ -1547,7 +1550,8 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
     window.addEventListener("keydown",onKeyDown);
     window.addEventListener("paste",onPaste);
     return()=>{window.removeEventListener("keydown",onKeyDown);window.removeEventListener("paste",onPaste);};
-  },[data,selected,selectionMode,selectedRows,selectedCols]);\n
+  },[data,selected,selectionMode,selectedRows,selectedCols]);
+
   const toggleSelected=(id:string)=>{
     setSelectionMode("cells");setSelectedRows([]);setSelectedCols([]);
     setSelected(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]);
@@ -1598,7 +1602,8 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
           <span>Ctrl/Cmd + C</span><span>Copiar células</span><span>Ctrl/Cmd + X</span><span>Recortar células</span><span>Ctrl/Cmd + V</span><span>Colar células</span><span>Ctrl/Cmd + Shift + V</span><span>Colar valores</span><span>Ctrl/Cmd + Z</span><span>Desfazer</span><span>Ctrl/Cmd + Shift + Z</span><span>Refazer</span><span>Ctrl/Cmd + A</span><span>Selecionar tudo</span><span>Ctrl + Espaço</span><span>Selecionar coluna</span><span>Shift + Espaço</span><span>Selecionar linha</span><span>Ctrl/Cmd + B</span><span>Negrito</span><span>Ctrl/Cmd + I</span><span>Itálico</span><span>Ctrl/Cmd + D</span><span>Preencher abaixo</span><span>Ctrl/Cmd + R</span><span>Preencher à direita</span><span>Delete / Backspace</span><span>Limpar conteúdo</span><span>Ctrl/Cmd + S</span><span>Salvar (automático)</span><span>Ctrl/Cmd + /</span><span>Mostrar atalhos</span><span>Ctrl/Cmd + F</span><span>Localizar</span><span>Ctrl/Cmd + H</span><span>Localizar e substituir</span>
         </div>
       </div>
-    </div>\n
+    </div>
+
     <div className="planner-toolbar">
       <div className="planner-title-wrap"><div className="planner-eyebrow">PLANEJAMENTO LIVRE</div><h1>Minha semana</h1><span>{weekLabel}</span></div>
       <div className="planner-tools">
