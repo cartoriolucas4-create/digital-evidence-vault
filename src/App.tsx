@@ -2263,6 +2263,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
           bg:defaultSmallColor,
           subjectBg:defaultSmallColor,
           subjectStyle:{...(cell.subjectStyle??defaultPartStyle("subject")),bg:defaultSmallColor},
+          textStyle:{...(cell.textStyle??defaultPartStyle("text")),bg:defaultSmallColor},
         };
       });
       return {...prev,weekOffset:prev.weekOffset+1,cells};
