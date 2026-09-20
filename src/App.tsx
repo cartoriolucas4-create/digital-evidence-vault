@@ -1861,7 +1861,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor}:{userId:s
       </div>
 
       <div className="planner-popover-wrap">
-        <button className="planner-format-btn" title="Alinhamento horizontal" onClick={()=>setMoreOpen(false)} onDoubleClick={()=>applyPlannerAlignment("center")}><AlignLeft size={15}/><ChevronDown size={11}/></button>
+        <button className="planner-format-btn" title="Centralizar texto" onClick={()=>applyPlannerAlignment("center")}><AlignCenter size={15}/><ChevronDown size={11}/></button>
         <div className="planner-align-menu">
           <button title="Alinhar à esquerda" onClick={()=>applyPlannerAlignment("left")}><AlignLeft size={15}/> Esquerda</button>
           <button title="Centralizar" onClick={()=>applyPlannerAlignment("center")}><AlignCenter size={15}/> Centro</button>
