@@ -1561,7 +1561,15 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
   const applyPlannerColor=(kind:"text"|"fill",color:string)=>{
     if(!color)return;
     if(kind==="text"){setTextColor(color);applyPartPatch({fg:color});}
-    else{setFillColor(color);applyPartPatch({bg:color});}
+    else{
+      setFillColor(color);
+      const targets=plannerTargets();
+      setData(prev=>{
+        const cells={...prev.cells};
+        targets.forEach(id=>{cells[id]={...getCell(id),bg:color};});
+        return {...prev,cells};
+      });
+    }
     setPaletteOpen(null);
   };
   const applyPlannerFont=(fontFamily:string)=>applyPartPatch({fontFamily});
@@ -1770,7 +1778,7 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
           <button key={"row-head-"+row} className={"planner-row-selector "+(selectedRows.includes(row)?"axis-selected":"")} onClick={()=>selectRow(row)}>{row+1}</button>,
           ...Array.from({length:data.cols},(_,col)=>{
           const id=cellId(row,col), cell=getCell(id), active=selected.includes(id);
-          return <div key={id} data-planner-row={row} data-planner-col={col} className={"planner-cell "+(active?"selected":"")} style={{backgroundColor:"#ffffff"}} onPointerDown={e=>startCellSelection(row,col,e)} onClick={(e)=>{if(e.ctrlKey||e.metaKey)toggleSelected(id);}}>
+          return <div key={id} data-planner-row={row} data-planner-col={col} className={"planner-cell "+(active?"selected":"")} style={{backgroundColor:cell.bg}} onPointerDown={e=>startCellSelection(row,col,e)} onClick={(e)=>{if(e.ctrlKey||e.metaKey)toggleSelected(id);}}>
             <span className="planner-resize-handle planner-row-resize" onPointerDown={e=>beginResize("row",row,e)} />
             <input
               className={"planner-content-top "+(selectedParts.includes(partKey(id,"subject"))?"planner-part-selected":"")}
@@ -1780,7 +1788,7 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
               onClick={e=>{e.stopPropagation();selectCellPart(id,"subject",e.ctrlKey||e.metaKey)}}
               onPointerDown={e=>e.stopPropagation()}
               onFocus={()=>selectCellPart(id,"subject",false)}
-              style={{backgroundColor:getPartStyle(id,"subject").bg,color:getPartStyle(id,"subject").fg,fontSize:getPartStyle(id,"subject").size,fontWeight:getPartStyle(id,"subject").bold?800:500,fontStyle:getPartStyle(id,"subject").italic?"italic":"normal",fontFamily:getPartStyle(id,"subject").fontFamily,textAlign:getPartStyle(id,"subject").align,textDecoration:[getPartStyle(id,"subject").underline?"underline":"",getPartStyle(id,"subject").strike?"line-through":""] .filter(Boolean).join(" "),whiteSpace:getPartStyle(id,"subject").wrap==="wrap"?"normal":getPartStyle(id,"subject").wrap==="clip"?"nowrap":"pre-wrap"}}
+              style={{backgroundColor:"transparent",color:getPartStyle(id,"subject").fg,fontSize:getPartStyle(id,"subject").size,fontWeight:getPartStyle(id,"subject").bold?800:500,fontStyle:getPartStyle(id,"subject").italic?"italic":"normal",fontFamily:getPartStyle(id,"subject").fontFamily,textAlign:getPartStyle(id,"subject").align,textDecoration:[getPartStyle(id,"subject").underline?"underline":"",getPartStyle(id,"subject").strike?"line-through":""] .filter(Boolean).join(" "),whiteSpace:getPartStyle(id,"subject").wrap==="wrap"?"normal":getPartStyle(id,"subject").wrap==="clip"?"nowrap":"pre-wrap"}}
               spellCheck={false}
             />
             <textarea
@@ -1791,7 +1799,7 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
               onClick={e=>{e.stopPropagation();selectCellPart(id,"text",e.ctrlKey||e.metaKey)}}
               onPointerDown={e=>e.stopPropagation()}
               onFocus={()=>selectCellPart(id,"text",false)}
-              style={{backgroundColor:getPartStyle(id,"text").bg,color:getPartStyle(id,"text").fg,fontSize:getPartStyle(id,"text").size,fontWeight:getPartStyle(id,"text").bold?800:500,fontStyle:getPartStyle(id,"text").italic?"italic":"normal",fontFamily:getPartStyle(id,"text").fontFamily,textAlign:getPartStyle(id,"text").align,textDecoration:[getPartStyle(id,"text").underline?"underline":"",getPartStyle(id,"text").strike?"line-through":""] .filter(Boolean).join(" "),whiteSpace:getPartStyle(id,"text").wrap==="wrap"?"normal":getPartStyle(id,"text").wrap==="clip"?"nowrap":"pre-wrap"}}
+              style={{backgroundColor:"transparent",color:getPartStyle(id,"text").fg,fontSize:getPartStyle(id,"text").size,fontWeight:getPartStyle(id,"text").bold?800:500,fontStyle:getPartStyle(id,"text").italic?"italic":"normal",fontFamily:getPartStyle(id,"text").fontFamily,textAlign:getPartStyle(id,"text").align,textDecoration:[getPartStyle(id,"text").underline?"underline":"",getPartStyle(id,"text").strike?"line-through":""] .filter(Boolean).join(" "),whiteSpace:getPartStyle(id,"text").wrap==="wrap"?"normal":getPartStyle(id,"text").wrap==="clip"?"nowrap":"pre-wrap"}}
               spellCheck={false}
             />
           </div>;
