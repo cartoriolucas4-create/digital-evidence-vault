@@ -1536,6 +1536,27 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor}:{userId:s
   };
   const selectRow=(row:number)=>{const rows=[row];setSelectedParts([]);setSelectionMode("rows");setSelectedRows(rows);setSelectedCols([]);setSelected(Array.from({length:data.cols},(_,col)=>cellId(row,col)));};
   const selectCol=(col:number)=>{const cols=[col];setSelectedParts([]);setSelectionMode("cols");setSelectedRows([]);setSelectedCols(cols);setSelected(Array.from({length:data.rows},(_,row)=>cellId(row,col)));};
+  const startAxisSelection=(axis:"row"|"col",index:number,event:PointerEvent)=>{
+    if(event.button!==0) return;
+    event.preventDefault();
+    if(axis==="row") selectRow(index); else selectCol(index);
+    let dragging=true;
+    const move=(ev:PointerEvent)=>{
+      if(!dragging) return;
+      const el=document.elementFromPoint(ev.clientX,ev.clientY) as HTMLElement|null;
+      const head=el?.closest(axis==="row"?".planner-row-selector":".planner-day") as HTMLElement|null;
+      if(!head) return;
+      if(axis==="row"){
+        const buttons=Array.from(document.querySelectorAll<HTMLElement>(".planner-row-selector"));
+        const next=buttons.indexOf(head); if(next>=0) selectRow(next);
+      }else{
+        const heads=Array.from(document.querySelectorAll<HTMLElement>(".planner-day"));
+        const next=heads.indexOf(head); if(next>=0) selectCol(next);
+      }
+    };
+    const stop=()=>{dragging=false;window.removeEventListener("pointermove",move);window.removeEventListener("pointerup",stop);};
+    window.addEventListener("pointermove",move);window.addEventListener("pointerup",stop);
+  };
   const selectAll=()=>{setSelectedParts([]);const ids=Array.from({length:data.rows*data.cols},(_,i)=>cellId(Math.floor(i/data.cols),i%data.cols));setSelectionMode("cells");setSelectedRows([]);setSelectedCols([]);setSelected(ids);};
   const plannerSelectionBounds=()=>{
     const ids=selected.length?selected:[cellId(0,0)];
@@ -1804,12 +1825,12 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor}:{userId:s
         <button className="planner-corner-selector" title="Selecionar toda a planilha" onClick={selectAll}>□</button>
         {Array.from({length:data.cols},(_,col)=>{
           const label=data.headers?.[col]??("COLUNA "+(col+1));
-          return <div className={"planner-day "+(selectedCols.includes(col)?"axis-selected":"")} key={"head-"+col} onClick={()=>selectCol(col)}>
-            <span className="planner-resize-handle planner-col-resize" onPointerDown={e=>{e.stopPropagation();beginResize("col",col,e)}} aria-hidden="true"/><input onClick={e=>{e.stopPropagation();selectCol(col)}} value={label} onChange={e=>updateHeader(col,e.target.value)} aria-label={"Nome da coluna "+(col+1)} spellCheck={false}/>
+          return <div className={"planner-day "+(selectedCols.includes(col)?"axis-selected":"")} key={"head-"+col} onPointerDown={e=>{if((e.target as HTMLElement).closest(".planner-resize-handle")) return;startAxisSelection("col",col,e)}} onClick={()=>selectCol(col)}>
+            <span className="planner-resize-handle planner-col-resize" onPointerDown={e=>{e.stopPropagation();beginResize("col",col,e)}} aria-hidden="true"/><input onClick={e=>{e.stopPropagation();selectCol(col)}} value={label} onChange={e=>updateHeader(col,e.target.value)} onKeyDown={e=>{if(e.key==="Delete"||e.key==="Backspace"){e.preventDefault();e.stopPropagation();deleteSelectedCols();}}} aria-label={"Nome da coluna "+(col+1)} spellCheck={false}/>
           </div>;
         })}
         {Array.from({length:data.rows},(_,row)=>[
-          <button key={"row-head-"+row} className={"planner-row-selector "+(selectedRows.includes(row)?"axis-selected":"")} onClick={()=>selectRow(row)}>{row+1}</button>,
+          <button key={"row-head-"+row} className={"planner-row-selector "+(selectedRows.includes(row)?"axis-selected":"")} onPointerDown={e=>startAxisSelection("row",row,e)} onClick={()=>selectRow(row)}>{row+1}</button>,
           ...Array.from({length:data.cols},(_,col)=>{
           const id=cellId(row,col), cell=getCell(id), active=selected.includes(id);
           return <div key={id} data-planner-row={row} data-planner-col={col} className={"planner-cell "+(active?"selected":"")} style={{backgroundColor:cell.bg}}
