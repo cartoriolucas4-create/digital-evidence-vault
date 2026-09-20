@@ -1495,7 +1495,7 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
               <input className="planner-mini-color planner-notes-color" type="color" value={cell.bg} title="Cor das observações" onChange={e=>{e.stopPropagation();updateCell(id,{bg:e.target.value})}} onClick={e=>e.stopPropagation()}/>
             </div>
           </div>;
-        })]}
+        })}
       </div>
     </div>
     <div className="planner-footer"><span>✓ Salvamento automático</span><span>{selected.length?selected.length+" célula(s) selecionada(s)":"Selecione células para edição em lote"}</span><button className="btn small" onClick={clearSelection}>Limpar seleção</button></div>
