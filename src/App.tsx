@@ -766,9 +766,9 @@ function App() {
               byDiscipline={byDiscipline} bySubject={bySubject} attention={attention} targetAccuracy={targetAccuracy} entries={entries} onExportMonthly={() => exportMonthlyPdf()}
             />
           )}
-          {tab === "planner" && <Planner userId={session.user.id} notify={notify} defaultSmallColor={plannerDefaultColor} completedSmallColor={plannerCompletedColor} subjects={subjects}/>}
-          {tab === "entries" && <Entries disciplines={disciplines} subjects={subjects} sources={sources} types={types} entries={entries} refresh={() => loadEntries().catch((error) => notify(error instanceof Error ? error.message : "Não foi possível carregar os lançamentos."))} notify={notify}/>}
-          {tab === "catalog" && <Catalog disciplines={disciplines} subjects={subjects} sources={sources} types={types} refresh={() => loadCatalog().catch((error) => notify(error instanceof Error ? error.message : "Não foi possível carregar o cadastro."))} notify={notify} catalogDeleteOpen={catalogDeleteOpen} setCatalogDeleteOpen={setCatalogDeleteOpen} catalogDeletePassword={catalogDeletePassword} setCatalogDeletePassword={setCatalogDeletePassword} catalogDeleteBusy={catalogDeleteBusy} deleteAllCatalogData={deleteAllCatalogData}/>}
+          {tab === "planner" && <Planner userId={session.user.id} notify={notify} defaultSmallColor={plannerDefaultColor} completedSmallColor={plannerCompletedColor} />}
+          {tab === "entries" && <Entries disciplines={disciplines}  sources={sources} types={types} entries={entries} refresh={() => loadEntries().catch((error) => notify(error instanceof Error ? error.message : "Não foi possível carregar os lançamentos."))} notify={notify}/>}
+          {tab === "catalog" && <Catalog disciplines={disciplines}  sources={sources} types={types} refresh={() => loadCatalog().catch((error) => notify(error instanceof Error ? error.message : "Não foi possível carregar o cadastro."))} notify={notify} catalogDeleteOpen={catalogDeleteOpen} setCatalogDeleteOpen={setCatalogDeleteOpen} catalogDeletePassword={catalogDeletePassword} setCatalogDeletePassword={setCatalogDeletePassword} catalogDeleteBusy={catalogDeleteBusy} deleteAllCatalogData={deleteAllCatalogData}/>}
           {tab === "settings" && (
             <SettingsPage
               studentName={studentName}
@@ -1107,7 +1107,7 @@ function Entries({disciplines,subjects,sources,types,entries,refresh,notify,onPe
     <section className="section"><div className="table-wrap"><table className="table"><thead><tr><th>Data</th><th>Disciplina</th><th>Assunto</th><th>Origem</th><th>Tipo</th><th>Questões</th><th>Acertos</th><th>Erros</th><th>%</th><th>Observações</th><th>Ações</th></tr></thead><tbody>
       {entries.length ? entries.map((entry: Entry) => <tr key={entry.id}><td>{new Date(`${entry.study_date}T12:00:00`).toLocaleDateString("pt-BR")}</td><td>{disciplines.find((x: Discipline)=>x.id===entry.discipline_id)?.name ?? entry.discipline_name_snapshot ?? "—"}</td><td>{subjects.find((x: Subject)=>x.id===entry.subject_id)?.name ?? entry.subject_name_snapshot ?? "—"}</td><td>{sources.find((x: Source)=>x.id===entry.source_id)?.name ?? entry.source_name_snapshot ?? "—"}</td><td>{types.find((x: QuestionType)=>x.id===entry.question_type_id)?.name ?? entry.question_type_name_snapshot ?? "—"}</td><td>{entry.questions}</td><td>{entry.correct}</td><td>{entry.questions-entry.correct}</td><td>{percent(entry.correct,entry.questions).toFixed(1)}%</td><td>{entry.notes ?? "—"}</td><td className="actions"><button className="btn small" onClick={() => {setEditing(entry);setOpen(true)}}>Editar</button><button className="btn small danger" onClick={() => remove(entry.id)}><Trash2 size={13}/></button></td></tr>) : <tr><td colSpan={11}><div className="empty">Nenhum lançamento encontrado.</div></td></tr>}
     </tbody></table></div></section>
-    {open && <LaunchModal initial={editing} disciplines={disciplines} subjects={subjects} sources={sources} types={types} onClose={() => {setOpen(false);setEditing(null)}} onSave={save}/>}
+    {open && <LaunchModal initial={editing} disciplines={disciplines}  sources={sources} types={types} onClose={() => {setOpen(false);setEditing(null)}} onSave={save}/>}
   </>;
 }
 
@@ -1401,7 +1401,7 @@ function PlannerColorPalette({title,colors,onPick,onCustom}:{title:string;colors
   </div>;
 }
 
-function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:{userId:string;notify:(message:string)=>void;defaultSmallColor:string;completedSmallColor:string;subjects:Subject[]}) {
+function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:{userId:string;notify:(message:string)=>void;defaultSmallColor:string;completedSmallColor:string;}) {
   type CellPartStyle = { bg:string; fg:string; bold:boolean; italic:boolean; underline:boolean; strike:boolean; size:number; fontFamily:string; align:"left"|"center"|"right"; vertical:"top"|"middle"|"bottom"; wrap:"overflow"|"wrap"|"clip" };
   type Cell = { id:string; subject:string; text:string; studiedWeek?:string; bg:string; fg:string; subjectBg:string; subjectFg:string; bold:boolean; italic:boolean; underline:boolean; strike:boolean; size:number; fontFamily:string; align:"left"|"center"|"right"; vertical:"top"|"middle"|"bottom"; wrap:"overflow"|"wrap"|"clip"; subjectStyle?:CellPartStyle; textStyle?:CellPartStyle };
   type PlannerData = { version:2; weekOffset:number; cols:number; rows:number; headers:string[]; colWidths:number[]; rowHeights:number[]; cells:Record<string,Cell> };
@@ -1444,7 +1444,6 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
   const [moreOpen,setMoreOpen]=useState(false);
   const [fullscreen,setFullscreen]=useState(false);
   const [shortcutHelpOpen,setShortcutHelpOpen]=useState(false);
-  const [subjectPickerId,setSubjectPickerId]=useState<string|null>(null);
   const plannerHistory=useRef<{past:PlannerData[];future:PlannerData[]}>({past:[],future:[]});
   const plannerHistoryMode=useRef<"undo"|"redo"|null>(null);
   const plannerPreviousData=useRef<PlannerData>(data);
@@ -1552,22 +1551,6 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
   const getCell=(id:string):Cell=>data.cells[id]??defaultCell();
   const updateCell=(id:string,patch:Partial<Cell>)=>{
     setData(prev=>({...prev,cells:{...prev.cells,[id]:{...getCell(id),...patch}}}));
-  };
-  const focusPlannerSubject=(id:string)=>{
-    setSubjectPickerId(null);
-    window.setTimeout(()=>{
-      const el=document.querySelector(`[data-planner-subject="${id}"]`) as HTMLInputElement|null;
-      el?.focus(); el?.select();
-    },0);
-  };
-  const choosePlannerSubject=(id:string,subject:string)=>{
-    updateCell(id,{subject});
-    setSubjectPickerId(null);
-  };
-  const deletePlannerSubject=(id:string)=>{
-    updateCell(id,{subject:"",studiedWeek:undefined});
-    setSubjectPickerId(null);
-    notify("Matéria removida da célula.");
   };
   const getPartStyle=(id:string,part:"subject"|"text"):CellPartStyle=>{
     const cell=getCell(id);
@@ -2020,7 +2003,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
               data-planner-subject={id}
               value={cell.subject}
               onChange={e=>updateCell(id,{subject:e.target.value})}
-              onClick={e=>{e.stopPropagation();selectCellPart(id,"subject",e.ctrlKey||e.metaKey);if(!cell.subject.trim())setSubjectPickerId(id)}}
+              onClick={e=>{e.stopPropagation();selectCellPart(id,"subject",e.ctrlKey||e.metaKey)}}
               onPointerDown={e=>e.stopPropagation()}
               onFocus={()=>selectCellPart(id,"subject",false)}
               style={{backgroundColor:isStudiedThisWeek(id)?completedSmallColor:(getPartStyle(id,"subject").bg||cell.subjectBg||defaultSmallColor),color:getPartStyle(id,"subject").fg,fontSize:getPartStyle(id,"subject").size,fontWeight:getPartStyle(id,"subject").bold?"700":"400",fontStyle:getPartStyle(id,"subject").italic?"italic":"normal",fontFamily:getPartStyle(id,"subject").fontFamily,textAlign:getPartStyle(id,"subject").align,textDecoration:[getPartStyle(id,"subject").underline?"underline":"",getPartStyle(id,"subject").strike?"line-through":""] .filter(Boolean).join(" "),whiteSpace:getPartStyle(id,"subject").wrap==="wrap"?"normal":getPartStyle(id,"subject").wrap==="clip"?"nowrap":"pre-wrap",padding:getPartStyle(id,"subject").vertical==="middle"?"8px":"8px",lineHeight:getPartStyle(id,"subject").vertical==="middle"?"29px":getPartStyle(id,"subject").vertical==="bottom"?"40px":"1.2"}}
@@ -2029,9 +2012,6 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
             {cell.subject.trim() && <button type="button" className={"planner-study-check "+(isStudiedThisWeek(id)?"checked":"")} aria-label={isStudiedThisWeek(id)?"Desmarcar matéria estudada":"Marcar matéria como estudada"} title={isStudiedThisWeek(id)?"Desmarcar como estudada":"Marcar como estudada"} onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();toggleStudied(id);}}>
               {isStudiedThisWeek(id) ? "✓" : ""}
             </button>}
-            {!cell.subject.trim() && subjectPickerId===id && <div className="planner-subject-picker" onPointerDown={e=>e.stopPropagation()} onClick={e=>e.stopPropagation()}>
-              <div className="planner-subject-picker-title">Escolha uma matéria</div>
-              {subjects.length ? subjects.map(subject=><button type="button" key={subject.id} onClick={()=>choosePlannerSubject(id,subject.name)}>{subject.name}</button>) : <div className="planner-subject-picker-empty">Nenhuma matéria cadastrada. Cadastre uma em Cadastro.</div>}
             </div>}
             </div>
             <textarea
