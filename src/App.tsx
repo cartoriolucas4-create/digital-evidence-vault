@@ -1440,7 +1440,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
   type Cell = { id:string; subject:string; text:string; studiedWeek?:string; bg:string; fg:string; subjectBg:string; subjectFg:string; bold:boolean; italic:boolean; underline:boolean; strike:boolean; size:number; fontFamily:string; align:"left"|"center"|"right"; vertical:"top"|"middle"|"bottom"; wrap:"overflow"|"wrap"|"clip"; subjectStyle?:CellPartStyle; textStyle?:CellPartStyle };
   type PlannerData = { version:2; weekOffset:number; cols:number; rows:number; headers:string[]; colWidths:number[]; rowHeights:number[]; cells:Record<string,Cell> };
   const defaultHeaders=["SEGUNDA","TERÇA","QUARTA","QUINTA","SEXTA","SÁBADO","DOMINGO"];
-  const defaultPartStyle=(kind:"subject"|"text"):CellPartStyle=>kind==="subject"?({bg:"#f7f8fa",fg:"#17202a",bold:true,italic:false,underline:false,strike:false,size:14,fontFamily:"Arial",align:"center",vertical:"top",wrap:"wrap"}):({bg:"#ffffff",fg:"#17202a",bold:false,italic:false,underline:false,strike:false,size:14,fontFamily:"Arial",align:"left",vertical:"top",wrap:"wrap"});
+  const defaultPartStyle=(kind:"subject"|"text"):CellPartStyle=>kind==="subject"?({bg:"#f7f8fa",fg:"#17202a",bold:true,italic:false,underline:false,strike:false,size:14,fontFamily:"Arial",align:"center",vertical:"top",wrap:"wrap"}):({bg:"#ffffff",fg:"#17202a",bold:true,italic:false,underline:false,strike:false,size:14,fontFamily:"Arial",align:"center",vertical:"top",wrap:"wrap"});
   const defaultCell=():Cell=>({id:uid(),subject:"",text:"",bg:"#ffffff",fg:"#17202a",subjectBg:"#f7f8fa",subjectFg:"#17202a",bold:false,italic:false,underline:false,strike:false,size:14,fontFamily:"Arial",align:"left",vertical:"top",wrap:"wrap",subjectStyle:defaultPartStyle("subject"),textStyle:defaultPartStyle("text")});
   const cleanPlannerField=(value:unknown)=>{const text=String(value??"").trim();const normalized=text.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toUpperCase();return normalized.startsWith("MATERIA")||normalized.startsWith("OBSERVACOES")||normalized.startsWith("OBSERVACAO")?"":text;};
   const makeInitial=():PlannerData=>({version:2,weekOffset:0,cols:7,rows:4,headers:[...defaultHeaders],colWidths:Array(7).fill(190),rowHeights:Array(4).fill(180),cells:{}});
@@ -1460,8 +1460,9 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
         if(hasLegacyDefaultSubjectStyle) base.subjectStyle={...defaultPartStyle("subject")};
         const legacy={bg:String(value?.bg??"#ffffff"),fg:String(value?.fg??"#17202a"),bold:Boolean(value?.bold),italic:Boolean(value?.italic),underline:Boolean(value?.underline),strike:Boolean(value?.strike),size:Number(value?.size)||14,fontFamily:String(value?.fontFamily??"Arial"),align:(value?.align??"left") as CellPartStyle["align"],vertical:(value?.vertical??"top") as CellPartStyle["vertical"],wrap:(value?.wrap??"wrap") as CellPartStyle["wrap"]};
         const normalizedSavedSubjectStyle={...(value?.subjectStyle??{}),bold:true,align:"center" as const};
+        const normalizedSavedTextStyle={...(value?.textStyle??{}),bold:true,align:"center" as const};
         const subjectStyle={...defaultPartStyle("subject"),...normalizedSavedSubjectStyle,bg:String(normalizedSavedSubjectStyle.bg??value?.subjectBg??"#f7f8fa"),fg:String(normalizedSavedSubjectStyle.fg??value?.subjectFg??"#17202a")};
-        const textStyle={...defaultPartStyle("text"),...legacy,...(value?.textStyle??{})};
+        const textStyle={...defaultPartStyle("text"),...legacy,...normalizedSavedTextStyle};
         cells[id]={...base,subjectStyle,textStyle};
       }
     });
