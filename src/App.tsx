@@ -1486,16 +1486,16 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
           return <div key={id} data-planner-row={row} data-planner-col={col} className={"planner-cell "+(active?"selected":"")} style={{backgroundColor:cell.bg,color:cell.fg,fontSize:cell.size,fontWeight:cell.bold?800:500,fontStyle:cell.italic?"italic":"normal"}} onPointerDown={e=>startCellSelection(row,col,e)} onClick={(e)=>{if(e.ctrlKey||e.metaKey)toggleSelected(id);}}>
             <span className="planner-resize-handle planner-row-resize" onPointerDown={e=>beginResize("row",row,e)} />
             <input
-              className="planner-subject-clean"
-              aria-label="Conteúdo superior da célula"
+              className="planner-content-top"
+              aria-label="Conteúdo superior da célula sem rótulo visível"
               value={cell.subject}
               onChange={e=>updateCell(id,{subject:e.target.value})}
               onClick={e=>e.stopPropagation()}
               spellCheck={false}
             />
             <textarea
-              className="planner-notes-clean"
-              aria-label="Conteúdo da célula"
+              className="planner-content-bottom"
+              aria-label="Conteúdo inferior da célula sem rótulo visível"
               value={cell.text}
               onChange={e=>updateCell(id,{text:e.target.value})}
               onClick={e=>e.stopPropagation()}
