@@ -1706,8 +1706,36 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor}:{userId:s
   };
   const applyPlannerFont=(fontFamily:string)=>applyPartPatch({fontFamily});
   const applyPlannerSize=(size:number)=>applyPartPatch({size});
-  const applyPlannerAlignment=(align:"left"|"center"|"right")=>applyPartPatch({align});
-  const applyPlannerVertical=(vertical:"top"|"middle"|"bottom")=>applyPartPatch({vertical});
+  const applyPlannerAlignment=(align:"left"|"center"|"right")=>{
+    const ids=selected.length?selected:[cellId(0,0)];
+    setData(prev=>{
+      const cells={...prev.cells};
+      ids.forEach(id=>{
+        const cell=cells[id]??getCell(id);
+        cells[id]={
+          ...cell,
+          subjectStyle:{...(cell.subjectStyle??defaultPartStyle("subject")),align},
+          textStyle:{...(cell.textStyle??defaultPartStyle("text")),align}
+        };
+      });
+      return {...prev,cells};
+    });
+  };
+  const applyPlannerVertical=(vertical:"top"|"middle"|"bottom")=>{
+    const ids=selected.length?selected:[cellId(0,0)];
+    setData(prev=>{
+      const cells={...prev.cells};
+      ids.forEach(id=>{
+        const cell=cells[id]??getCell(id);
+        cells[id]={
+          ...cell,
+          subjectStyle:{...(cell.subjectStyle??defaultPartStyle("subject")),vertical},
+          textStyle:{...(cell.textStyle??defaultPartStyle("text")),vertical}
+        };
+      });
+      return {...prev,cells};
+    });
+  };
   const applyPlannerWrap=(wrap:"overflow"|"wrap"|"clip")=>applyPartPatch({wrap});
   const fillPlannerDirection=(direction:"down"|"right")=>{
     if(selected.length<2) return;
