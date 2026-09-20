@@ -12,4 +12,7 @@ export default defineConfig({
   preview: {
     host: true,
   },
+  build: {
+    cssMinify: false,
+  },
 });
