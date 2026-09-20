@@ -766,7 +766,7 @@ function App() {
               byDiscipline={byDiscipline} bySubject={bySubject} attention={attention} targetAccuracy={targetAccuracy} entries={entries} onExportMonthly={() => exportMonthlyPdf()}
             />
           )}
-          {tab === "planner" && <Planner userId={session.user.id} notify={notify} defaultSmallColor={plannerDefaultColor} completedSmallColor={plannerCompletedColor}/>}
+          {tab === "planner" && <Planner userId={session.user.id} notify={notify} defaultSmallColor={plannerDefaultColor} completedSmallColor={plannerCompletedColor} subjects={subjects}/>}
           {tab === "entries" && <Entries disciplines={disciplines} subjects={subjects} sources={sources} types={types} entries={entries} refresh={() => loadEntries().catch((error) => notify(error instanceof Error ? error.message : "Não foi possível carregar os lançamentos."))} notify={notify}/>}
           {tab === "catalog" && <Catalog disciplines={disciplines} subjects={subjects} sources={sources} types={types} refresh={() => loadCatalog().catch((error) => notify(error instanceof Error ? error.message : "Não foi possível carregar o cadastro."))} notify={notify} catalogDeleteOpen={catalogDeleteOpen} setCatalogDeleteOpen={setCatalogDeleteOpen} catalogDeletePassword={catalogDeletePassword} setCatalogDeletePassword={setCatalogDeletePassword} catalogDeleteBusy={catalogDeleteBusy} deleteAllCatalogData={deleteAllCatalogData}/>}
           {tab === "settings" && (
@@ -1401,7 +1401,7 @@ function PlannerColorPalette({title,colors,onPick,onCustom}:{title:string;colors
   </div>;
 }
 
-function Planner({userId,notify,defaultSmallColor,completedSmallColor}:{userId:string;notify:(message:string)=>void;defaultSmallColor:string;completedSmallColor:string}) {
+function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:{userId:string;notify:(message:string)=>void;defaultSmallColor:string;completedSmallColor:string;subjects:Subject[]}) {
   type CellPartStyle = { bg:string; fg:string; bold:boolean; italic:boolean; underline:boolean; strike:boolean; size:number; fontFamily:string; align:"left"|"center"|"right"; vertical:"top"|"middle"|"bottom"; wrap:"overflow"|"wrap"|"clip" };
   type Cell = { id:string; subject:string; text:string; studiedWeek?:string; bg:string; fg:string; subjectBg:string; subjectFg:string; bold:boolean; italic:boolean; underline:boolean; strike:boolean; size:number; fontFamily:string; align:"left"|"center"|"right"; vertical:"top"|"middle"|"bottom"; wrap:"overflow"|"wrap"|"clip"; subjectStyle?:CellPartStyle; textStyle?:CellPartStyle };
   type PlannerData = { version:2; weekOffset:number; cols:number; rows:number; headers:string[]; colWidths:number[]; rowHeights:number[]; cells:Record<string,Cell> };
@@ -1444,6 +1444,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor}:{userId:s
   const [moreOpen,setMoreOpen]=useState(false);
   const [fullscreen,setFullscreen]=useState(false);
   const [shortcutHelpOpen,setShortcutHelpOpen]=useState(false);
+  const [subjectPickerId,setSubjectPickerId]=useState<string|null>(null);
   const plannerHistory=useRef<{past:PlannerData[];future:PlannerData[]}>({past:[],future:[]});
   const plannerHistoryMode=useRef<"undo"|"redo"|null>(null);
   const plannerPreviousData=useRef<PlannerData>(data);
@@ -1551,6 +1552,22 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor}:{userId:s
   const getCell=(id:string):Cell=>data.cells[id]??defaultCell();
   const updateCell=(id:string,patch:Partial<Cell>)=>{
     setData(prev=>({...prev,cells:{...prev.cells,[id]:{...getCell(id),...patch}}}));
+  };
+  const focusPlannerSubject=(id:string)=>{
+    setSubjectPickerId(null);
+    window.setTimeout(()=>{
+      const el=document.querySelector(`[data-planner-subject="${id}"]`) as HTMLInputElement|null;
+      el?.focus(); el?.select();
+    },0);
+  };
+  const choosePlannerSubject=(id:string,subject:string)=>{
+    updateCell(id,{subject});
+    setSubjectPickerId(null);
+  };
+  const deletePlannerSubject=(id:string)=>{
+    updateCell(id,{subject:"",studiedWeek:undefined});
+    setSubjectPickerId(null);
+    notify("Matéria removida da célula.");
   };
   const getPartStyle=(id:string,part:"subject"|"text"):CellPartStyle=>{
     const cell=getCell(id);
@@ -2000,9 +2017,10 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor}:{userId:s
             <input
               className={"planner-content-top "+(selectedParts.includes(partKey(id,"subject"))?"planner-part-selected":"")}
               aria-label="Conteúdo superior da célula sem rótulo visível"
+              data-planner-subject={id}
               value={cell.subject}
               onChange={e=>updateCell(id,{subject:e.target.value})}
-              onClick={e=>{e.stopPropagation();selectCellPart(id,"subject",e.ctrlKey||e.metaKey)}}
+              onClick={e=>{e.stopPropagation();selectCellPart(id,"subject",e.ctrlKey||e.metaKey);setSubjectPickerId(id)}}
               onPointerDown={e=>e.stopPropagation()}
               onFocus={()=>selectCellPart(id,"subject",false)}
               style={{backgroundColor:isStudiedThisWeek(id)?completedSmallColor:(getPartStyle(id,"subject").bg||cell.subjectBg||defaultSmallColor),color:getPartStyle(id,"subject").fg,fontSize:getPartStyle(id,"subject").size,fontWeight:getPartStyle(id,"subject").bold?"700":"400",fontStyle:getPartStyle(id,"subject").italic?"italic":"normal",fontFamily:getPartStyle(id,"subject").fontFamily,textAlign:getPartStyle(id,"subject").align,textDecoration:[getPartStyle(id,"subject").underline?"underline":"",getPartStyle(id,"subject").strike?"line-through":""] .filter(Boolean).join(" "),whiteSpace:getPartStyle(id,"subject").wrap==="wrap"?"normal":getPartStyle(id,"subject").wrap==="clip"?"nowrap":"pre-wrap",padding:getPartStyle(id,"subject").vertical==="middle"?"8px":"8px",lineHeight:getPartStyle(id,"subject").vertical==="middle"?"29px":getPartStyle(id,"subject").vertical==="bottom"?"40px":"1.2"}}
@@ -2011,6 +2029,16 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor}:{userId:s
             {cell.subject.trim() && <button type="button" className={"planner-study-check "+(isStudiedThisWeek(id)?"checked":"")} aria-label={isStudiedThisWeek(id)?"Desmarcar matéria estudada":"Marcar matéria como estudada"} title={isStudiedThisWeek(id)?"Desmarcar como estudada":"Marcar como estudada"} onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();toggleStudied(id);}}>
               {isStudiedThisWeek(id) ? "✓" : ""}
             </button>}
+            {subjectPickerId===id && <div className="planner-subject-picker" onPointerDown={e=>e.stopPropagation()} onClick={e=>e.stopPropagation()}>
+              {cell.subject.trim() ? <>
+                <div className="planner-subject-picker-title">Matéria preenchida</div>
+                <button type="button" onClick={()=>focusPlannerSubject(id)}>Editar nome</button>
+                <button type="button" className="danger" onClick={()=>deletePlannerSubject(id)}>Excluir matéria</button>
+              </> : <>
+                <div className="planner-subject-picker-title">Escolha uma matéria</div>
+                {subjects.length ? subjects.map(subject=><button type="button" key={subject.id} onClick={()=>choosePlannerSubject(id,subject.name)}>{subject.name}</button>) : <div className="planner-subject-picker-empty">Nenhuma matéria cadastrada. Cadastre uma em Cadastro.</div>}
+              </>}
+            </div>}
             </div>
             <textarea
               className={"planner-content-bottom "+(selectedParts.includes(partKey(id,"text"))?"planner-part-selected":"")}
