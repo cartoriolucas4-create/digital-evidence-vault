@@ -243,93 +243,422 @@ function App() {
     return () => { mounted = false; listener.subscription.unsubscribe(); };
   }, []);
 
-  const exportMonthlyPdf = async (referenceDate = new Date()) => {
+  const exportMonthlyPdf = async () => {
     if (!session?.user.id) return;
-    const { from, to } = monthBounds(referenceDate);
-    const { data, error } = await (supabase as any).from("study_entries").select("*").gte("study_date", from).lte("study_date", to).order("study_date", { ascending: true });
-    if (error) { notify(error.message); return; }
-    const monthlyEntries = (data ?? []) as Entry[];
-    const questions = monthlyEntries.reduce((sum: number, entry: Entry) => sum + Number(entry.questions || 0), 0);
-    const correct = monthlyEntries.reduce((sum: number, entry: Entry) => sum + Number(entry.correct || 0), 0);
-    const errors = questions - correct, accuracy = percent(correct, questions);
-    const days = new Set(monthlyEntries.map((entry: Entry) => entry.study_date)).size;
-    const monthlyGroups = new Map<string, any>();
-    monthlyEntries.forEach((entry: Entry) => {
-      const id = entry.discipline_id ?? "snapshot:" + (entry.discipline_name_snapshot ?? "Sem disciplina");
-      const name = entry.discipline_id
-        ? disciplines.find((discipline) => discipline.id === entry.discipline_id)?.name ?? entry.discipline_name_snapshot ?? "Disciplina removida"
-        : entry.discipline_name_snapshot ?? "Disciplina removida";
-      const current = monthlyGroups.get(id) ?? { name, questions: 0, correct: 0, errors: 0, accuracy: 0 };
-      current.questions += Number(entry.questions || 0);
-      current.correct += Number(entry.correct || 0);
-      current.errors = current.questions - current.correct;
-      current.accuracy = percent(current.correct, current.questions);
-      monthlyGroups.set(id, current);
-    });
-    const byDisciplineMonthly = [...monthlyGroups.values()].filter((item) => item.questions > 0).sort((a, b) => b.accuracy - a.accuracy);
 
-    const doc = new jsPDF({ unit: "mm", format: "a4" });
-    doc.setFillColor(214, 51, 132); doc.rect(0, 0, 210, 9, "F");
-    doc.setTextColor(42, 24, 35); doc.setFontSize(20); doc.setFont("helvetica", "bold");
-    doc.text("MCR — Meu Controle de Rendimento", 14, 25);
-    doc.setFontSize(12); doc.setFont("helvetica", "normal"); doc.setTextColor(105, 91, 100);
-    doc.text("Resumo mensal — " + monthLabel(referenceDate), 14, 33);
-    doc.setDrawColor(238, 221, 231); doc.line(14, 39, 196, 39);
-    const cards = [["Questões", questions.toLocaleString("pt-BR")], ["Acertos", correct.toLocaleString("pt-BR")], ["Erros", errors.toLocaleString("pt-BR")], ["Aproveitamento", accuracy.toFixed(1) + "%"], ["Dias estudados", String(days)], ["Meta", targetAccuracy + "%"]];
-    cards.forEach(([label, value], index) => {
-      const x = 14 + (index % 3) * 61, y = 47 + Math.floor(index / 3) * 25;
-      doc.setFillColor(252, 244, 248); doc.roundedRect(x, y, 57, 20, 3, 3, "F");
-      doc.setTextColor(120, 102, 113); doc.setFontSize(8); doc.text(label.toUpperCase(), x + 4, y + 7);
-      doc.setTextColor(42, 24, 35); doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.text(value, x + 4, y + 15); doc.setFont("helvetica", "normal");
-    });
-    autoTable(doc, { startY: 105, head: [["Disciplina", "Questões", "Acertos", "Erros", "Aproveitamento"]], body: byDisciplineMonthly.map((item) => [item.name, item.questions, item.correct, item.errors, item.accuracy.toFixed(1) + "%"]), theme: "grid", headStyles: { fillColor: [214, 51, 132], textColor: 255, fontStyle: "bold", fontSize: 8 }, bodyStyles: { fontSize: 8, textColor: [55, 65, 81] }, alternateRowStyles: { fillColor: [252, 249, 251] }, styles: { cellPadding: 3 } });
-    const finalY = (doc as any).lastAutoTable?.finalY ?? 120;
-    doc.setFontSize(9); doc.setTextColor(105, 91, 100);
-    doc.text("Diferença para a meta: " + (accuracy - targetAccuracy).toFixed(1) + " p.p.", 14, finalY + 12);
-    doc.text("Relatório gerado pelo MCR.", 14, finalY + 19);
-    doc.save("MCR-rendimento-" + referenceDate.getFullYear() + "-" + String(referenceDate.getMonth() + 1).padStart(2, "0") + ".pdf");
-    setNotificationOpen(false); notify("PDF mensal exportado.");
-  };
-
-  const exportAnnualBackup = async (referenceDate = new Date()) => {
-    if (!session?.user.id) return;
     const client = supabase as any;
-    const tables = [
-      ["study_disciplines", "disciplinas"],
-      ["study_subjects", "assuntos"],
-      ["study_sources", "fontes"],
-      ["study_question_types", "tipos_questao"],
-      ["study_entries", "lancamentos"],
-      ["study_settings", "configuracoes"],
-    ] as const;
-    const results = await Promise.all(tables.map(async ([table, key]) => {
-      const { data, error } = await client.from(table).select("*");
-      return { key, data, error };
-    }));
-    const failed = results.find((result) => result.error);
-    if (failed?.error) {
-      notify("Não foi possível gerar o backup anual.");
+    const { data, error } = await client
+      .from("study_entries")
+      .select("*")
+      .gte("study_date", applied.from)
+      .lte("study_date", applied.to)
+      .order("study_date", { ascending: true })
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      notify(error.message);
       return;
     }
+
+    const reportEntries = ((data ?? []) as Entry[]).filter((entry) =>
+      (!applied.disciplineId || entry.discipline_id === applied.disciplineId) &&
+      (!applied.subjectId || entry.subject_id === applied.subjectId) &&
+      (!applied.sourceId || entry.source_id === applied.sourceId)
+    );
+
+    const disciplineMap = new Map(disciplines.map((item) => [item.id, item.name]));
+    const subjectMap = new Map(subjects.map((item) => [item.id, item.name]));
+    const sourceMap = new Map(sources.map((item) => [item.id, item.name]));
+    const typeMap = new Map(types.map((item) => [item.id, item.name]));
+    const entryAccuracy = (entry: Entry) => percent(Number(entry.correct || 0), Number(entry.questions || 0));
+    const dateLabel = (value: string) => new Date(value + "T12:00:00").toLocaleDateString("pt-BR");
+
+    const enriched = reportEntries.map((entry) => ({
+      entry,
+      discipline: entry.discipline_id ? disciplineMap.get(entry.discipline_id) ?? entry.discipline_name_snapshot ?? "Disciplina removida" : entry.discipline_name_snapshot ?? "Sem disciplina",
+      subject: entry.subject_id ? subjectMap.get(entry.subject_id) ?? entry.subject_name_snapshot ?? "Assunto removido" : entry.subject_name_snapshot ?? "Sem assunto",
+      source: entry.source_id ? sourceMap.get(entry.source_id) ?? entry.source_name_snapshot ?? "Origem removida" : entry.source_name_snapshot ?? "—",
+      type: entry.question_type_id ? typeMap.get(entry.question_type_id) ?? entry.question_type_name_snapshot ?? "Tipo removido" : entry.question_type_name_snapshot ?? "—",
+      questions: Number(entry.questions || 0),
+      correct: Number(entry.correct || 0),
+      errors: Math.max(0, Number(entry.questions || 0) - Number(entry.correct || 0)),
+      accuracy: entryAccuracy(entry),
+    }));
+
+    const totalQuestions = enriched.reduce((sum, item) => sum + item.questions, 0);
+    const totalCorrect = enriched.reduce((sum, item) => sum + item.correct, 0);
+    const totalErrors = enriched.reduce((sum, item) => sum + item.errors, 0);
+    const totalAccuracy = percent(totalCorrect, totalQuestions);
+    const studiedDays = new Set(enriched.map((item) => item.entry.study_date)).size;
+
+    const aggregate = (key: "discipline" | "subject") => {
+      const groups = new Map<string, any>();
+      enriched.forEach((item) => {
+        const name = item[key];
+        const id = key === "discipline" ? item.entry.discipline_id ?? "snapshot:" + name : item.entry.subject_id ?? "snapshot:" + name;
+        const current = groups.get(id) ?? { id, name, discipline: key === "subject" ? item.discipline : "", questions: 0, correct: 0, errors: 0, accuracy: 0 };
+        current.questions += item.questions;
+        current.correct += item.correct;
+        current.errors += item.errors;
+        current.accuracy = percent(current.correct, current.questions);
+        groups.set(id, current);
+      });
+      return [...groups.values()].filter((item) => item.questions > 0).sort((a, b) => b.accuracy - a.accuracy);
+    };
+
+    const byDisciplineReport = aggregate("discipline");
+    const bySubjectReport = aggregate("subject");
+
+    const bestSubject = bySubjectReport[0];
+    const worstSubject = bySubjectReport[bySubjectReport.length - 1];
+
+    const bestWorstBySubject = bySubjectReport.map((subject) => {
+      const rows = enriched.filter((item) => item.subject === subject.name && (!subject.discipline || item.discipline === subject.discipline));
+      const best = rows.slice().sort((a, b) => b.accuracy - a.accuracy)[0];
+      const worst = rows.slice().sort((a, b) => a.accuracy - b.accuracy)[0];
+      return { subject, best, worst };
+    });
+
+    const dayMap = new Map<string, { questions: number; correct: number; errors: number }>();
+    enriched.forEach((item) => {
+      const current = dayMap.get(item.entry.study_date) ?? { questions: 0, correct: 0, errors: 0 };
+      current.questions += item.questions;
+      current.correct += item.correct;
+      current.errors += item.errors;
+      dayMap.set(item.entry.study_date, current);
+    });
+    const dailyReport = [...dayMap.entries()].map(([date, values]) => ({
+      date,
+      ...values,
+      accuracy: percent(values.correct, values.questions),
+    })).sort((a, b) => a.date.localeCompare(b.date));
+
+    const doc = new jsPDF({ unit: "mm", format: "a4" });
+    const margin = 14;
+    const pageWidth = 210;
+    const contentWidth = pageWidth - margin * 2;
+    const pink: [number, number, number] = [214, 51, 132];
+    const dark: [number, number, number] = [42, 24, 35];
+    const muted: [number, number, number] = [105, 91, 100];
+
+    const header = (title: string, subtitle?: string) => {
+      doc.setFillColor(...pink);
+      doc.rect(0, 0, pageWidth, 8, "F");
+      doc.setTextColor(...dark);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(17);
+      doc.text("MCR — Meu Controle de Rendimento", margin, 21);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.text(title, margin, 29);
+      if (subtitle) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8.5);
+        doc.setTextColor(...muted);
+        doc.text(subtitle, margin, 35);
+      }
+      doc.setDrawColor(238, 221, 231);
+      doc.line(margin, 40, pageWidth - margin, 40);
+    };
+
+    const sectionTitle = (title: string, y: number) => {
+      doc.setTextColor(...dark);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.text(title, margin, y);
+      return y + 7;
+    };
+
+    const addBarChart = (title: string, rows: any[], labelKey: string, valueKey: string, maxRows = 12) => {
+      const chartRows = rows.slice(0, maxRows);
+      if (!chartRows.length) return;
+      doc.addPage();
+      header(title, "Ordenado do maior rendimento para o menor rendimento.");
+      const maxValue = Math.max(100, ...chartRows.map((row) => Number(row[valueKey]) || 0));
+      let y = 52;
+      chartRows.forEach((row) => {
+        const label = String(row[labelKey] ?? "—");
+        const value = Number(row[valueKey]) || 0;
+        const labelText = label.length > 36 ? label.slice(0, 33) + "..." : label;
+        doc.setTextColor(...dark);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(7.5);
+        doc.text(labelText, margin, y);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(...muted);
+        doc.text(value.toFixed(1) + "%", pageWidth - margin, y, { align: "right" });
+        y += 3;
+        doc.setDrawColor(232, 226, 230);
+        doc.setFillColor(246, 241, 244);
+        doc.roundedRect(margin, y, contentWidth, 6, 2, 2, "F");
+        doc.setFillColor(...pink);
+        doc.roundedRect(margin, y, contentWidth * Math.min(100, Math.max(0, value)) / 100, 6, 2, 2, "F");
+        y += 13;
+        if (y > 270) {
+          doc.addPage();
+          header(title, "Continuação");
+          y = 52;
+        }
+      });
+    };
+
+    header("Relatório completo de rendimento", "Período filtrado: " + dateLabel(applied.from) + " a " + dateLabel(applied.to));
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(...muted);
+    const filterLabels = [
+      "Disciplina: " + (applied.disciplineId ? disciplineMap.get(applied.disciplineId) ?? "Selecionada" : "Todas"),
+      "Assunto: " + (applied.subjectId ? subjectMap.get(applied.subjectId) ?? "Selecionado" : "Todos"),
+      "Banca / Origem: " + (applied.sourceId ? sourceMap.get(applied.sourceId) ?? "Selecionada" : "Todas"),
+    ];
+    doc.text(filterLabels.join("   •   "), margin, 47);
+
+    const cards = [
+      ["Questões", totalQuestions.toLocaleString("pt-BR")],
+      ["Acertos", totalCorrect.toLocaleString("pt-BR")],
+      ["Erros", totalErrors.toLocaleString("pt-BR")],
+      ["Aproveitamento", totalAccuracy.toFixed(1) + "%"],
+      ["Dias estudados", String(studiedDays)],
+      ["Meta", targetAccuracy + "%"],
+    ];
+    cards.forEach(([label, value], index) => {
+      const x = margin + (index % 3) * 61;
+      const y = 55 + Math.floor(index / 3) * 25;
+      doc.setFillColor(252, 244, 248);
+      doc.roundedRect(x, y, 57, 20, 3, 3, "F");
+      doc.setTextColor(...muted);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
+      doc.text(label.toUpperCase(), x + 4, y + 7);
+      doc.setTextColor(...dark);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.text(value, x + 4, y + 15);
+    });
+
+    let y = 112;
+    y = sectionTitle("INDICADORES PRINCIPAIS", y);
+    autoTable(doc, {
+      startY: y,
+      head: [["Indicador", "Resultado"]],
+      body: [
+        ["Melhor assunto", bestSubject ? bestSubject.name + " — " + bestSubject.accuracy.toFixed(1) + "%" : "—"],
+        ["Pior assunto", worstSubject ? worstSubject.name + " — " + worstSubject.accuracy.toFixed(1) + "%" : "—"],
+        ["Melhor disciplina", byDisciplineReport[0] ? byDisciplineReport[0].name + " — " + byDisciplineReport[0].accuracy.toFixed(1) + "%" : "—"],
+        ["Pior disciplina", byDisciplineReport.at(-1) ? byDisciplineReport.at(-1).name + " — " + byDisciplineReport.at(-1).accuracy.toFixed(1) + "%" : "—"],
+        ["Diferença para a meta", (totalAccuracy - targetAccuracy).toFixed(1) + " p.p."],
+      ],
+      theme: "grid",
+      headStyles: { fillColor: pink, textColor: 255, fontStyle: "bold", fontSize: 8 },
+      bodyStyles: { fontSize: 8 },
+      styles: { cellPadding: 2.5 },
+      margin: { left: margin, right: margin },
+    });
+
+    addBarChart("Gráfico — rendimento por disciplina", byDisciplineReport, "name", "accuracy");
+    addBarChart("Gráfico — rendimento por assunto", bySubjectReport, "name", "accuracy");
+
+    doc.addPage();
+    header("Evolução diária", "Aproveitamento calculado por dia dentro do período filtrado.");
+    if (dailyReport.length) {
+      autoTable(doc, {
+        startY: 48,
+        head: [["Data", "Questões", "Acertos", "Erros", "Aproveitamento"]],
+        body: dailyReport.map((row) => [dateLabel(row.date), row.questions, row.correct, row.errors, row.accuracy.toFixed(1) + "%"]),
+        theme: "grid",
+        headStyles: { fillColor: pink, textColor: 255, fontStyle: "bold", fontSize: 8 },
+        bodyStyles: { fontSize: 8 },
+        styles: { cellPadding: 2.5 },
+        margin: { left: margin, right: margin },
+      });
+      const finalY = (doc as any).lastAutoTable?.finalY ?? 60;
+      const chartTop = finalY + 12;
+      const chartHeight = Math.min(90, Math.max(45, 10 + dailyReport.length * 3.8));
+      const chartWidth = contentWidth;
+      const barWidth = Math.max(2.5, Math.min(9, chartWidth / Math.max(1, dailyReport.length) - 2));
+      doc.setTextColor(...dark);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.text("Gráfico — aproveitamento diário", margin, chartTop);
+      const baseY = chartTop + chartHeight;
+      doc.setDrawColor(225, 218, 223);
+      doc.line(margin, baseY, margin + chartWidth, baseY);
+      dailyReport.forEach((row, index) => {
+        const value = Math.min(100, Math.max(0, row.accuracy));
+        const x = margin + (chartWidth / Math.max(1, dailyReport.length)) * index + 1;
+        const h = chartHeight * value / 100;
+        doc.setFillColor(...pink);
+        doc.roundedRect(x, baseY - h, barWidth, h, 1, 1, "F");
+        if (dailyReport.length <= 18 || index % Math.ceil(dailyReport.length / 18) === 0) {
+          doc.setTextColor(...muted);
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(5.8);
+          doc.text(new Date(row.date + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }), x + barWidth / 2, baseY + 7, { align: "center" });
+        }
+      });
+    } else {
+      doc.setTextColor(...muted);
+      doc.setFontSize(9);
+      doc.text("Nenhum lançamento no período filtrado.", margin, 55);
+    }
+
+    doc.addPage();
+    header("Ranking por disciplina", "Maior rendimento → menor rendimento.");
+    autoTable(doc, {
+      startY: 48,
+      head: [["#", "Disciplina", "Questões", "Acertos", "Erros", "Rendimento"]],
+      body: byDisciplineReport.map((item, index) => [index + 1, item.name, item.questions, item.correct, item.errors, item.accuracy.toFixed(1) + "%"]),
+      theme: "grid",
+      headStyles: { fillColor: pink, textColor: 255, fontStyle: "bold", fontSize: 8 },
+      bodyStyles: { fontSize: 8 },
+      styles: { cellPadding: 2.5 },
+      margin: { left: margin, right: margin },
+    });
+
+    doc.addPage();
+    header("Ranking por assunto", "Maior rendimento → menor rendimento.");
+    autoTable(doc, {
+      startY: 48,
+      head: [["#", "Assunto", "Disciplina", "Questões", "Acertos", "Erros", "Rendimento"]],
+      body: bySubjectReport.map((item, index) => [index + 1, item.name, item.discipline || "—", item.questions, item.correct, item.errors, item.accuracy.toFixed(1) + "%"]),
+      theme: "grid",
+      headStyles: { fillColor: pink, textColor: 255, fontStyle: "bold", fontSize: 7.5 },
+      bodyStyles: { fontSize: 7.5 },
+      styles: { cellPadding: 2.2 },
+      margin: { left: margin, right: margin },
+    });
+
+    doc.addPage();
+    header("Melhor e pior rendimento em cada assunto", "Para cada assunto: melhor lançamento e pior lançamento registrados no período.");
+    autoTable(doc, {
+      startY: 48,
+      head: [["Assunto", "Disciplina", "Melhor lançamento", "Pior lançamento"]],
+      body: bestWorstBySubject.map((item) => [
+        item.subject.name,
+        item.subject.discipline || "—",
+        item.best ? dateLabel(item.best.entry.study_date) + " — " + item.best.accuracy.toFixed(1) + "% (" + item.best.correct + "/" + item.best.questions + ")" : "—",
+        item.worst ? dateLabel(item.worst.entry.study_date) + " — " + item.worst.accuracy.toFixed(1) + "% (" + item.worst.correct + "/" + item.worst.questions + ")" : "—",
+      ]),
+      theme: "grid",
+      headStyles: { fillColor: pink, textColor: 255, fontStyle: "bold", fontSize: 7.5 },
+      bodyStyles: { fontSize: 7.2 },
+      styles: { cellPadding: 2.2, overflow: "linebreak" },
+      columnStyles: { 0: { cellWidth: 48 }, 1: { cellWidth: 42 }, 2: { cellWidth: 49 }, 3: { cellWidth: 49 } },
+      margin: { left: margin, right: margin },
+    });
+
+    doc.addPage();
+    header("Lançamentos detalhados", "Todos os lançamentos do período filtrado, com data, matéria, assunto, origem, tipo, questões, acertos, erros, rendimento e observações.");
+    autoTable(doc, {
+      startY: 48,
+      head: [["Data", "Matéria", "Assunto", "Origem", "Tipo", "Q", "A", "E", "%", "Observações"]],
+      body: enriched.map((item) => [
+        dateLabel(item.entry.study_date),
+        item.discipline,
+        item.subject,
+        item.source,
+        item.type,
+        item.questions,
+        item.correct,
+        item.errors,
+        item.accuracy.toFixed(1) + "%",
+        item.entry.notes || "—",
+      ]),
+      theme: "grid",
+      headStyles: { fillColor: pink, textColor: 255, fontStyle: "bold", fontSize: 6.5 },
+      bodyStyles: { fontSize: 6.2, valign: "top", overflow: "linebreak" },
+      styles: { cellPadding: 1.7, overflow: "linebreak" },
+      columnStyles: {
+        0: { cellWidth: 17 },
+        1: { cellWidth: 24 },
+        2: { cellWidth: 28 },
+        3: { cellWidth: 22 },
+        4: { cellWidth: 20 },
+        5: { cellWidth: 9, halign: "center" },
+        6: { cellWidth: 9, halign: "center" },
+        7: { cellWidth: 9, halign: "center" },
+        8: { cellWidth: 13, halign: "center" },
+        9: { cellWidth: 31 },
+      },
+      margin: { left: margin, right: margin, top: 48, bottom: 12 },
+      showHead: "everyPage",
+      rowPageBreak: "auto",
+    });
+
+    const totalPages = doc.getNumberOfPages();
+    for (let page = 1; page <= totalPages; page += 1) {
+      doc.setPage(page);
+      doc.setTextColor(...muted);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
+      doc.text("MCR • Relatório completo • " + dateLabel(applied.from) + " a " + dateLabel(applied.to), margin, 291);
+      doc.text("Página " + page + " de " + totalPages, pageWidth - margin, 291, { align: "right" });
+    }
+
+    const filenameFrom = applied.from.replaceAll("-", "");
+    const filenameTo = applied.to.replaceAll("-", "");
+    doc.save("MCR-relatorio-" + filenameFrom + "-" + filenameTo + ".pdf");
+    setNotificationOpen(false);
+    notify("Relatório PDF completo exportado.");
+  };
+
+  const exportMonthlyBackup = async () => {
+    if (!session?.user.id) return;
+    const client = supabase as any;
+    const to = localDate();
+    const from = dateMinus(29);
+    const { data: entriesData, error: entriesError } = await client
+      .from("study_entries")
+      .select("*")
+      .gte("study_date", from)
+      .lte("study_date", to)
+      .order("study_date", { ascending: true });
+    if (entriesError) {
+      notify("Não foi possível gerar o backup mensal.");
+      return;
+    }
+
+    const [disciplinesResult, subjectsResult, sourcesResult, typesResult, settingsResult] = await Promise.all([
+      client.from("study_disciplines").select("*"),
+      client.from("study_subjects").select("*"),
+      client.from("study_sources").select("*"),
+      client.from("study_question_types").select("*"),
+      client.from("study_settings").select("*").maybeSingle(),
+    ]);
+    const failed = [disciplinesResult, subjectsResult, sourcesResult, typesResult, settingsResult].find((result) => result.error);
+    if (failed?.error) {
+      notify("Não foi possível gerar o backup mensal.");
+      return;
+    }
+
     const backup = {
       format: "MCR_BACKUP",
-      version: 1,
+      version: 2,
+      backup_type: "monthly",
+      period: { from, to, days: 30 },
       exported_at: new Date().toISOString(),
-      reference_year: referenceDate.getFullYear(),
       user_id: session.user.id,
-      data: Object.fromEntries(results.map((result) => [result.key, result.data ?? []])),
+      data: {
+        disciplinas: disciplinesResult.data ?? [],
+        assuntos: subjectsResult.data ?? [],
+        fontes: sourcesResult.data ?? [],
+        tipos_questao: typesResult.data ?? [],
+        lancamentos_ultimos_30_dias: entriesData ?? [],
+        configuracoes: settingsResult.data ?? null,
+      },
     };
+
     const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "MCR-backup-" + referenceDate.getFullYear() + ".json";
+    link.download = "MCR-backup-mensal-" + from + "-a-" + to + ".json";
     document.body.appendChild(link);
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
     setNotificationOpen(false);
-    notify("Backup anual exportado.");
+    notify("Backup mensal dos últimos 30 dias exportado.");
   };
 
   const deleteAllCatalogData = async () => {
@@ -733,7 +1062,7 @@ function App() {
                 <span><strong>{personalizeNotificationTitle(item.title, studentName)}</strong><small>{personalizeNotificationText(item.message, studentName)}</small><small className="notification-date">{new Date(item.created_at).toLocaleDateString("pt-BR")}</small></span>
               </button>)}
               {isLastDayOfMonth() && <button className="monthly-notification" onClick={() => exportMonthlyPdf()}><span className="notification-icon"><FileDown size={15}/></span><span><strong>{studentName ? studentName + ", seu rendimento mensal está pronto." : "Seu rendimento mensal está pronto"}</strong><small>{studentName ? "Exporte seu resumo mensal em PDF." : "Exporte o resumo mensal em PDF."}</small></span></button>}
-              {isLastDayOfMonth() && new Date().getMonth() === 11 && <button className="monthly-notification" onClick={() => exportAnnualBackup()}><span className="notification-icon"><Upload size={15}/></span><span><strong>{studentName ? studentName + ", seu backup anual está disponível." : "Backup anual disponível"}</strong><small>{studentName ? "Faça seu backup dos dados antes de encerrar o ano." : "Faça o backup dos seus dados antes de encerrar o ano."}</small></span></button>}
+              {isLastDayOfMonth() && <button className="monthly-notification" onClick={() => exportMonthlyBackup()}><span className="notification-icon"><Upload size={15}/></span><span><strong>{studentName ? studentName + ", seu backup mensal está disponível." : "Backup mensal disponível"}</strong><small>{studentName ? "Faça o backup dos seus dados dos últimos 30 dias." : "Faça o backup dos dados dos últimos 30 dias."}</small></span></button>}
               {!performanceNotifications.length && !inactiveFor24Hours && !isLastDayOfMonth() && <div className="notification-empty">{studentName ? studentName + ", nenhuma observação importante por enquanto. O MCR só aparece quando identifica algo relevante." : "Nenhuma observação importante por enquanto. O MCR só aparece quando identifica algo relevante."}</div>}
             </div>}
           </div>
@@ -774,7 +1103,7 @@ function App() {
               onClear={() => { const next = emptyFilters(); setFilters(next); setApplied(next); }}
               totalQuestions={totalQuestions} totalCorrect={totalCorrect} totalErrors={totalErrors} accuracy={accuracy}
               daysStudied={daysStudied} todayQuestions={todayQuestions} todayCorrect={todayCorrect} dailyGoal={dailyGoal}
-              byDiscipline={byDiscipline} bySubject={bySubject} attention={attention} targetAccuracy={targetAccuracy} entries={entries} onExportMonthly={() => exportMonthlyPdf()}
+              byDiscipline={byDiscipline} bySubject={bySubject} attention={attention} targetAccuracy={targetAccuracy} entries={entries} onExportMonthly={exportMonthlyPdf}
             />
           )}
           {tab === "planner" && <Planner userId={session.user.id} notify={notify} defaultSmallColor={plannerDefaultColor} completedSmallColor={plannerCompletedColor} />}
@@ -839,7 +1168,7 @@ function Dashboard(props: any) {
   return (
     <>
       <h1 className="page-title">Olá, {props.studentName || "estudante"}.</h1>
-      <div className="dashboard-heading"><p className="subtitle">Visão consolidada dos lançamentos reais do período selecionado.</p><div className="dashboard-heading-actions"><button className="btn export-pdf-btn" onClick={props.onExportMonthly}><FileDown size={15}/> Exportar rendimento mensal</button><button className="btn" onClick={props.onToggleFullscreen} title={props.fullscreen?"Sair da tela cheia":"Entrar em tela cheia"}>{props.fullscreen?<Minimize2 size={15}/>:<Maximize2 size={15}/>} {props.fullscreen?"Sair da tela cheia":"Tela cheia"}</button></div></div>
+      <div className="dashboard-heading"><p className="subtitle">Visão consolidada dos lançamentos reais do período selecionado.</p><div className="dashboard-heading-actions"><button className="btn export-pdf-btn" onClick={props.onExportMonthly}><FileDown size={15}/> Exportar relatório</button><button className="btn" onClick={props.onToggleFullscreen} title={props.fullscreen?"Sair da tela cheia":"Entrar em tela cheia"}>{props.fullscreen?<Minimize2 size={15}/>:<Maximize2 size={15}/>} {props.fullscreen?"Sair da tela cheia":"Tela cheia"}</button></div></div>
 
       <section className="section">
         <div className="section-head">FILTROS DE ANÁLISE</div>
