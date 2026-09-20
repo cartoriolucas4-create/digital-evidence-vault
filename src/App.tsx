@@ -1712,7 +1712,7 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
         </div>}
       </div>
     </div>
-
+    <div className="planner-grid-wrap">
       <div className="planner-grid" style={{gridTemplateColumns:["30px",...data.colWidths.map(w=>w+"px")].join(" "),gridTemplateRows:["34px",...data.rowHeights.map(h=>h+"px")].join(" ")}}>
         <button className="planner-corner-selector" title="Selecionar toda a planilha" onClick={selectAll}>□</button>
         {Array.from({length:data.cols},(_,col)=>{
