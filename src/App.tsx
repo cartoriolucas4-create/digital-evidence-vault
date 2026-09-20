@@ -1459,7 +1459,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
         const hasLegacyDefaultSubjectStyle=savedSubjectStyle && savedSubjectStyle.bold===false && savedSubjectStyle.align==="left" && savedSubjectStyle.fontFamily==="Arial" && Number(savedSubjectStyle.size)===14 && savedSubjectStyle.bg==="#f7f8fa" && savedSubjectStyle.fg==="#17202a" && savedSubjectStyle.italic===false && savedSubjectStyle.underline===false && savedSubjectStyle.strike===false && savedSubjectStyle.vertical==="top" && savedSubjectStyle.wrap==="wrap";
         if(hasLegacyDefaultSubjectStyle) base.subjectStyle={...defaultPartStyle("subject")};
         const legacy={bg:String(value?.bg??"#ffffff"),fg:String(value?.fg??"#17202a"),bold:Boolean(value?.bold),italic:Boolean(value?.italic),underline:Boolean(value?.underline),strike:Boolean(value?.strike),size:Number(value?.size)||14,fontFamily:String(value?.fontFamily??"Arial"),align:(value?.align??"left") as CellPartStyle["align"],vertical:(value?.vertical??"top") as CellPartStyle["vertical"],wrap:(value?.wrap??"wrap") as CellPartStyle["wrap"]};
-        const normalizedSavedSubjectStyle=hasLegacyDefaultSubjectStyle?defaultPartStyle("subject"):(value?.subjectStyle??{});
+        const normalizedSavedSubjectStyle={...(value?.subjectStyle??{}),bold:true,align:"center" as const};
         const subjectStyle={...defaultPartStyle("subject"),...normalizedSavedSubjectStyle,bg:String(normalizedSavedSubjectStyle.bg??value?.subjectBg??"#f7f8fa"),fg:String(normalizedSavedSubjectStyle.fg??value?.subjectFg??"#17202a")};
         const textStyle={...defaultPartStyle("text"),...legacy,...(value?.textStyle??{})};
         cells[id]={...base,subjectStyle,textStyle};
