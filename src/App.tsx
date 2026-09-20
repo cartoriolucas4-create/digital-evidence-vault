@@ -188,6 +188,7 @@ function App() {
   const [toast, setToast] = useState("");
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [performanceNotifications, setPerformanceNotifications] = useState<PerformanceNotification[]>([]);
+  const [inactivityNotificationRead, setInactivityNotificationRead] = useState(false);
   const [catalogDeleteOpen, setCatalogDeleteOpen] = useState(false);
   const [catalogDeletePassword, setCatalogDeletePassword] = useState("");
   const [catalogDeleteBusy, setCatalogDeleteBusy] = useState(false);
@@ -533,8 +534,24 @@ function App() {
     window.setTimeout(() => setToast(""), 2200);
   };
 
+  const latestQuestionEntry = entries
+    .filter((entry) => Number(entry.questions || 0) > 0)
+    .slice()
+    .sort((a, b) => {
+      const ta = new Date(a.updated_at ?? a.created_at ?? a.study_date).getTime();
+      const tb = new Date(b.updated_at ?? b.created_at ?? b.study_date).getTime();
+      return tb - ta;
+    })[0];
+  const latestQuestionTimestamp = latestQuestionEntry
+    ? new Date(latestQuestionEntry.updated_at ?? latestQuestionEntry.created_at ?? latestQuestionEntry.study_date).getTime()
+    : 0;
+  const inactiveFor24Hours = Boolean(latestQuestionTimestamp && Date.now() - latestQuestionTimestamp >= 24 * 60 * 60 * 1000);
   const unreadPerformanceCount = performanceNotifications.filter((item) => !item.read_at).length;
-  const notificationCount = unreadPerformanceCount + (isLastDayOfMonth() ? 1 : 0);
+  const notificationCount = unreadPerformanceCount + (inactiveFor24Hours && !inactivityNotificationRead ? 1 : 0) + (isLastDayOfMonth() ? 1 : 0);
+
+  useEffect(() => {
+    setInactivityNotificationRead(false);
+  }, [latestQuestionTimestamp]);
 
   const evaluatePerformanceEntry = async (entry: Entry) => {
     if (!session?.user.id || !entry.subject_id || Number(entry.questions || 0) < 5) return;
@@ -691,6 +708,10 @@ function App() {
                   <button onClick={() => setNotificationOpen(false)} aria-label="Fechar"><X size={14}/></button>
                 </div>
               </div>
+              {inactiveFor24Hours && <button className={"monthly-notification performance-notification " + (inactivityNotificationRead ? "read" : "unread")} onClick={() => setInactivityNotificationRead(true)}>
+                <span className="notification-icon performance-attention"><AlertTriangle size={15}/></span>
+                <span><strong>{studentName ? studentName + ", já faz 24 horas sem lançar questões." : "Já faz 24 horas sem lançar questões."}</strong><small>Registre suas questões para manter seu acompanhamento de desempenho atualizado.</small><small className="notification-date">Agora</small></span>
+              </button>}
               {performanceNotifications.map((item) => <button key={item.id} className={"monthly-notification performance-notification " + (item.read_at ? "read" : "unread")} onClick={() => markPerformanceNotificationRead(item.id)}>
                 <span className={"notification-icon performance-" + item.notification_type}>
                   {item.notification_type === "drop" || item.notification_type === "drop_severe" || item.notification_type === "attention" ? <AlertTriangle size={15}/> : item.notification_type === "record" ? <Trophy size={15}/> : item.notification_type === "evolution" ? <TrendingUp size={15}/> : item.notification_type === "recovery" ? <Sparkles size={15}/> : <Target size={15}/>}
@@ -699,7 +720,7 @@ function App() {
               </button>)}
               {isLastDayOfMonth() && <button className="monthly-notification" onClick={() => exportMonthlyPdf()}><span className="notification-icon"><FileDown size={15}/></span><span><strong>{studentName ? studentName + ", seu rendimento mensal está pronto." : "Seu rendimento mensal está pronto"}</strong><small>{studentName ? "Exporte seu resumo mensal em PDF." : "Exporte o resumo mensal em PDF."}</small></span></button>}
               {isLastDayOfMonth() && new Date().getMonth() === 11 && <button className="monthly-notification" onClick={() => exportAnnualBackup()}><span className="notification-icon"><Upload size={15}/></span><span><strong>{studentName ? studentName + ", seu backup anual está disponível." : "Backup anual disponível"}</strong><small>{studentName ? "Faça seu backup dos dados antes de encerrar o ano." : "Faça o backup dos seus dados antes de encerrar o ano."}</small></span></button>}
-              {!performanceNotifications.length && !isLastDayOfMonth() && <div className="notification-empty">{studentName ? studentName + ", nenhuma observação importante por enquanto. O MCR só aparece quando identifica algo relevante." : "Nenhuma observação importante por enquanto. O MCR só aparece quando identifica algo relevante."}</div>}
+              {!performanceNotifications.length && !inactiveFor24Hours && !isLastDayOfMonth() && <div className="notification-empty">{studentName ? studentName + ", nenhuma observação importante por enquanto. O MCR só aparece quando identifica algo relevante." : "Nenhuma observação importante por enquanto. O MCR só aparece quando identifica algo relevante."}</div>}
             </div>}
           </div>
           <span className="user">{session.user.email}</span>
