@@ -1256,6 +1256,8 @@ function Catalog({disciplines,subjects,sources,types,refresh,notify,catalogDelet
   const [bulkOpen,setBulkOpen]=useState(false);
   const [disciplineOrder,setDisciplineOrder]=useState<string[]>(() => readStore<string[]>("mcr_discipline_order", []));
   const [draggingId,setDraggingId]=useState<string | null>(null);
+  const [editingId,setEditingId]=useState<string | null>(null);
+  const [editingName,setEditingName]=useState("");
 
   const table=kind==="discipline"?"study_disciplines":kind==="subject"?"study_subjects":kind==="source"?"study_sources":"study_question_types";
   const baseList=(kind==="discipline"?disciplines:kind==="subject"?subjects:kind==="source"?sources:types);
@@ -1300,6 +1302,27 @@ function Catalog({disciplines,subjects,sources,types,refresh,notify,catalogDelet
     if(!error)refresh();
   };
 
+  const startEdit=(item:any)=>{
+    setEditingId(item.id);
+    setEditingName(item.name ?? "");
+  };
+
+  const cancelEdit=()=>{
+    setEditingId(null);
+    setEditingName("");
+  };
+
+  const saveEdit=async(id:string)=>{
+    const clean=editingName.trim();
+    if(!clean)return notify("Informe um nome para a disciplina.");
+    const client=supabase as any;
+    const {error}=await client.from("study_disciplines").update({name:clean}).eq("id",id);
+    if(error)return notify(error.message);
+    cancelEdit();
+    notify("Disciplina atualizada.");
+    refresh();
+  };
+
   const tabs=[["discipline","Disciplinas"],["subject","Assuntos"],["source","Bancas / Origens"],["type","Tipos"]] as const;
 
   return <>
@@ -1317,7 +1340,7 @@ function Catalog({disciplines,subjects,sources,types,refresh,notify,catalogDelet
       </form>
       <input className="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Pesquisar cadastro..."/>
       <div className="table-wrap"><table className="table"><thead><tr><th>{kind==="discipline"?"Nome · arraste para ordenar":"Nome"}</th>{kind==="subject"&&<th>Disciplina</th>}<th>Ações</th></tr></thead><tbody>
-        {list.length?list.map((item:any)=><tr key={item.id} draggable={kind==="discipline"} onDragStart={()=>kind==="discipline"&&setDraggingId(item.id)} onDragOver={(e)=>kind==="discipline"&&e.preventDefault()} onDrop={()=>kind==="discipline"&&draggingId&&moveDiscipline(draggingId,item.id)} onDragEnd={()=>setDraggingId(null)} className={draggingId===item.id?"row-dragging":""}><td>{kind==="discipline"&&<span className="drag-handle" title="Arraste para reordenar"><GripVertical size={15}/></span>}{item.name}</td>{kind==="subject"&&<td>{disciplines.find((d:Discipline)=>d.id===item.discipline_id)?.name??"—"}</td>}<td><button className="btn small danger" onClick={()=>remove(item.id)}><Trash2 size={13}/> Excluir</button></td></tr>):<tr><td colSpan={kind==="subject"?3:2}><div className="empty">Nenhum cadastro encontrado.</div></td></tr>}
+        {list.length?list.map((item:any)=><tr key={item.id} draggable={kind==="discipline"} onDragStart={()=>kind==="discipline"&&setDraggingId(item.id)} onDragOver={(e)=>kind==="discipline"&&e.preventDefault()} onDrop={()=>kind==="discipline"&&draggingId&&moveDiscipline(draggingId,item.id)} onDragEnd={()=>setDraggingId(null)} className={draggingId===item.id?"row-dragging":""}><td>{kind==="discipline"&&<span className="drag-handle" title="Arraste para reordenar"><GripVertical size={15}/></span>}{kind==="discipline"&&editingId===item.id?<input className="catalog-inline-edit" value={editingName} onChange={e=>setEditingName(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();void saveEdit(item.id)}if(e.key==="Escape")cancelEdit()}} autoFocus spellCheck={false}/>:item.name}</td>{kind==="subject"&&<td>{disciplines.find((d:Discipline)=>d.id===item.discipline_id)?.name??"—"}</td>}<td><div className="actions">{kind==="discipline"&&(editingId===item.id?<><button type="button" className="btn small primary" onClick={()=>void saveEdit(item.id)}><CheckCircle2 size={13}/> Salvar</button><button type="button" className="btn small" onClick={cancelEdit}><X size={13}/> Cancelar</button></>:<button type="button" className="btn small" onClick={()=>startEdit(item)}>Editar</button>)}<button type="button" className="btn small danger" onClick={()=>remove(item.id)}><Trash2 size={13}/> Excluir</button></div></td></tr>):<tr><td colSpan={kind==="subject"?3:2}><div className="empty">Nenhum cadastro encontrado.</div></td></tr>
       </tbody></table></div>
     </div></section>
     {bulkOpen&&<BulkImportModal onClose={()=>setBulkOpen(false)} onImported={refresh} notify={notify}/>}
