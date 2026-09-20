@@ -1595,14 +1595,14 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
   const copyWeek=()=>{setData(prev=>{const cells:{[key:string]:Cell}={...prev.cells};for(let r=0;r<prev.rows;r++)for(let col=0;col<prev.cols;col++){const id=cellId(r,col);cells[id]={...getCell(id),id:uid()};}return {...prev,cells}});notify("Semana duplicada.");};
 
   return <div className={"planner-shell "+(fullscreen?"planner-fullscreen":"")}>
-    {shortcutHelpOpen&&<div className="planner-shortcuts-backdrop" role="dialog" aria-modal="true" onClick={()=>setShortcutHelpOpen(false)}>
+    {shortcutHelpOpen ? <div className="planner-shortcuts-backdrop" role="dialog" aria-modal="true" onClick={()=>setShortcutHelpOpen(false)}>
       <div className="planner-shortcuts-modal" onClick={e=>e.stopPropagation()}>
         <div className="planner-shortcuts-head"><strong>Atalhos do Planejamento</strong><button className="planner-tool" onClick={()=>setShortcutHelpOpen(false)}>×</button></div>
         <div className="planner-shortcuts-grid">
           <span>Ctrl/Cmd + C</span><span>Copiar células</span><span>Ctrl/Cmd + X</span><span>Recortar células</span><span>Ctrl/Cmd + V</span><span>Colar células</span><span>Ctrl/Cmd + Shift + V</span><span>Colar valores</span><span>Ctrl/Cmd + Z</span><span>Desfazer</span><span>Ctrl/Cmd + Shift + Z</span><span>Refazer</span><span>Ctrl/Cmd + A</span><span>Selecionar tudo</span><span>Ctrl + Espaço</span><span>Selecionar coluna</span><span>Shift + Espaço</span><span>Selecionar linha</span><span>Ctrl/Cmd + B</span><span>Negrito</span><span>Ctrl/Cmd + I</span><span>Itálico</span><span>Ctrl/Cmd + D</span><span>Preencher abaixo</span><span>Ctrl/Cmd + R</span><span>Preencher à direita</span><span>Delete / Backspace</span><span>Limpar conteúdo</span><span>Ctrl/Cmd + S</span><span>Salvar (automático)</span><span>Ctrl/Cmd + /</span><span>Mostrar atalhos</span><span>Ctrl/Cmd + F</span><span>Localizar</span><span>Ctrl/Cmd + H</span><span>Localizar e substituir</span>
         </div>
       </div>
-    </div>
+    </div> : null}
 
     <div className="planner-toolbar">
       <div className="planner-title-wrap"><div className="planner-eyebrow">PLANEJAMENTO LIVRE</div><h1>Minha semana</h1><span>{weekLabel}</span></div>
