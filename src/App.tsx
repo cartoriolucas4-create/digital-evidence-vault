@@ -1262,7 +1262,7 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
     const rowHeights=Array.from({length:rows},(_,i)=>{const v=Number(raw?.rowHeights?.[i]);return Number.isFinite(v)&&v>=90?v:180;});
     const cells:Record<string,Cell>={};
     Object.entries(raw?.cells??{}).forEach(([id,value]:any)=>{
-      cells[id]={...defaultCell(),...(value||{}),id,subject:String(value?.subject??""),text:String(value?.text??""),subjectBg:String(value?.subjectBg??"#f7f8fa"),subjectFg:String(value?.subjectFg??value?.fg??"#17202a")};
+      const subject=String(value?.subject??""); const text=String(value?.text??""); cells[id]={...defaultCell(),...(value||{}),id,subject:/^MATÉRIA$/i.test(subject)?"":subject,text:/^OBSERVAÇÕES$/i.test(text)?"":text,subjectBg:String(value?.subjectBg??"#f7f8fa"),subjectFg:String(value?.subjectFg??value?.fg??"#17202a")};
     });
     return {version:2,weekOffset:Number(raw?.weekOffset)||0,cols,rows,headers,colWidths,rowHeights,cells};
   };
@@ -1294,7 +1294,7 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
       });
       const cells:Record<string,Cell>={};
       Object.entries(legacy.cells??{}).forEach(([id,value]:any)=>{
-        cells[id]={...defaultCell(),...(value||{}),id,subject:String(value?.subject??""),text:String(value?.text??"")};
+        const subject=String(value?.subject??""); const text=String(value?.text??""); cells[id]={...defaultCell(),...(value||{}),id,subject:/^MATÉRIA$/i.test(subject)?"":subject,text:/^OBSERVAÇÕES$/i.test(text)?"":text};
       });
       return {version:2,weekOffset:Number(legacy.weekOffset)||0,cols,rows,headers,colWidths,rowHeights,cells};
     });
