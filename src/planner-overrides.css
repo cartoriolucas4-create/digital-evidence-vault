@@ -205,3 +205,21 @@ html[data-theme="dark"] .planner-content-bottom:focus{
   z-index:9999;
   min-height:250px;
 }
+
+/* O contêiner do bloco de matéria não pode cobrir o campo de anotações. */
+.planner-subject-wrap{
+  top:0;
+  left:0;
+  right:0;
+  bottom:auto;
+  height:62px;
+  pointer-events:none;
+}
+.planner-subject-wrap .planner-content-top,
+.planner-subject-wrap .planner-study-check{
+  pointer-events:auto;
+}
+.planner-content-bottom{
+  z-index:5;
+  pointer-events:auto;
+}
