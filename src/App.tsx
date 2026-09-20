@@ -1,4 +1,4 @@
-import { Component, type ErrorInfo, type FormEvent, type ReactNode, type PointerEvent, useEffect, useMemo, useState } from "react";
+import { Component, type ErrorInfo, type FormEvent, type ReactNode, type PointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, BarChart3, Bell, BookOpen, CheckCircle2, Clipboard, Copy, FileDown, GripVertical, LogOut, Plus, Settings, Sparkles, Target, Trash2, Trophy, TrendingUp, Upload, X } from "lucide-react";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -1336,13 +1336,13 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
         <button className="planner-tool planner-danger" onClick={resetPlanner}>Limpar</button>
       </div>
     </div>
-    <div className="planner-hint">Edite o nome dos dias no cabeçalho. Em cada quadrado, informe a <strong>MATÉRIA</strong> e use o espaço abaixo para suas observações.</div>
+    <div className="planner-hint">Arraste a divisão entre as colunas ↔ para mudar a largura e a divisão entre as linhas ↕ para mudar a altura, como no Excel. Em cada quadrado, informe a <strong>MATÉRIA</strong> e suas observações.</div>
     <div className="planner-grid-wrap">
-      <div className="planner-grid" style={{gridTemplateColumns:"repeat("+data.cols+",minmax(150px,1fr))"}}>
+      <div className="planner-grid" style={{gridTemplateColumns:data.colWidths.map(w=>w+"px").join(" "),gridTemplateRows:["34px",...data.rowHeights.map(h=>h+"px")].join(" ")}}>
         {Array.from({length:data.cols},(_,col)=>{
           const label=data.headers?.[col]??("COLUNA "+(col+1));
           return <div className="planner-day" key={"head-"+col}>
-            <input value={label} onChange={e=>updateHeader(col,e.target.value)} aria-label={"Nome da coluna "+(col+1)} spellCheck={false}/>
+            <span className="planner-resize-handle planner-col-resize" onPointerDown={e=>beginResize("col",col,e)} onPointerMove={moveResize} onPointerUp={endResize} aria-hidden="true"/><input value={label} onChange={e=>updateHeader(col,e.target.value)} aria-label={"Nome da coluna "+(col+1)} spellCheck={false}/>
           </div>;
         })}
         {Array.from({length:data.rows},(_,row)=>Array.from({length:data.cols},(_,col)=>{
