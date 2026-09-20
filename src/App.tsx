@@ -1249,16 +1249,16 @@ function CatalogDeleteModal({password,setPassword,busy,onClose,onConfirm}:any) {
 
 function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) {
   type Cell = { id:string; subject:string; text:string; bg:string; fg:string; bold:boolean; italic:boolean; size:number };
-  type PlannerData = { version:2; weekOffset:number; cols:number; rows:number; headers:string[]; cells:Record<string,Cell> };
+  type PlannerData = { version:2; weekOffset:number; cols:number; rows:number; headers:string[]; colWidths:number[]; rowHeights:number[]; cells:Record<string,Cell> };
   const defaultHeaders=["SEGUNDA","TERÇA","QUARTA","QUINTA","SEXTA","SÁBADO","DOMINGO"];
   const defaultCell=():Cell=>({id:uid(),subject:"",text:"",bg:"#ffffff",fg:"#17202a",bold:false,italic:false,size:14});
-  const makeInitial=():PlannerData=>({version:2,weekOffset:0,cols:7,rows:4,headers:[...defaultHeaders],cells:{}});
+  const makeInitial=():PlannerData=>({version:2,weekOffset:0,cols:7,rows:4,headers:[...defaultHeaders],colWidths:Array(7).fill(190),rowHeights:Array(4).fill(180),cells:{}});
   const key="mcr_planner_"+userId;
   const [data,setData]=useState<PlannerData>(()=>readStore<PlannerData>(key,makeInitial()));
   const [selected,setSelected]=useState<string[]>([]);
   const [textColor,setTextColor]=useState("#17202a");
   const [fillColor,setFillColor]=useState("#ffffff");
-  const [fullscreen,setFullscreen]=useState(false);
+  const [fullscreen,setFullscreen]=useState(false);\n  const resizing=useRef<{type:"col"|"row";index:number;start:number;size:number}|null>(null);
 
   useEffect(()=>{
     setData(prev=>{
@@ -1268,11 +1268,11 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
       Object.entries(legacy.cells??{}).forEach(([id,value]:any)=>{
         cells[id]={...defaultCell(),...value,subject:"",text:value?.text??""};
       });
-      return {version:2,weekOffset:legacy.weekOffset??0,cols:legacy.cols??7,rows:legacy.rows??4,headers:(legacy.headers??defaultHeaders).slice(0,legacy.cols??7),cells};
+      return {version:2,weekOffset:legacy.weekOffset??0,cols:legacy.cols??7,rows:legacy.rows??4,headers:(legacy.headers??defaultHeaders).slice(0,legacy.cols??7),colWidths:Array(legacy.cols??7).fill(190),rowHeights:Array(legacy.rows??4).fill(180),cells};
     });
   },[]);
 
-  useEffect(()=>{writeStore(key,data)},[key,data]);
+  useEffect(()=>{writeStore(key,data)},[key,data]);\n\n  const beginResize=(type:"col"|"row",index:number,event:React.PointerEvent)=>{\n    event.preventDefault(); event.stopPropagation();\n    const sizes=type==="col"?data.colWidths:data.rowHeights;\n    resizing.current={type,index,start:type==="col"?event.clientX:event.clientY,size:sizes[index]??(type==="col"?190:180)};\n    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);\n  };\n  const moveResize=(event:React.PointerEvent)=>{\n    const r=resizing.current; if(!r) return;\n    const delta=(r.type==="col"?event.clientX:event.clientY)-r.start;\n    const next=Math.max(r.type==="col"?120:90,Math.min(r.type==="col"?700:600,r.size+delta));\n    setData(prev=>r.type==="col"?({...prev,colWidths:prev.colWidths.map((v,i)=>i===r.index?next:v)}):({...prev,rowHeights:prev.rowHeights.map((v,i)=>i===r.index?next:v)}));\n  };\n  const endResize=()=>{resizing.current=null};
 
   const weekStart=useMemo(()=>{
     const now=new Date(); now.setHours(12,0,0,0);
@@ -1307,11 +1307,11 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
   const applyFill=()=>{setData(prev=>{const cells={...prev.cells};selected.forEach(id=>{cells[id]={...getCell(id),bg:fillColor}});return {...prev,cells}});notify("Cor aplicada.");};
   const applyText=()=>{setData(prev=>{const cells={...prev.cells};selected.forEach(id=>{cells[id]={...getCell(id),fg:textColor}});return {...prev,cells}});notify("Cor do texto aplicada.");};
   const clearSelection=()=>setSelected([]);
-  const addRow=()=>setData(prev=>({...prev,rows:prev.rows+1}));
+  const addRow=()=>setData(prev=>({...prev,rows:prev.rows+1,rowHeights:[...prev.rowHeights,180]}));
   const addCol=()=>setData(prev=>{
     const headers=[...(prev.headers??[])];
     headers.push("COLUNA "+(prev.cols+1));
-    return {...prev,cols:prev.cols+1,headers};
+    return {...prev,cols:prev.cols+1,headers,colWidths:[...prev.colWidths,190]};
   });
   const resetPlanner=()=>{if(window.confirm("Limpar todo o conteúdo desta semana?")){setData(prev=>({...prev,cells:{}}));setSelected([]);}};
   const copyWeek=()=>{setData(prev=>{const cells:{[key:string]:Cell}={...prev.cells};for(let r=0;r<prev.rows;r++)for(let col=0;col<prev.cols;col++){const id=cellId(r,col);cells[id]={...getCell(id),id:uid()};}return {...prev,cells}});notify("Semana duplicada.");};
@@ -1348,7 +1348,7 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
         {Array.from({length:data.rows},(_,row)=>Array.from({length:data.cols},(_,col)=>{
           const id=cellId(row,col), cell=getCell(id), active=selected.includes(id);
           return <div key={id} className={"planner-cell "+(active?"selected":"")} style={{backgroundColor:cell.bg,color:cell.fg,fontSize:cell.size,fontWeight:cell.bold?800:500,fontStyle:cell.italic?"italic":"normal"}} onClick={(e)=>{if(e.ctrlKey||e.metaKey)toggleSelected(id);else setSelected([id]);}} onDoubleClick={()=>toggleSelected(id)}>
-            <div className="planner-cell-actions"><button title="Negrito" onClick={(e)=>{e.stopPropagation();updateCell(id,{bold:!cell.bold})}}>B</button><button title="Itálico" onClick={(e)=>{e.stopPropagation();updateCell(id,{italic:!cell.italic})}}>I</button><button title="Aumentar fonte" onClick={(e)=>{e.stopPropagation();updateCell(id,{size:Math.min(32,cell.size+2)})}}>A+</button><button title="Diminuir fonte" onClick={(e)=>{e.stopPropagation();updateCell(id,{size:Math.max(10,cell.size-2)})}}>A-</button></div>
+            <span className="planner-resize-handle planner-row-resize" onPointerDown={e=>beginResize("row",row,e)} onPointerMove={moveResize} onPointerUp={endResize} />\n            <div className="planner-cell-actions"><button title="Negrito" onClick={(e)=>{e.stopPropagation();updateCell(id,{bold:!cell.bold})}}>B</button><button title="Itálico" onClick={(e)=>{e.stopPropagation();updateCell(id,{italic:!cell.italic})}}>I</button><button title="Aumentar fonte" onClick={(e)=>{e.stopPropagation();updateCell(id,{size:Math.min(32,cell.size+2)})}}>A+</button><button title="Diminuir fonte" onClick={(e)=>{e.stopPropagation();updateCell(id,{size:Math.max(10,cell.size-2)})}}>A-</button></div>
             <input className="planner-subject" value={cell.subject} onChange={e=>updateCell(id,{subject:e.target.value})} onClick={e=>e.stopPropagation()} placeholder="MATÉRIA: ex. Direito Penal" spellCheck={false}/>
             <textarea className="planner-notes" value={cell.text} onChange={e=>updateCell(id,{text:e.target.value})} onClick={e=>e.stopPropagation()} placeholder="Observações, páginas, tarefas..." spellCheck={false}/>
           </div>;
