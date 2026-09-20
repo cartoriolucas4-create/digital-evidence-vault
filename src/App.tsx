@@ -1263,13 +1263,23 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
 
   useEffect(()=>{
     setData(prev=>{
-      if(prev.version===2 && Array.isArray(prev.headers)) return prev;
       const legacy=prev as any;
+      const cols=Math.max(1,Number(legacy.cols)||7);
+      const rows=Math.max(1,Number(legacy.rows)||4);
+      const headers=Array.from({length:cols},(_,i)=>String(legacy.headers?.[i]??defaultHeaders[i]??("COLUNA "+(i+1))));
+      const colWidths=Array.from({length:cols},(_,i)=>{
+        const value=Number(legacy.colWidths?.[i]);
+        return Number.isFinite(value)&&value>=120?value:190;
+      });
+      const rowHeights=Array.from({length:rows},(_,i)=>{
+        const value=Number(legacy.rowHeights?.[i]);
+        return Number.isFinite(value)&&value>=90?value:180;
+      });
       const cells:Record<string,Cell>={};
       Object.entries(legacy.cells??{}).forEach(([id,value]:any)=>{
-        cells[id]={...defaultCell(),...value,subject:"",text:value?.text??""};
+        cells[id]={...defaultCell(),...(value||{}),id,subject:String(value?.subject??""),text:String(value?.text??"")};
       });
-      return {version:2,weekOffset:legacy.weekOffset??0,cols:legacy.cols??7,rows:legacy.rows??4,headers:(legacy.headers??defaultHeaders).slice(0,legacy.cols??7),colWidths:Array(legacy.cols??7).fill(190),rowHeights:Array(legacy.rows??4).fill(180),cells};
+      return {version:2,weekOffset:Number(legacy.weekOffset)||0,cols,rows,headers,colWidths,rowHeights,cells};
     });
   },[]);
 
