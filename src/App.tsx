@@ -1538,8 +1538,10 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor}:{userId:s
     setData(prev=>{
       const cells={...prev.cells};
       targets.forEach(({id,part})=>{
-        const cell={...getCell(id)};
-        cells[id]={...cell,[part==="subject"?"subjectStyle":"textStyle"]:{...getPartStyle(id,part),...patch}};
+        const cell=cells[id]??getCell(id);
+        const current=part==="subject"?(cell.subjectStyle??defaultPartStyle("subject")):(cell.textStyle??defaultPartStyle("text"));
+        const key=part==="subject"?"subjectStyle":"textStyle";
+        cells[id]={...cell,[key]:{...current,...patch}};
       });
       return {...prev,cells};
     });
