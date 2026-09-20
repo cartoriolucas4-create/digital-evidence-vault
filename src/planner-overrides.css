@@ -6,6 +6,7 @@
 
 .planner-content-top,
 .planner-content-bottom{
+  text-transform: uppercase;
   position:absolute;
   left:8px;
   width:calc(100% - 16px);
@@ -23,6 +24,7 @@
 }
 
 .planner-content-top{
+  text-transform: uppercase;
   top:8px;
   height:54px;
   padding:8px 10px;
