@@ -1689,7 +1689,12 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor}:{userId:s
   const plannerTargets=()=>selected.length?selected:[cellId(0,0)];
   const activeStyle=()=>getPartStyle(selected[0]??cellId(0,0),activePart);
   const applyPlannerPatch=(patch:Partial<CellPartStyle>)=>applyPartPatch(patch);
-  const togglePlannerFormat=(format:"bold"|"italic"|"underline"|"strike")=>togglePartFormat(format);
+  const togglePlannerFormat=(format:"bold"|"italic"|"underline"|"strike")=>{
+    const ids=selected.length?selected:[cellId(0,0)];
+    const first=getCell(ids[0]);
+    const next=!(first.subjectStyle??defaultPartStyle("subject"))[format];
+    setData(prev=>{const cells={...prev.cells};ids.forEach(id=>{const cell=cells[id]??getCell(id);cells[id]={...cell,subjectStyle:{...(cell.subjectStyle??defaultPartStyle("subject")),[format]:next},textStyle:{...(cell.textStyle??defaultPartStyle("text")),[format]:next}};});return {...prev,cells};});
+  };
   const applyPlannerColor=(kind:"text"|"fill",color:string)=>{
     if(!color)return;
     if(kind==="text"){
@@ -1715,8 +1720,14 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor}:{userId:s
     }
     setPaletteOpen(null);
   };
-  const applyPlannerFont=(fontFamily:string)=>applyPartPatch({fontFamily});
-  const applyPlannerSize=(size:number)=>applyPartPatch({size});
+  const applyPlannerFont=(fontFamily:string)=>{
+    const ids=selected.length?selected:[cellId(0,0)];
+    setData(prev=>{const cells={...prev.cells};ids.forEach(id=>{const cell=cells[id]??getCell(id);cells[id]={...cell,subjectStyle:{...(cell.subjectStyle??defaultPartStyle("subject")),fontFamily},textStyle:{...(cell.textStyle??defaultPartStyle("text")),fontFamily}};});return {...prev,cells};});
+  };
+  const applyPlannerSize=(size:number)=>{
+    const ids=selected.length?selected:[cellId(0,0)];
+    setData(prev=>{const cells={...prev.cells};ids.forEach(id=>{const cell=cells[id]??getCell(id);cells[id]={...cell,subjectStyle:{...(cell.subjectStyle??defaultPartStyle("subject")),size},textStyle:{...(cell.textStyle??defaultPartStyle("text")),size}};});return {...prev,cells};});
+  };
   const applyPlannerAlignment=(align:"left"|"center"|"right")=>{
     const ids=selected.length?selected:[cellId(0,0)];
     setData(prev=>{
