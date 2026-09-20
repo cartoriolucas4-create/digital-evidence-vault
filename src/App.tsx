@@ -1692,7 +1692,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor}:{userId:s
   const togglePlannerFormat=(format:"bold"|"italic"|"underline"|"strike")=>{
     const ids=selected.length?selected:[cellId(0,0)];
     const first=getCell(ids[0]);
-    const next=!(first.subjectStyle??defaultPartStyle("subject"))[format];
+    const next=format==="bold"?true:!(first.subjectStyle??defaultPartStyle("subject"))[format];
     setData(prev=>{const cells={...prev.cells};ids.forEach(id=>{const cell=cells[id]??getCell(id);cells[id]={...cell,subjectStyle:{...(cell.subjectStyle??defaultPartStyle("subject")),[format]:next},textStyle:{...(cell.textStyle??defaultPartStyle("text")),[format]:next}};});return {...prev,cells};});
   };
   const applyPlannerColor=(kind:"text"|"fill",color:string)=>{
@@ -1969,7 +1969,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor}:{userId:s
               onClick={e=>{e.stopPropagation();selectCellPart(id,"subject",e.ctrlKey||e.metaKey)}}
               onPointerDown={e=>e.stopPropagation()}
               onFocus={()=>selectCellPart(id,"subject",false)}
-              style={{backgroundColor:isStudiedThisWeek(id)?completedSmallColor:(getPartStyle(id,"subject").bg||cell.subjectBg||defaultSmallColor),color:getPartStyle(id,"subject").fg,fontSize:getPartStyle(id,"subject").size,fontWeight:getPartStyle(id,"subject").bold?800:500,fontStyle:getPartStyle(id,"subject").italic?"italic":"normal",fontFamily:getPartStyle(id,"subject").fontFamily,textAlign:getPartStyle(id,"subject").align,textDecoration:[getPartStyle(id,"subject").underline?"underline":"",getPartStyle(id,"subject").strike?"line-through":""] .filter(Boolean).join(" "),whiteSpace:getPartStyle(id,"subject").wrap==="wrap"?"normal":getPartStyle(id,"subject").wrap==="clip"?"nowrap":"pre-wrap",padding:getPartStyle(id,"subject").vertical==="middle"?"8px":"8px",lineHeight:getPartStyle(id,"subject").vertical==="middle"?"29px":getPartStyle(id,"subject").vertical==="bottom"?"40px":"1.2"}}
+              style={{backgroundColor:isStudiedThisWeek(id)?completedSmallColor:(getPartStyle(id,"subject").bg||cell.subjectBg||defaultSmallColor),color:getPartStyle(id,"subject").fg,fontSize:getPartStyle(id,"subject").size,fontWeight:getPartStyle(id,"subject").bold?"700":"400",fontStyle:getPartStyle(id,"subject").italic?"italic":"normal",fontFamily:getPartStyle(id,"subject").fontFamily,textAlign:getPartStyle(id,"subject").align,textDecoration:[getPartStyle(id,"subject").underline?"underline":"",getPartStyle(id,"subject").strike?"line-through":""] .filter(Boolean).join(" "),whiteSpace:getPartStyle(id,"subject").wrap==="wrap"?"normal":getPartStyle(id,"subject").wrap==="clip"?"nowrap":"pre-wrap",padding:getPartStyle(id,"subject").vertical==="middle"?"8px":"8px",lineHeight:getPartStyle(id,"subject").vertical==="middle"?"29px":getPartStyle(id,"subject").vertical==="bottom"?"40px":"1.2"}}
               spellCheck={false}
             />
             {cell.subject.trim() && <button type="button" className={"planner-study-check "+(isStudiedThisWeek(id)?"checked":"")} aria-label={isStudiedThisWeek(id)?"Desmarcar matéria estudada":"Marcar matéria como estudada"} title={isStudiedThisWeek(id)?"Desmarcar como estudada":"Marcar como estudada"} onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();toggleStudied(id);}}>
@@ -1984,7 +1984,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor}:{userId:s
               onClick={e=>{e.stopPropagation();selectCellPart(id,"text",e.ctrlKey||e.metaKey)}}
               onPointerDown={e=>e.stopPropagation()}
               onFocus={()=>selectCellPart(id,"text",false)}
-              style={{backgroundColor:"transparent",color:getPartStyle(id,"text").fg,fontSize:getPartStyle(id,"text").size,fontWeight:getPartStyle(id,"text").bold?800:500,fontStyle:getPartStyle(id,"text").italic?"italic":"normal",fontFamily:getPartStyle(id,"text").fontFamily,textAlign:getPartStyle(id,"text").align,textDecoration:[getPartStyle(id,"text").underline?"underline":"",getPartStyle(id,"text").strike?"line-through":""] .filter(Boolean).join(" "),whiteSpace:getPartStyle(id,"text").wrap==="wrap"?"normal":getPartStyle(id,"text").wrap==="clip"?"nowrap":"pre-wrap",padding:getPartStyle(id,"text").vertical==="bottom"?"28px 8px 8px":getPartStyle(id,"text").vertical==="middle"?"18px 8px":"8px"}}
+              style={{backgroundColor:"transparent",color:getPartStyle(id,"text").fg,fontSize:getPartStyle(id,"text").size,fontWeight:getPartStyle(id,"text").bold?"700":"400",fontStyle:getPartStyle(id,"text").italic?"italic":"normal",fontFamily:getPartStyle(id,"text").fontFamily,textAlign:getPartStyle(id,"text").align,textDecoration:[getPartStyle(id,"text").underline?"underline":"",getPartStyle(id,"text").strike?"line-through":""] .filter(Boolean).join(" "),whiteSpace:getPartStyle(id,"text").wrap==="wrap"?"normal":getPartStyle(id,"text").wrap==="clip"?"nowrap":"pre-wrap",padding:getPartStyle(id,"text").vertical==="bottom"?"28px 8px 8px":getPartStyle(id,"text").vertical==="middle"?"18px 8px":"8px"}}
               spellCheck={false}
             />
           </div>;
