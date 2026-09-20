@@ -358,7 +358,12 @@ function App() {
       .select("*")
       .order("created_at", { ascending: false })
       .limit(20);
-    if (error) throw error;
+    // This optional notification table may not exist in older database versions.
+    // It must never block the account, dashboard, or planner from loading.
+    if (error) {
+      setPerformanceNotifications([]);
+      return;
+    }
     setPerformanceNotifications((data ?? []) as PerformanceNotification[]);
   };
 
