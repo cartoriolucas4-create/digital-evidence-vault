@@ -1509,6 +1509,9 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
   const beginResize=(type:"col"|"row",index:number,event:PointerEvent)=>{
     event.preventDefault();
     event.stopPropagation();
+    plannerHistory.current.past=[...plannerHistory.current.past.slice(-99),data];
+    plannerHistory.current.future=[];
+    plannerHistoryMode.current=null;
     const sizes=type==="col"?data.colWidths:data.rowHeights;
     resizing.current={
       type,
