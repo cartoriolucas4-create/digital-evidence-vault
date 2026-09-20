@@ -1063,7 +1063,7 @@ function App() {
   if (!session) return <AuthScreen />;
 
   return (
-    <div className="app">
+    <div className={"app " + (mobileMenuOpen ? "mobile-menu-is-open" : "")}>
       <header className={"topbar " + (tab === "planner" ? "planner-topbar-hidden" : "")}>
         <div className="brand"><img className="mcr-logo mcr-logo-header" src={MCR_LOGO} alt="MCR — Meu Controle de Rendimento" /></div>
         <div className="top-actions">
@@ -1108,7 +1108,7 @@ function App() {
             <PanelLeftOpen size={16}/>
           </button>
         )}
-        <aside className="sidebar">
+        <aside className={"sidebar " + (mobileMenuOpen ? "mobile-sidebar-open" : "")}>
           {tab === "planner" && !plannerSidebarCollapsed && (
             <button className="planner-sidebar-toggle" title="Ocultar menu" aria-label="Ocultar menu" onClick={()=>setPlannerSidebarCollapsed(true)}>
               <PanelLeftClose size={16}/>
