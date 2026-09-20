@@ -715,6 +715,10 @@ function App() {
             <button className={tab === "entries" ? "active" : ""} onClick={() => setTab("entries")}><CheckCircle2 size={16}/> Lançamentos</button>
             <button className={tab === "catalog" ? "active" : ""} onClick={() => setTab("catalog")}><BookOpen size={16}/> Cadastro</button>
             <button className={tab === "settings" ? "active" : ""} onClick={() => setTab("settings")}><Settings size={16}/> Configurações</button>
+            <button className="nav-fullscreen-btn" onClick={toggleAppFullscreen} title={appFullscreen ? "Sair da tela cheia" : "Entrar em tela cheia"}>
+              {appFullscreen ? <Minimize2 size={16}/> : <Maximize2 size={16}/>}
+              {appFullscreen ? "Sair da tela cheia" : "Tela cheia"}
+            </button>
           </nav>
         </aside>
 
