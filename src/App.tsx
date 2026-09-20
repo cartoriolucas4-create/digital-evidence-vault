@@ -168,6 +168,7 @@ function App() {
   const [plannerDefaultColor, setPlannerDefaultColor] = useState("#fff2cc");
   const [plannerCompletedColor, setPlannerCompletedColor] = useState("#d9ead3");
   const [theme, setTheme] = useState<"light" | "dark">(() => readStore<"light" | "dark">("mcr_theme", "light"));
+  const [buttonColor, setButtonColor] = useState("#d63384");
   const [appFullscreen,setAppFullscreen]=useState(false);
   useEffect(()=>{
     const sync=()=>setAppFullscreen(Boolean(document.fullscreenElement));
@@ -197,6 +198,18 @@ function App() {
     document.documentElement.dataset.theme = theme;
     writeStore("mcr_theme", theme);
   }, [theme]);
+
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    const saved = readStore<string>(`mcr_button_color_${session.user.id}`, "#d63384");
+    setButtonColor(saved || "#d63384");
+  }, [session?.user?.id]);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty("--accent-2", buttonColor);
+    document.documentElement.style.setProperty("--accent", buttonColor);
+    if (session?.user?.id) writeStore(`mcr_button_color_${session.user.id}`, buttonColor);
+  }, [buttonColor, session?.user?.id]);
 
   useEffect(() => {
     if (!session?.user?.id) return;
@@ -770,6 +783,8 @@ function App() {
               setPlannerCompletedColor={setPlannerCompletedColor}
               theme={theme}
               setTheme={setTheme}
+              buttonColor={buttonColor}
+              setButtonColor={setButtonColor}
               setDailyGoal={setDailyGoal}
               setWeeklyGoal={setWeeklyGoal}
               setMonthlyGoal={setMonthlyGoal}
@@ -2020,7 +2035,7 @@ function SettingsPage({
   studentName,setStudentName,
   dailyGoal,weeklyGoal,monthlyGoal,targetAccuracy,
   plannerDefaultColor,setPlannerDefaultColor,plannerCompletedColor,setPlannerCompletedColor,
-  theme,setTheme,
+  theme,setTheme,buttonColor,setButtonColor,
   setDailyGoal,setWeeklyGoal,setMonthlyGoal,setTargetAccuracy,save,
   session,passwordModalOpen,setPasswordModalOpen,currentPassword,setCurrentPassword,
   newPassword,setNewPassword,confirmPassword,setConfirmPassword,passwordBusy,
@@ -2096,6 +2111,33 @@ function SettingsPage({
           </button>
         </div>
         <div className="notice theme-note">O tema claro é o padrão. A preferência fica salva neste navegador e pode ser alterada a qualquer momento.</div>
+      </div>
+    </section>
+    <section className="section">
+      <div className="section-head">🎨 COR DOS BOTÕES</div>
+      <div className="section-body">
+        <div className="button-color-setting">
+          <div>
+            <strong>Cor principal dos botões</strong>
+            <small>Escolha a cor dos botões de destaque do sistema.</small>
+          </div>
+          <div className="button-color-control">
+            <input
+              type="color"
+              value={buttonColor}
+              onChange={(e)=>setButtonColor(e.target.value)}
+              aria-label="Escolher cor dos botões"
+              className="button-color-picker"
+            />
+            <span>{buttonColor.toUpperCase()}</span>
+            <button type="button" className="btn" onClick={()=>setButtonColor("#d63384")}>Restaurar padrão</button>
+          </div>
+        </div>
+        <div className="button-color-preview">
+          <button type="button" className="btn primary">Pré-visualização</button>
+          <span>O padrão original do MCR é rosa.</span>
+        </div>
+        <div className="notice">A cor é individual por aluno. Quem já usa o sistema continua com o rosa padrão até escolher outra cor. Restaurar padrão volta para o rosa.</div>
       </div>
     </section>
     <section className="section">
