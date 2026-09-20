@@ -2013,7 +2013,6 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
               {isStudiedThisWeek(id) ? "✓" : ""}
             </button>}
             </div>
-            </div>
             <textarea
               className={"planner-content-bottom "+(selectedParts.includes(partKey(id,"text"))?"planner-part-selected":"")}
               aria-label="Conteúdo inferior da célula sem rótulo visível"
