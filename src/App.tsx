@@ -2255,14 +2255,23 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
   const startNextCycle=()=>{
     commitPlannerChange(prev=>{
       const cells={...prev.cells};
-      Object.keys(cells).forEach(id=>{cells[id]={...cells[id],studiedWeek:undefined};});
+      Object.keys(cells).forEach(id=>{
+        const cell=cells[id];
+        cells[id]={
+          ...cell,
+          studiedWeek:undefined,
+          bg:defaultSmallColor,
+          subjectBg:defaultSmallColor,
+          subjectStyle:{...(cell.subjectStyle??defaultPartStyle("subject")),bg:defaultSmallColor},
+        };
+      });
       return {...prev,weekOffset:prev.weekOffset+1,cells};
     });
     setSelected([]);
     setSelectedRows([]);
     setSelectedCols([]);
     setSelectionMode("cells");
-    notify("Novo ciclo iniciado. As matérias voltaram para não estudadas.");
+    notify("Novo ciclo iniciado. As matérias voltaram para a cor padrão e para não estudadas.");
   };
   const copyWeek=()=>{commitPlannerChange(prev=>{const cells:{[key:string]:Cell}={...prev.cells};for(let r=0;r<prev.rows;r++)for(let col=0;col<prev.cols;col++){const id=cellId(r,col);cells[id]={...getCell(id),id:uid()};}return {...prev,cells}});notify("Semana duplicada.");};
 
