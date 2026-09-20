@@ -1248,11 +1248,11 @@ function CatalogDeleteModal({password,setPassword,busy,onClose,onConfirm}:any) {
 }
 
 function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) {
-  type Cell = { id:string; text:string; bg:string; fg:string; bold:boolean; italic:boolean; size:number };
-  type PlannerData = { version:1; weekOffset:number; cols:number; rows:number; cells:Record<string,Cell> };
-  const days=["SEGUNDA","TERÇA","QUARTA","QUINTA","SEXTA","SÁBADO","DOMINGO"];
-  const defaultCell=():Cell=>({id:uid(),text:"",bg:"#ffffff",fg:"#17202a",bold:false,italic:false,size:14});
-  const makeInitial=():PlannerData=>({version:1,weekOffset:0,cols:7,rows:4,cells:{}});
+  type Cell = { id:string; subject:string; text:string; bg:string; fg:string; bold:boolean; italic:boolean; size:number };
+  type PlannerData = { version:2; weekOffset:number; cols:number; rows:number; headers:string[]; cells:Record<string,Cell> };
+  const defaultHeaders=["SEGUNDA","TERÇA","QUARTA","QUINTA","SEXTA","SÁBADO","DOMINGO"];
+  const defaultCell=():Cell=>({id:uid(),subject:"",text:"",bg:"#ffffff",fg:"#17202a",bold:false,italic:false,size:14});
+  const makeInitial=():PlannerData=>({version:2,weekOffset:0,cols:7,rows:4,headers:[...defaultHeaders],cells:{}});
   const key="mcr_planner_"+userId;
   const [data,setData]=useState<PlannerData>(()=>readStore<PlannerData>(key,makeInitial()));
   const [selected,setSelected]=useState<string[]>([]);
@@ -1260,13 +1260,27 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
   const [fillColor,setFillColor]=useState("#ffffff");
   const [fullscreen,setFullscreen]=useState(false);
 
+  useEffect(()=>{
+    setData(prev=>{
+      if(prev.version===2 && Array.isArray(prev.headers)) return prev;
+      const legacy=prev as any;
+      const cells:Record<string,Cell>={};
+      Object.entries(legacy.cells??{}).forEach(([id,value]:any)=>{
+        cells[id]={...defaultCell(),...value,subject:"",text:value?.text??""};
+      });
+      return {version:2,weekOffset:legacy.weekOffset??0,cols:legacy.cols??7,rows:legacy.rows??4,headers:(legacy.headers??defaultHeaders).slice(0,legacy.cols??7),cells};
+    });
+  },[]);
+
   useEffect(()=>{writeStore(key,data)},[key,data]);
+
   const weekStart=useMemo(()=>{
     const now=new Date(); now.setHours(12,0,0,0);
     const day=now.getDay()||7;
     now.setDate(now.getDate()-day+1+(data.weekOffset*7));
     return now;
   },[data.weekOffset]);
+
   const weekLabel=useMemo(()=>{
     const end=new Date(weekStart); end.setDate(end.getDate()+6);
     const f=(d:Date)=>d.toLocaleDateString("pt-BR",{day:"2-digit",month:"short"}).replace(".","");
@@ -1278,17 +1292,29 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
   const updateCell=(id:string,patch:Partial<Cell>)=>{
     setData(prev=>({...prev,cells:{...prev.cells,[id]:{...getCell(id),...patch}}}));
   };
+  const updateHeader=(col:number,value:string)=>{
+    setData(prev=>{
+      const headers=[...(prev.headers??[])];
+      while(headers.length<prev.cols) headers.push("COLUNA "+(headers.length+1));
+      headers[col]=value.slice(0,40);
+      return {...prev,headers};
+    });
+  };
   const toggleSelected=(id:string)=>{
     setSelected(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]);
   };
   const selectAll=()=>setSelected(Array.from({length:data.rows*data.cols},(_,i)=>cellId(Math.floor(i/data.cols),i%data.cols)));
-  const applyFill=()=>{setData(prev=>{const cells={...prev.cells}; selected.forEach(id=>{cells[id]={...getCell(id),bg:fillColor}});return {...prev,cells}});notify("Cor aplicada.");};
-  const applyText=()=>{setData(prev=>{const cells={...prev.cells}; selected.forEach(id=>{cells[id]={...getCell(id),fg:textColor}});return {...prev,cells}});notify("Cor do texto aplicada.");};
+  const applyFill=()=>{setData(prev=>{const cells={...prev.cells};selected.forEach(id=>{cells[id]={...getCell(id),bg:fillColor}});return {...prev,cells}});notify("Cor aplicada.");};
+  const applyText=()=>{setData(prev=>{const cells={...prev.cells};selected.forEach(id=>{cells[id]={...getCell(id),fg:textColor}});return {...prev,cells}});notify("Cor do texto aplicada.");};
   const clearSelection=()=>setSelected([]);
   const addRow=()=>setData(prev=>({...prev,rows:prev.rows+1}));
-  const addCol=()=>setData(prev=>({...prev,cols:prev.cols+1}));
+  const addCol=()=>setData(prev=>{
+    const headers=[...(prev.headers??[])];
+    headers.push("COLUNA "+(prev.cols+1));
+    return {...prev,cols:prev.cols+1,headers};
+  });
   const resetPlanner=()=>{if(window.confirm("Limpar todo o conteúdo desta semana?")){setData(prev=>({...prev,cells:{}}));setSelected([]);}};
-  const copyWeek=()=>{setData(prev=>{const cells={...prev.cells};for(let r=0;r<prev.rows;r++)for(let col=0;col<prev.cols;col++){const id=cellId(r,col);cells[id]={...getCell(id),id:uid()};}return {...prev,cells}});notify("Semana duplicada.");};
+  const copyWeek=()=>{setData(prev=>{const cells:{[key:string]:Cell}={...prev.cells};for(let r=0;r<prev.rows;r++)for(let col=0;col<prev.cols;col++){const id=cellId(r,col);cells[id]={...getCell(id),id:uid()};}return {...prev,cells}});notify("Semana duplicada.");};
 
   return <div className={"planner-shell "+(fullscreen?"planner-fullscreen":"")}>
     <div className="planner-toolbar">
@@ -1310,18 +1336,21 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
         <button className="planner-tool planner-danger" onClick={resetPlanner}>Limpar</button>
       </div>
     </div>
-    <div className="planner-hint">Clique em uma célula para editar. Use Ctrl/⌘ + clique para selecionar várias e aplicar cores de uma vez.</div>
+    <div className="planner-hint">Edite o nome dos dias no cabeçalho. Em cada quadrado, informe a <strong>MATÉRIA</strong> e use o espaço abaixo para suas observações.</div>
     <div className="planner-grid-wrap">
       <div className="planner-grid" style={{gridTemplateColumns:"repeat("+data.cols+",minmax(150px,1fr))"}}>
         {Array.from({length:data.cols},(_,col)=>{
-          const label=days[col]??("COLUNA "+(col+1));
-          return <div className="planner-day" key={"head-"+col}>{label}</div>;
+          const label=data.headers?.[col]??("COLUNA "+(col+1));
+          return <div className="planner-day" key={"head-"+col}>
+            <input value={label} onChange={e=>updateHeader(col,e.target.value)} aria-label={"Nome da coluna "+(col+1)} spellCheck={false}/>
+          </div>;
         })}
         {Array.from({length:data.rows},(_,row)=>Array.from({length:data.cols},(_,col)=>{
           const id=cellId(row,col), cell=getCell(id), active=selected.includes(id);
           return <div key={id} className={"planner-cell "+(active?"selected":"")} style={{backgroundColor:cell.bg,color:cell.fg,fontSize:cell.size,fontWeight:cell.bold?800:500,fontStyle:cell.italic?"italic":"normal"}} onClick={(e)=>{if(e.ctrlKey||e.metaKey)toggleSelected(id);else setSelected([id]);}} onDoubleClick={()=>toggleSelected(id)}>
             <div className="planner-cell-actions"><button title="Negrito" onClick={(e)=>{e.stopPropagation();updateCell(id,{bold:!cell.bold})}}>B</button><button title="Itálico" onClick={(e)=>{e.stopPropagation();updateCell(id,{italic:!cell.italic})}}>I</button><button title="Aumentar fonte" onClick={(e)=>{e.stopPropagation();updateCell(id,{size:Math.min(32,cell.size+2)})}}>A+</button><button title="Diminuir fonte" onClick={(e)=>{e.stopPropagation();updateCell(id,{size:Math.max(10,cell.size-2)})}}>A-</button></div>
-            <textarea value={cell.text} onChange={e=>updateCell(id,{text:e.target.value})} placeholder="Digite aqui..." spellCheck={false}/>
+            <input className="planner-subject" value={cell.subject} onChange={e=>updateCell(id,{subject:e.target.value})} onClick={e=>e.stopPropagation()} placeholder="MATÉRIA: ex. Direito Penal" spellCheck={false}/>
+            <textarea className="planner-notes" value={cell.text} onChange={e=>updateCell(id,{text:e.target.value})} onClick={e=>e.stopPropagation()} placeholder="Observações, páginas, tarefas..." spellCheck={false}/>
           </div>;
         }))}
       </div>
