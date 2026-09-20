@@ -2012,7 +2012,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
             {cell.subject.trim() && <button type="button" className={"planner-study-check "+(isStudiedThisWeek(id)?"checked":"")} aria-label={isStudiedThisWeek(id)?"Desmarcar matéria estudada":"Marcar matéria como estudada"} title={isStudiedThisWeek(id)?"Desmarcar como estudada":"Marcar como estudada"} onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();toggleStudied(id);}}>
               {isStudiedThisWeek(id) ? "✓" : ""}
             </button>}
-            </div>}
+            </div>
             </div>
             <textarea
               className={"planner-content-bottom "+(selectedParts.includes(partKey(id,"text"))?"planner-part-selected":"")}
