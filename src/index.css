@@ -176,3 +176,14 @@ html[data-theme="dark"] .toast{background:#f3f5f7;color:#171b22}
   .planner-cell{min-height:180px}
   .planner-footer{font-size:8px}
 }
+
+/* PLANEJAMENTO — CABEÇALHO E CAMPO DE MATÉRIA */
+.planner-day{padding:0!important;min-height:34px;display:flex;align-items:center}
+.planner-day input{width:100%;height:34px;border:0;outline:0;background:transparent;color:#fff;padding:8px 10px;font-size:10px;font-weight:900;letter-spacing:.06em;text-transform:uppercase}
+.planner-day input:focus{background:rgba(255,255,255,.14);box-shadow:inset 0 0 0 2px rgba(255,255,255,.65)}
+.planner-cell{padding:30px 9px 9px!important;display:flex;flex-direction:column;gap:7px}
+.planner-subject{width:100%;height:30px;flex:none;border:1px solid rgba(180,35,109,.16);border-radius:5px;background:rgba(255,255,255,.78);color:inherit;padding:6px 7px;outline:0;font-size:11px;font-weight:850}
+.planner-subject:focus{border-color:var(--accent-2);background:#fff;box-shadow:0 0 0 2px rgba(214,51,132,.08)}
+.planner-notes{width:100%;flex:1;min-height:85px;resize:both;border:0;outline:0;background:transparent;color:inherit;font:inherit;line-height:1.35;padding:0;overflow:auto}
+.planner-notes:focus{background:rgba(255,255,255,.18)}
+.planner-subject::placeholder,.planner-notes::placeholder{color:#9aa1a9;opacity:.85}
