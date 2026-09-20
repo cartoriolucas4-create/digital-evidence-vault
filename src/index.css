@@ -239,3 +239,63 @@ html[data-theme="dark"] .subject-performance-name span,html[data-theme="dark"] .
 html[data-theme="dark"] .subject-performance-track{background:#2a3038}
 @media(max-width:1150px){.subject-performance-charts{grid-template-columns:1fr}}
 @media(max-width:760px){.subject-performance-list{gap:11px}.subject-performance-name strong{font-size:10px}.subject-performance-foot{font-size:8px}}
+
+/* RESPONSIVIDADE — CELULAR E TABLETS (OTIMIZADO PARA TABLETS SAMSUNG) */
+@media (max-width:1024px){
+  html,body,#root{width:100%;min-width:0;overflow-x:hidden}
+  .topbar{height:60px;padding:0 16px}
+  .layout{display:block;min-height:calc(100vh - 60px)}
+  .sidebar{width:100%;height:auto;border-right:0;border-bottom:1px solid var(--border);padding:7px 10px;position:sticky;top:60px;z-index:19}
+  .nav{display:flex;gap:5px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .nav::-webkit-scrollbar{display:none}
+  .nav button{width:auto;min-width:max-content;min-height:42px;white-space:nowrap;padding:10px 13px;touch-action:manipulation}
+  .content{width:100%;max-width:none;padding:20px}
+  .filters{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .metrics{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .add-row{grid-template-columns:1fr 1fr auto}
+  .toolbar{flex-wrap:wrap}
+  .dashboard-heading{flex-wrap:wrap}
+  .performance-charts{grid-template-columns:1fr}
+  .chart-card{min-width:0}
+  .modal{width:min(760px,94vw);max-height:88vh}
+  .planner-shell{width:100%;min-height:calc(100vh - 60px)}
+  .planner-toolbar{gap:9px}
+  .planner-tools{overflow-x:auto;flex-wrap:nowrap;max-width:100%;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .planner-tools::-webkit-scrollbar{display:none}
+  .planner-formatbar{overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none;-webkit-overflow-scrolling:touch;touch-action:pan-x}
+  .planner-formatbar::-webkit-scrollbar{display:none}
+  .planner-grid-wrap{overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+  .planner-day input,.planner-content-top,.planner-content-bottom{font-size:14px}
+  .planner-row-selector,.planner-corner-selector{min-width:38px;width:38px}
+}
+@media (max-width:760px){
+  .topbar{padding:0 12px}
+  .content{padding:12px}
+  .filters,.form-grid,.add-row{grid-template-columns:1fr}
+  .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .section-body{padding:12px}
+  .btn{min-height:42px}
+  .field input,.field select,.field textarea,.add-row input,.add-row select,.search{min-height:42px}
+  .modal-backdrop{padding:10px}
+  .modal{width:100%;max-height:92vh;padding:16px}
+  .planner-shell{border-radius:0}
+  .planner-title-wrap{min-width:0}
+  .planner-title-wrap h1{font-size:15px}
+  .planner-toolbar{padding:7px}
+  .planner-formatbar{min-height:48px;padding:6px}
+  .planner-format-btn,.planner-icon-tool,.planner-format-select{min-height:38px;height:38px}
+  .planner-format-btn{min-width:38px}
+  .planner-tool{min-height:40px}
+  .planner-color-popover{top:100px}
+  .planner-align-menu,.planner-more-menu{top:100px}
+  .toast{left:12px;right:12px;bottom:12px;text-align:center}
+}
+/* Tablet touch ergonomics: avoids tiny controls and preserves the spreadsheet canvas */
+@media (min-width:761px) and (max-width:1024px){
+  .nav button{font-size:12px}
+  .planner-tool,.planner-today-tool{min-height:38px}
+  .planner-icon-tool,.planner-format-btn{min-width:36px;min-height:36px}
+  .planner-grid-wrap{min-height:55vh}
+  .planner-content-top,.planner-content-bottom{font-size:15px}
+}
