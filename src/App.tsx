@@ -705,7 +705,7 @@ function App() {
 
   return (
     <div className="app">
-      <header className="topbar">
+      <header className={"topbar " + (tab === "planner" ? "planner-topbar-hidden" : "")}>
         <div className="brand"><img className="mcr-logo mcr-logo-header" src={MCR_LOGO} alt="MCR — Meu Controle de Rendimento" /></div>
         <div className="top-actions">
           <div className="notification-wrap">
@@ -741,7 +741,7 @@ function App() {
         </div>
       </header>
 
-      <div className="layout">
+      <div className={"layout " + (tab === "planner" ? "planner-layout" : "")}>
         <aside className="sidebar">
           <nav className="nav">
             <button className={tab === "dashboard" ? "active" : ""} onClick={() => setTab("dashboard")}><BarChart3 size={16}/> Dashboard</button>
