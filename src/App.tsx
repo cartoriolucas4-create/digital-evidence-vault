@@ -1692,13 +1692,24 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor}:{userId:s
   const togglePlannerFormat=(format:"bold"|"italic"|"underline"|"strike")=>togglePartFormat(format);
   const applyPlannerColor=(kind:"text"|"fill",color:string)=>{
     if(!color)return;
-    if(kind==="text"){setTextColor(color);applyPartPatch({fg:color});}
-    else{
+    if(kind==="text"){
+      setTextColor(color);
+      applyPartPatch({fg:color});
+    }else{
       setFillColor(color);
       const targets=plannerTargets();
       setData(prev=>{
         const cells={...prev.cells};
-        targets.forEach(id=>{cells[id]={...getCell(id),bg:color};});
+        targets.forEach(id=>{
+          const cell=cells[id]??getCell(id);
+          cells[id]={
+            ...cell,
+            bg:color,
+            subjectBg:color,
+            subjectStyle:{...(cell.subjectStyle??defaultPartStyle("subject")),bg:color},
+            textStyle:{...(cell.textStyle??defaultPartStyle("text")),bg:color}
+          };
+        });
         return {...prev,cells};
       });
     }
@@ -1947,7 +1958,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor}:{userId:s
               onClick={e=>{e.stopPropagation();selectCellPart(id,"subject",e.ctrlKey||e.metaKey)}}
               onPointerDown={e=>e.stopPropagation()}
               onFocus={()=>selectCellPart(id,"subject",false)}
-              style={{backgroundColor:isStudiedThisWeek(id)?completedSmallColor:defaultSmallColor,color:getPartStyle(id,"subject").fg,fontSize:getPartStyle(id,"subject").size,fontWeight:getPartStyle(id,"subject").bold?800:500,fontStyle:getPartStyle(id,"subject").italic?"italic":"normal",fontFamily:getPartStyle(id,"subject").fontFamily,textAlign:getPartStyle(id,"subject").align,textDecoration:[getPartStyle(id,"subject").underline?"underline":"",getPartStyle(id,"subject").strike?"line-through":""] .filter(Boolean).join(" "),whiteSpace:getPartStyle(id,"subject").wrap==="wrap"?"normal":getPartStyle(id,"subject").wrap==="clip"?"nowrap":"pre-wrap",padding:getPartStyle(id,"subject").vertical==="middle"?"8px":"8px",lineHeight:getPartStyle(id,"subject").vertical==="middle"?"29px":getPartStyle(id,"subject").vertical==="bottom"?"40px":"1.2"}}
+              style={{backgroundColor:isStudiedThisWeek(id)?completedSmallColor:(getPartStyle(id,"subject").bg||cell.subjectBg||defaultSmallColor),color:getPartStyle(id,"subject").fg,fontSize:getPartStyle(id,"subject").size,fontWeight:getPartStyle(id,"subject").bold?800:500,fontStyle:getPartStyle(id,"subject").italic?"italic":"normal",fontFamily:getPartStyle(id,"subject").fontFamily,textAlign:getPartStyle(id,"subject").align,textDecoration:[getPartStyle(id,"subject").underline?"underline":"",getPartStyle(id,"subject").strike?"line-through":""] .filter(Boolean).join(" "),whiteSpace:getPartStyle(id,"subject").wrap==="wrap"?"normal":getPartStyle(id,"subject").wrap==="clip"?"nowrap":"pre-wrap",padding:getPartStyle(id,"subject").vertical==="middle"?"8px":"8px",lineHeight:getPartStyle(id,"subject").vertical==="middle"?"29px":getPartStyle(id,"subject").vertical==="bottom"?"40px":"1.2"}}
               spellCheck={false}
             />
             {cell.subject.trim() && <button type="button" className={"planner-study-check "+(isStudiedThisWeek(id)?"checked":"")} aria-label={isStudiedThisWeek(id)?"Desmarcar matéria estudada":"Marcar matéria como estudada"} title={isStudiedThisWeek(id)?"Desmarcar como estudada":"Marcar como estudada"} onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();toggleStudied(id);}}>
