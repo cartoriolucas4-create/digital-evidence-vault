@@ -155,5 +155,7 @@ html[data-theme="dark"] .toast{background:#f3f5f7;color:#171b22}
 @media(max-width:760px){.planner-content{padding:0}.planner-shell{border-radius:0;border-left:0;border-right:0}.planner-toolbar{padding:8px;align-items:flex-start}.planner-title-wrap{width:100%}.planner-tools{width:100%;overflow-x:auto;flex-wrap:nowrap;padding-bottom:2px}.planner-tool{white-space:nowrap}.planner-footer{font-size:8px}.planner-corner-selector{width:36px;min-width:36px}.planner-row-selector{width:36px;min-width:36px}}
 
 /* Planner: remove legacy field labels from cached/older renders */
-.planner-subject-wrap::before,
-.planner-notes-wrap::before{content:none!important;display:none!important;}
+/* Planner: fields are intentionally unlabeled; only the editable areas remain visible. */
+.planner-subject-wrap::before,.planner-subject-wrap::after,
+.planner-notes-wrap::before,.planner-notes-wrap::after,
+.planner-cell label{content:none!important;display:none!important;}
