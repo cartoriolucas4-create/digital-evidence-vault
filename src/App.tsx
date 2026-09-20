@@ -1649,6 +1649,8 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
               value={cell.subject}
               onChange={e=>updateCell(id,{subject:e.target.value})}
               onClick={e=>e.stopPropagation()}
+              onPointerDown={e=>e.stopPropagation()}
+              onFocus={()=>{setSelectionMode("cells");setSelectedRows([]);setSelectedCols([]);setSelected(prev=>prev.includes(id)?prev:[id]);}}
               spellCheck={false}
             />
             <textarea
@@ -1657,6 +1659,8 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
               value={cell.text}
               onChange={e=>updateCell(id,{text:e.target.value})}
               onClick={e=>e.stopPropagation()}
+              onPointerDown={e=>e.stopPropagation()}
+              onFocus={()=>{setSelectionMode("cells");setSelectedRows([]);setSelectedCols([]);setSelected(prev=>prev.includes(id)?prev:[id]);}}
               spellCheck={false}
             />
           </div>;
