@@ -1469,7 +1469,7 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
         <button className="planner-tool planner-danger" onClick={resetPlanner}>Limpar</button>
       </div>
     </div>
-    <div className="planner-hint">Selecione como no Excel: clique e arraste o mouse pelos quadrados para selecionar um bloco. Clique no cabeçalho de uma coluna ou no número de uma linha para selecionar tudo. Use <strong>− Coluna</strong> ou <strong>− Linha</strong> para excluir. As divisões continuam redimensionáveis.</div>
+    
     <div className="planner-grid-wrap">
       <div className="planner-grid" style={{gridTemplateColumns:["42px",...data.colWidths.map(w=>w+"px")].join(" "),gridTemplateRows:["34px",...data.rowHeights.map(h=>h+"px")].join(" ")}}>
         <button className="planner-corner-selector" title="Selecionar toda a planilha" onClick={selectAll}>□</button>
