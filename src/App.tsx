@@ -1485,15 +1485,22 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
           const id=cellId(row,col), cell=getCell(id), active=selected.includes(id);
           return <div key={id} data-planner-row={row} data-planner-col={col} className={"planner-cell "+(active?"selected":"")} style={{backgroundColor:cell.bg,color:cell.fg,fontSize:cell.size,fontWeight:cell.bold?800:500,fontStyle:cell.italic?"italic":"normal"}} onPointerDown={e=>startCellSelection(row,col,e)} onClick={(e)=>{if(e.ctrlKey||e.metaKey)toggleSelected(id);}}>
             <span className="planner-resize-handle planner-row-resize" onPointerDown={e=>beginResize("row",row,e)} />
-            <div className="planner-cell-actions"><button title="Negrito" onClick={(e)=>{e.stopPropagation();updateCell(id,{bold:!cell.bold})}}>B</button><button title="Itálico" onClick={(e)=>{e.stopPropagation();updateCell(id,{italic:!cell.italic})}}>I</button><button title="Aumentar fonte" onClick={(e)=>{e.stopPropagation();updateCell(id,{size:Math.min(32,cell.size+2)})}}>A+</button><button title="Diminuir fonte" onClick={(e)=>{e.stopPropagation();updateCell(id,{size:Math.max(10,cell.size-2)})}}>A-</button></div>
-            <div className="planner-subject-wrap" style={{backgroundColor:cell.subjectBg}}>
-              <input className="planner-subject" style={{color:cell.subjectFg}} value={cell.subject} onChange={e=>updateCell(id,{subject:e.target.value})} onClick={e=>e.stopPropagation()} placeholder="" spellCheck={false}/>
-              <input className="planner-mini-color" type="color" value={cell.subjectBg} title="Cor da matéria" onChange={e=>{e.stopPropagation();updateCell(id,{subjectBg:e.target.value})}} onClick={e=>e.stopPropagation()}/>
-            </div>
-            <div className="planner-notes-wrap" style={{backgroundColor:cell.bg}}>
-              <textarea className="planner-notes" style={{color:cell.fg}} value={cell.text} onChange={e=>updateCell(id,{text:e.target.value})} onClick={e=>e.stopPropagation()} placeholder="" spellCheck={false}/>
-              <input className="planner-mini-color planner-notes-color" type="color" value={cell.bg} title="Cor das observações" onChange={e=>{e.stopPropagation();updateCell(id,{bg:e.target.value})}} onClick={e=>e.stopPropagation()}/>
-            </div>
+            <input
+              className="planner-subject-clean"
+              aria-label="Conteúdo superior da célula"
+              value={cell.subject}
+              onChange={e=>updateCell(id,{subject:e.target.value})}
+              onClick={e=>e.stopPropagation()}
+              spellCheck={false}
+            />
+            <textarea
+              className="planner-notes-clean"
+              aria-label="Conteúdo da célula"
+              value={cell.text}
+              onChange={e=>updateCell(id,{text:e.target.value})}
+              onClick={e=>e.stopPropagation()}
+              spellCheck={false}
+            />
           </div>;
         })}
       </div>
