@@ -153,3 +153,7 @@ html[data-theme="dark"] .toast{background:#f3f5f7;color:#171b22}
 .planner-resize-handle{position:absolute;z-index:30;background:transparent}.planner-col-resize{right:-5px;top:0;bottom:0;width:11px;cursor:col-resize;touch-action:none}.planner-col-resize:hover{background:rgba(255,255,255,.65)}.planner-row-resize{left:0;right:0;bottom:-5px;width:auto;height:11px;cursor:row-resize;touch-action:none}.planner-row-resize:hover{background:rgba(214,51,132,.28)}body.planner-resizing,.planner-resizing *{user-select:none!important}body.planner-resizing{cursor:col-resize!important}.planner-resizing .planner-row-resize{cursor:row-resize!important}
 .planner-footer{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 10px;border-top:1px solid var(--border);background:#fff;color:#87909a;font-size:9px}.planner-footer .btn{font-size:9px;padding:5px 8px}
 @media(max-width:760px){.planner-content{padding:0}.planner-shell{border-radius:0;border-left:0;border-right:0}.planner-toolbar{padding:8px;align-items:flex-start}.planner-title-wrap{width:100%}.planner-tools{width:100%;overflow-x:auto;flex-wrap:nowrap;padding-bottom:2px}.planner-tool{white-space:nowrap}.planner-footer{font-size:8px}.planner-corner-selector{width:36px;min-width:36px}.planner-row-selector{width:36px;min-width:36px}}
+
+/* Planner: remove legacy field labels from cached/older renders */
+.planner-subject-wrap::before,
+.planner-notes-wrap::before{content:none!important;display:none!important;}
