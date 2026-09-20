@@ -1257,7 +1257,7 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
   type PlannerData = { version:2; weekOffset:number; cols:number; rows:number; headers:string[]; colWidths:number[]; rowHeights:number[]; cells:Record<string,Cell> };
   const defaultHeaders=["SEGUNDA","TERÇA","QUARTA","QUINTA","SEXTA","SÁBADO","DOMINGO"];
   const defaultCell=():Cell=>({id:uid(),subject:"",text:"",bg:"#ffffff",fg:"#17202a",subjectBg:"#f7f8fa",subjectFg:"#17202a",bold:false,italic:false,size:14});
-  const cleanPlannerField=(value:unknown)=>{const text=String(value??"").trim();const normalized=text.normalize("NFD").replace(/[\\u0300-\\u036f]/g,"").toUpperCase();return normalized==="MATERIA"||normalized==="OBSERVACOES"||normalized==="OBSERVACAO"?"":text;};
+  const cleanPlannerField=(value:unknown)=>{const text=String(value??"").trim();const normalized=text.normalize("NFD").replace(/[\\u0300-\\u036f]/g,"").toUpperCase();return normalized.startsWith("MATERIA")||normalized.startsWith("OBSERVACOES")||normalized.startsWith("OBSERVACAO")?"":text;};
   const makeInitial=():PlannerData=>({version:2,weekOffset:0,cols:7,rows:4,headers:[...defaultHeaders],colWidths:Array(7).fill(190),rowHeights:Array(4).fill(180),cells:{}});
   const key="mcr_planner_"+userId;
   const normalizePlanner=(raw:any):PlannerData=>{
