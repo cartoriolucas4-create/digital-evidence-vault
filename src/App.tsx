@@ -1806,7 +1806,9 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor}:{userId:s
           <button key={"row-head-"+row} className={"planner-row-selector "+(selectedRows.includes(row)?"axis-selected":"")} onClick={()=>selectRow(row)}>{row+1}</button>,
           ...Array.from({length:data.cols},(_,col)=>{
           const id=cellId(row,col), cell=getCell(id), active=selected.includes(id);
-          return <div key={id} data-planner-row={row} data-planner-col={col} className={"planner-cell "+(active?"selected":"")} style={{backgroundColor:cell.bg}} onPointerDown={e=>startCellSelection(row,col,e)} onClick={(e)=>{if(e.ctrlKey||e.metaKey)toggleSelected(id);}}>
+          return <div key={id} data-planner-row={row} data-planner-col={col} className={"planner-cell "+(active?"selected":"")} style={{backgroundColor:cell.bg}}
+            onPointerDown={e=>{const target=e.target as HTMLElement;if(target.closest("input,textarea,button,select")) return;startCellSelection(row,col,e)}}
+            onClick={(e)=>{const target=e.target as HTMLElement;if(target.closest("input,textarea,button,select")) return;if(e.ctrlKey||e.metaKey)toggleSelected(id);}}>
             <span className="planner-resize-handle planner-row-resize" onPointerDown={e=>beginResize("row",row,e)} />
             <div className="planner-subject-wrap">
             <input
