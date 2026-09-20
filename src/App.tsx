@@ -1728,14 +1728,6 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor}:{userId:s
       </div>
     </div> : null}
 
-    <div className="planner-toolbar">
-      <div className="planner-title-wrap"><div className="planner-eyebrow">PLANEJAMENTO LIVRE</div><h1>Minha semana</h1><span>{weekLabel}</span></div>
-      <div className="planner-week-tools">
-        <button className="planner-icon-tool" title="Semana anterior" onClick={()=>setData(p=>({...p,weekOffset:p.weekOffset-1}))}>‹</button>
-        <button className="planner-today-tool" onClick={()=>setData(p=>({...p,weekOffset:0}))}>Hoje</button>
-        <button className="planner-icon-tool" title="Próxima semana" onClick={()=>setData(p=>({...p,weekOffset:p.weekOffset+1}))}>›</button>
-      </div>
-    </div>
     <div className="planner-formatbar">
       <button className="planner-icon-tool" title="Desfazer" onClick={plannerUndo}><Undo2 size={16}/></button>
       <button className="planner-icon-tool" title="Refazer" onClick={plannerRedo}><Redo2 size={16}/></button>
