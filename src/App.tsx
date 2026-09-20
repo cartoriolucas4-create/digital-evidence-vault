@@ -715,11 +715,7 @@ function App() {
             <button className={tab === "entries" ? "active" : ""} onClick={() => setTab("entries")}><CheckCircle2 size={16}/> Lançamentos</button>
             <button className={tab === "catalog" ? "active" : ""} onClick={() => setTab("catalog")}><BookOpen size={16}/> Cadastro</button>
             <button className={tab === "settings" ? "active" : ""} onClick={() => setTab("settings")}><Settings size={16}/> Configurações</button>
-            <button className="nav-fullscreen-btn" onClick={toggleAppFullscreen} title={appFullscreen ? "Sair da tela cheia" : "Entrar em tela cheia"}>
-              {appFullscreen ? <Minimize2 size={16}/> : <Maximize2 size={16}/>}
-              {appFullscreen ? "Sair da tela cheia" : "Tela cheia"}
-            </button>
-          </nav>
+                      </nav>
         </aside>
 
         <main className={tab === "planner" ? "content planner-content" : "content"}>
@@ -1824,6 +1820,10 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor}:{userId:s
     </div> : null}
 
     <div className="planner-formatbar">
+      <button className="planner-format-btn planner-fullscreen-visible-btn" title={fullscreen ? "Sair da tela cheia" : "Abrir planejamento em tela cheia"} onClick={()=>setFullscreen(v=>!v)}>
+        {fullscreen ? <Minimize2 size={15}/> : <Maximize2 size={15}/>} {fullscreen ? "Sair da tela cheia" : "Tela cheia"}
+      </button>
+      <span className="planner-format-sep"/>
       <button className="planner-icon-tool" title="Desfazer" onClick={plannerUndo}><Undo2 size={16}/></button>
       <button className="planner-icon-tool" title="Refazer" onClick={plannerRedo}><Redo2 size={16}/></button>
       <span className="planner-format-sep"/>
