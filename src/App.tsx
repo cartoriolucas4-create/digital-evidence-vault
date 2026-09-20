@@ -2088,10 +2088,20 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
   const activeStyle=()=>getPartStyle(selected[0]??cellId(0,0),activePart);
   const applyPlannerPatch=(patch:Partial<CellPartStyle>)=>applyPartPatch(patch);
   const togglePlannerFormat=(format:"bold"|"italic"|"underline"|"strike")=>{
-    const ids=selected.length?selected:[cellId(0,0)];
-    const first=getCell(ids[0]);
-    const next=format==="bold"?true:!(first.subjectStyle??defaultPartStyle("subject"))[format];
-    commitPlannerChange(prev=>{const cells={...prev.cells};ids.forEach(id=>{const cell=cells[id]??getCell(id);cells[id]={...cell,subjectStyle:{...(cell.subjectStyle??defaultPartStyle("subject")),[format]:next},textStyle:{...(cell.textStyle??defaultPartStyle("text")),[format]:next}};});return {...prev,cells};});
+    const targets=selectedParts.length
+      ? selectedParts.map(key=>{const [id,part]=key.split(":") as [string,"subject"|"text"];return {id,part};})
+      : (selected.length?selected:[cellId(0,0)]).flatMap(id=>[{id,part:"subject" as const},{id,part:"text" as const}]);
+    const first=targets[0];
+    const next=first?format==="bold"?!getPartStyle(first.id,first.part).bold:!getPartStyle(first.id,first.part)[format]:true;
+    commitPlannerChange(prev=>{
+      const cells={...prev.cells};
+      targets.forEach(({id,part})=>{
+        const cell=cells[id]??getCell(id);
+        const key=part==="subject"?"subjectStyle":"textStyle";
+        cells[id]={...cell,[key]:{...getPartStyle(id,part),[format]:next}};
+      });
+      return {...prev,cells};
+    });
   };
   const applyPlannerColor=(kind:"text"|"fill",color:string)=>{
     if(!color)return;
@@ -2118,44 +2128,10 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
     }
     setPaletteOpen(null);
   };
-  const applyPlannerFont=(fontFamily:string)=>{
-    const ids=selected.length?selected:[cellId(0,0)];
-    commitPlannerChange(prev=>{const cells={...prev.cells};ids.forEach(id=>{const cell=cells[id]??getCell(id);cells[id]={...cell,subjectStyle:{...(cell.subjectStyle??defaultPartStyle("subject")),fontFamily},textStyle:{...(cell.textStyle??defaultPartStyle("text")),fontFamily}};});return {...prev,cells};});
-  };
-  const applyPlannerSize=(size:number)=>{
-    const ids=selected.length?selected:[cellId(0,0)];
-    commitPlannerChange(prev=>{const cells={...prev.cells};ids.forEach(id=>{const cell=cells[id]??getCell(id);cells[id]={...cell,subjectStyle:{...(cell.subjectStyle??defaultPartStyle("subject")),size},textStyle:{...(cell.textStyle??defaultPartStyle("text")),size}};});return {...prev,cells};});
-  };
-  const applyPlannerAlignment=(align:"left"|"center"|"right")=>{
-    const ids=selected.length?selected:[cellId(0,0)];
-    commitPlannerChange(prev=>{
-      const cells={...prev.cells};
-      ids.forEach(id=>{
-        const cell=cells[id]??getCell(id);
-        cells[id]={
-          ...cell,
-          subjectStyle:{...(cell.subjectStyle??defaultPartStyle("subject")),align},
-          textStyle:{...(cell.textStyle??defaultPartStyle("text")),align}
-        };
-      });
-      return {...prev,cells};
-    });
-  };
-  const applyPlannerVertical=(vertical:"top"|"middle"|"bottom")=>{
-    const ids=selected.length?selected:[cellId(0,0)];
-    commitPlannerChange(prev=>{
-      const cells={...prev.cells};
-      ids.forEach(id=>{
-        const cell=cells[id]??getCell(id);
-        cells[id]={
-          ...cell,
-          subjectStyle:{...(cell.subjectStyle??defaultPartStyle("subject")),vertical},
-          textStyle:{...(cell.textStyle??defaultPartStyle("text")),vertical}
-        };
-      });
-      return {...prev,cells};
-    });
-  };
+  const applyPlannerFont=(fontFamily:string)=>applyPartPatch({fontFamily});
+  const applyPlannerSize=(size:number)=>applyPartPatch({size});
+  const applyPlannerAlignment=(align:"left"|"center"|"right")=>applyPartPatch({align});
+  const applyPlannerVertical=(vertical:"top"|"middle"|"bottom")=>applyPartPatch({vertical});
   const applyPlannerWrap=(wrap:"overflow"|"wrap"|"clip")=>applyPartPatch({wrap});
   const fillPlannerDirection=(direction:"down"|"right")=>{
     if(selected.length<2) return;
