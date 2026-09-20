@@ -302,3 +302,109 @@ html[data-theme="dark"] .subject-performance-track{background:#2a3038}
 }
 
 /* Planner layout publication refresh */
+
+
+/* MOBILE — navegação e layout otimizados para celular */
+@media (max-width:760px){
+  html,body,#root{width:100%;min-width:0;overflow-x:hidden}
+  body{padding-bottom:68px}
+  .topbar{height:54px;padding:0 10px;position:sticky;top:0;z-index:40;background:var(--surface,#fff)}
+  .mcr-logo-header{width:150px;max-height:42px}
+  .brand{min-width:0}
+  .brand span{display:none}
+  .user{display:none}
+  .layout{display:block;min-height:calc(100vh - 54px)}
+  .sidebar{
+    position:fixed!important;
+    left:0;right:0;bottom:0;top:auto!important;
+    width:100%!important;height:64px!important;
+    padding:5px 6px!important;
+    border:0!important;
+    border-top:1px solid var(--border)!important;
+    background:var(--surface,#fff);
+    box-shadow:0 -4px 18px rgba(20,20,30,.10);
+    z-index:100;
+  }
+  .nav{
+    width:100%;
+    height:100%;
+    display:grid!important;
+    grid-template-columns:repeat(5,minmax(0,1fr));
+    gap:3px!important;
+    overflow:visible!important;
+  }
+  .nav button{
+    width:100%!important;
+    min-width:0!important;
+    min-height:54px!important;
+    height:54px;
+    padding:5px 2px!important;
+    border-radius:9px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:3px;
+    white-space:normal!important;
+    font-size:9px!important;
+    line-height:1.05;
+    touch-action:manipulation;
+  }
+  .nav button svg{width:17px;height:17px;flex:none}
+  .nav button.active{font-weight:900}
+  .content{width:100%;max-width:none;padding:10px}
+  .dashboard-heading{gap:10px;margin-bottom:12px}
+  .dashboard-heading h1{font-size:19px}
+  .dashboard-heading .subtitle{font-size:10px}
+  .dashboard-heading-actions{width:100%;display:grid;grid-template-columns:1fr auto;gap:7px}
+  .dashboard-heading-actions .btn{min-height:40px}
+  .filters{
+    grid-template-columns:1fr!important;
+    gap:8px!important;
+    padding:10px!important;
+  }
+  .filters .field{min-width:0}
+  .filters .btn{min-height:42px}
+  .metrics{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    gap:7px!important;
+    margin-top:10px;
+  }
+  .metric{min-width:0;padding:11px!important}
+  .metric .value{font-size:21px}
+  .metric .label{font-size:8px}
+  .section{margin-top:10px}
+  .section-body{padding:10px!important}
+  .performance-charts,.subject-performance-charts{grid-template-columns:1fr!important;gap:10px}
+  .chart-card{padding:12px!important;border-radius:10px}
+  .chart-card h2{font-size:15px}
+  .chart-card p{font-size:10px}
+  .performance-svg{min-width:480px;height:220px}
+  .table-wrap{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .table{min-width:650px}
+  .toolbar{gap:7px!important}
+  .toolbar>*{max-width:100%}
+  .form-grid{grid-template-columns:1fr!important}
+  .add-row{grid-template-columns:1fr!important}
+  .modal-backdrop{padding:8px}
+  .modal{width:100%;max-height:90vh;padding:14px;border-radius:12px}
+  .notification-panel{top:58px;left:8px;right:8px}
+  .planner-shell{width:100%;min-height:calc(100vh - 54px);border-radius:0}
+  .planner-sidebar-toggle-open{bottom:74px!important;top:auto!important;left:8px!important}
+  .planner-toolbar{padding:5px!important;gap:6px!important}
+  .planner-tools{max-width:100%;overflow-x:auto!important;flex-wrap:nowrap!important}
+  .planner-formatbar{min-height:44px!important;padding:4px!important;overflow-x:auto!important;flex-wrap:nowrap!important}
+  .planner-grid-wrap{
+    width:100%;
+    max-width:100%;
+    overflow:auto!important;
+    -webkit-overflow-scrolling:touch;
+    touch-action:pan-x pan-y;
+  }
+  .planner-day input,.planner-content-top,.planner-content-bottom{font-size:13px}
+  .planner-row-selector,.planner-corner-selector{min-width:32px!important;width:32px!important}
+  .planner-content-top{min-height:36px}
+  .planner-content-bottom{min-height:70px}
+  .planner-format-select{max-width:110px!important}
+  .toast{left:8px!important;right:8px!important;bottom:74px!important}
+}
