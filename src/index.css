@@ -213,3 +213,10 @@ body.planner-resizing{cursor:col-resize!important}
 .planner-resizing .planner-col-resize{cursor:col-resize!important}
 .planner-col-resize{right:-5px!important;width:11px!important;top:0!important;bottom:0!important}
 .planner-row-resize{bottom:-5px!important;height:11px!important;left:0!important;right:0!important;width:auto!important}
+
+/* Planejamento: bloco de matéria separado das observações */
+.planner-cell{gap:0!important;padding-top:34px!important}
+.planner-subject{box-sizing:border-box;width:100%;min-height:34px;height:34px;flex:none;margin:0 0 9px 0;padding:8px 9px;border:1px solid #d7dbe0;border-left:3px solid var(--accent-2);border-radius:4px;background:#f7f8fa;color:inherit;font-size:11px;font-weight:850;line-height:16px}
+.planner-subject:focus{border-color:var(--accent-2);border-left-color:var(--accent-2);background:#fff;box-shadow:0 0 0 2px rgba(214,51,132,.08)}
+.planner-notes{box-sizing:border-box;width:100%;flex:1;min-height:80px;margin:0;padding:9px 7px 7px;border:0;border-top:1px solid #e1e4e8;border-radius:0;background:transparent;color:inherit;font:inherit;line-height:1.35}
+.planner-notes:focus{background:rgba(255,255,255,.18)}
