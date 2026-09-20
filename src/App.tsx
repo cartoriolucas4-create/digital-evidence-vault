@@ -152,7 +152,7 @@ function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState("");
-  const [tab, setTab] = useState<"dashboard" | "entries" | "catalog" | "settings">("dashboard");
+  const [tab, setTab] = useState<"dashboard" | "planner" | "entries" | "catalog" | "settings">("dashboard");
   const [disciplines, setDisciplines] = useState<Discipline[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [sources, setSources] = useState<Source[]>([]);
@@ -680,13 +680,14 @@ function App() {
         <aside className="sidebar">
           <nav className="nav">
             <button className={tab === "dashboard" ? "active" : ""} onClick={() => setTab("dashboard")}><BarChart3 size={16}/> Dashboard</button>
+            <button className={tab === "planner" ? "active" : ""} onClick={() => setTab("planner")}><Clipboard size={16}/> Planejamento</button>
             <button className={tab === "entries" ? "active" : ""} onClick={() => setTab("entries")}><CheckCircle2 size={16}/> Lançamentos</button>
             <button className={tab === "catalog" ? "active" : ""} onClick={() => setTab("catalog")}><BookOpen size={16}/> Cadastro</button>
             <button className={tab === "settings" ? "active" : ""} onClick={() => setTab("settings")}><Settings size={16}/> Configurações</button>
           </nav>
         </aside>
 
-        <main className="content">
+        <main className={tab === "planner" ? "content planner-content" : "content"}>
           {tab === "dashboard" && (
             <Dashboard
               studentName={studentName}
@@ -698,7 +699,7 @@ function App() {
               byDiscipline={byDiscipline} attention={attention} targetAccuracy={targetAccuracy} entries={entries} onExportMonthly={() => exportMonthlyPdf()}
             />
           )}
-          {tab === "entries" && <Entries disciplines={disciplines} subjects={subjects} sources={sources} types={types} entries={entries} refresh={() => loadEntries().catch((error) => notify(error instanceof Error ? error.message : "Não foi possível carregar os lançamentos."))} notify={notify}/>}
+          {tab === "planner" && <Planner userId={session.user.id} notify={notify}/>}\n          {tab === "entries" && <Entries disciplines={disciplines} subjects={subjects} sources={sources} types={types} entries={entries} refresh={() => loadEntries().catch((error) => notify(error instanceof Error ? error.message : "Não foi possível carregar os lançamentos."))} notify={notify}/>}
           {tab === "catalog" && <Catalog disciplines={disciplines} subjects={subjects} sources={sources} types={types} refresh={() => loadCatalog().catch((error) => notify(error instanceof Error ? error.message : "Não foi possível carregar o cadastro."))} notify={notify} catalogDeleteOpen={catalogDeleteOpen} setCatalogDeleteOpen={setCatalogDeleteOpen} catalogDeletePassword={catalogDeletePassword} setCatalogDeletePassword={setCatalogDeletePassword} catalogDeleteBusy={catalogDeleteBusy} deleteAllCatalogData={deleteAllCatalogData}/>}
           {tab === "settings" && (
             <SettingsPage
@@ -1242,6 +1243,89 @@ function CatalogDeleteModal({password,setPassword,busy,onClose,onConfirm}:any) {
         </div>
       </>}
     </div>
+  </div>;
+}
+
+function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) {
+  type Cell = { id:string; text:string; bg:string; fg:string; bold:boolean; italic:boolean; size:number };
+  type PlannerData = { version:1; weekOffset:number; cols:number; rows:number; cells:Record<string,Cell> };
+  const days=["SEGUNDA","TERÇA","QUARTA","QUINTA","SEXTA","SÁBADO","DOMINGO"];
+  const defaultCell=():Cell=>({id:uid(),text:"",bg:"#ffffff",fg:"#17202a",bold:false,italic:false,size:14});
+  const makeInitial=():PlannerData=>({version:1,weekOffset:0,cols:7,rows:4,cells:{}});
+  const key="mcr_planner_"+userId;
+  const [data,setData]=useState<PlannerData>(()=>readStore<PlannerData>(key,makeInitial()));
+  const [selected,setSelected]=useState<string[]>([]);
+  const [textColor,setTextColor]=useState("#17202a");
+  const [fillColor,setFillColor]=useState("#ffffff");
+  const [fullscreen,setFullscreen]=useState(false);
+
+  useEffect(()=>{writeStore(key,data)},[key,data]);
+  const weekStart=useMemo(()=>{
+    const now=new Date(); now.setHours(12,0,0,0);
+    const day=now.getDay()||7;
+    now.setDate(now.getDate()-day+1+(data.weekOffset*7));
+    return now;
+  },[data.weekOffset]);
+  const weekLabel=useMemo(()=>{
+    const end=new Date(weekStart); end.setDate(end.getDate()+6);
+    const f=(d:Date)=>d.toLocaleDateString("pt-BR",{day:"2-digit",month:"short"}).replace(".","");
+    return f(weekStart)+" — "+f(end);
+  },[weekStart]);
+
+  const cellId=(r:number,col:number)=>r+"-"+col;
+  const getCell=(id:string):Cell=>data.cells[id]??defaultCell();
+  const updateCell=(id:string,patch:Partial<Cell>)=>{
+    setData(prev=>({...prev,cells:{...prev.cells,[id]:{...getCell(id),...patch}}}));
+  };
+  const toggleSelected=(id:string)=>{
+    setSelected(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]);
+  };
+  const selectAll=()=>setSelected(Array.from({length:data.rows*data.cols},(_,i)=>cellId(Math.floor(i/data.cols),i%data.cols)));
+  const applyFill=()=>{setData(prev=>{const cells={...prev.cells}; selected.forEach(id=>{cells[id]={...getCell(id),bg:fillColor}});return {...prev,cells}});notify("Cor aplicada.");};
+  const applyText=()=>{setData(prev=>{const cells={...prev.cells}; selected.forEach(id=>{cells[id]={...getCell(id),fg:textColor}});return {...prev,cells}});notify("Cor do texto aplicada.");};
+  const clearSelection=()=>setSelected([]);
+  const addRow=()=>setData(prev=>({...prev,rows:prev.rows+1}));
+  const addCol=()=>setData(prev=>({...prev,cols:prev.cols+1}));
+  const resetPlanner=()=>{if(window.confirm("Limpar todo o conteúdo desta semana?")){setData(prev=>({...prev,cells:{}}));setSelected([]);}};
+  const copyWeek=()=>{setData(prev=>{const cells={...prev.cells};for(let r=0;r<prev.rows;r++)for(let col=0;col<prev.cols;col++){const id=cellId(r,col);cells[id]={...getCell(id),id:uid()};}return {...prev,cells}});notify("Semana duplicada.");};
+
+  return <div className={"planner-shell "+(fullscreen?"planner-fullscreen":"")}>
+    <div className="planner-toolbar">
+      <div className="planner-title-wrap"><div className="planner-eyebrow">PLANEJAMENTO LIVRE</div><h1>Minha semana</h1><span>{weekLabel}</span></div>
+      <div className="planner-tools">
+        <button className="planner-tool" onClick={()=>setData(p=>({...p,weekOffset:p.weekOffset-1}))}>←</button>
+        <button className="planner-tool planner-today" onClick={()=>setData(p=>({...p,weekOffset:0}))}>Hoje</button>
+        <button className="planner-tool" onClick={()=>setData(p=>({...p,weekOffset:p.weekOffset+1}))}>→</button>
+        <span className="planner-sep"/>
+        <label className="planner-color" title="Cor do texto"><span>A</span><input type="color" value={textColor} onChange={e=>setTextColor(e.target.value)}/></label>
+        <label className="planner-color" title="Cor de fundo"><span>🎨</span><input type="color" value={fillColor} onChange={e=>setFillColor(e.target.value)}/></label>
+        <button className="planner-tool" onClick={applyText} disabled={!selected.length}>Texto</button>
+        <button className="planner-tool" onClick={applyFill} disabled={!selected.length}>Fundo</button>
+        <button className="planner-tool" onClick={selectAll}>Selecionar tudo</button>
+        <button className="planner-tool" onClick={addCol}>+ Coluna</button>
+        <button className="planner-tool" onClick={addRow}>+ Linha</button>
+        <button className="planner-tool" onClick={copyWeek}>Duplicar</button>
+        <button className="planner-tool" onClick={()=>setFullscreen(v=>!v)}>{fullscreen?"⛶ Sair":"⛶ Tela cheia"}</button>
+        <button className="planner-tool planner-danger" onClick={resetPlanner}>Limpar</button>
+      </div>
+    </div>
+    <div className="planner-hint">Clique em uma célula para editar. Use Ctrl/⌘ + clique para selecionar várias e aplicar cores de uma vez.</div>
+    <div className="planner-grid-wrap">
+      <div className="planner-grid" style={{gridTemplateColumns:"repeat("+data.cols+",minmax(150px,1fr))"}}>
+        {Array.from({length:data.cols},(_,col)=>{
+          const label=days[col]??("COLUNA "+(col+1));
+          return <div className="planner-day" key={"head-"+col}>{label}</div>;
+        })}
+        {Array.from({length:data.rows},(_,row)=>Array.from({length:data.cols},(_,col)=>{
+          const id=cellId(row,col), cell=getCell(id), active=selected.includes(id);
+          return <div key={id} className={"planner-cell "+(active?"selected":"")} style={{backgroundColor:cell.bg,color:cell.fg,fontSize:cell.size,fontWeight:cell.bold?800:500,fontStyle:cell.italic?"italic":"normal"}} onClick={(e)=>{if(e.ctrlKey||e.metaKey)toggleSelected(id);else setSelected([id]);}} onDoubleClick={()=>toggleSelected(id)}>
+            <div className="planner-cell-actions"><button title="Negrito" onClick={(e)=>{e.stopPropagation();updateCell(id,{bold:!cell.bold})}}>B</button><button title="Itálico" onClick={(e)=>{e.stopPropagation();updateCell(id,{italic:!cell.italic})}}>I</button><button title="Aumentar fonte" onClick={(e)=>{e.stopPropagation();updateCell(id,{size:Math.min(32,cell.size+2)})}}>A+</button><button title="Diminuir fonte" onClick={(e)=>{e.stopPropagation();updateCell(id,{size:Math.max(10,cell.size-2)})}}>A-</button></div>
+            <textarea value={cell.text} onChange={e=>updateCell(id,{text:e.target.value})} placeholder="Digite aqui..." spellCheck={false}/>
+          </div>;
+        }))}
+      </div>
+    </div>
+    <div className="planner-footer"><span>✓ Salvamento automático</span><span>{selected.length?selected.length+" célula(s) selecionada(s)":"Selecione células para edição em lote"}</span><button className="btn small" onClick={clearSelection}>Limpar seleção</button></div>
   </div>;
 }
 
