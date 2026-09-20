@@ -1,5 +1,5 @@
 import { Component, type ErrorInfo, type FormEvent, type ReactNode, type PointerEvent, useEffect, useMemo, useRef, useState } from "react";
-import { AlignCenter, AlignJustify, AlignLeft, AlignRight, AlertTriangle, BarChart3, Bell, Bold, BookOpen, CheckCircle2, ChevronDown, Clipboard, Copy, FileDown, GripVertical, Italic, LogOut, Maximize2, Minimize2, MoreHorizontal, PaintBucket, PanelLeftClose, PanelLeftOpen, Plus, Redo2, RotateCcw, Settings, Sparkles, Strikethrough, Target, Trash2, Trophy, TrendingUp, Underline, Undo2, Upload, WrapText, X } from "lucide-react";
+import { AlignCenter, AlignJustify, AlignLeft, AlignRight, AlertTriangle, BarChart3, Bell, Bold, BookOpen, CheckCircle2, ChevronDown, Clipboard, Copy, FileDown, GripVertical, Italic, LogOut, Maximize2, Minimize2, MoreHorizontal, Menu, PaintBucket, PanelLeftClose, PanelLeftOpen, Plus, Redo2, RotateCcw, Settings, Sparkles, Strikethrough, Target, Trash2, Trophy, TrendingUp, Underline, Undo2, Upload, WrapText, X } from "lucide-react";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { Discipline, Entry, Filters, PerformanceNotification, QuestionType, Source, Subject } from "./types";
@@ -182,6 +182,7 @@ function App() {
   const [buttonColor, setButtonColor] = useState("#d63384");
   const [appFullscreen,setAppFullscreen]=useState(false);
   const [plannerSidebarCollapsed,setPlannerSidebarCollapsed]=useState(false);
+  const [mobileMenuOpen,setMobileMenuOpen]=useState(false);
   useEffect(()=>{
     const sync=()=>setAppFullscreen(Boolean(document.fullscreenElement));
     document.addEventListener("fullscreenchange",sync);
@@ -1099,6 +1100,8 @@ function App() {
         </div>
       </header>
 
+      {mobileMenuOpen && <button className="mobile-menu-backdrop" aria-label="Fechar menu" onClick={() => setMobileMenuOpen(false)} />}
+      <button className="mobile-menu-button" aria-label="Abrir menu" onClick={() => setMobileMenuOpen(true)}><Menu size={21}/></button>
       <div className={"layout " + (tab === "planner" ? "planner-layout " + (plannerSidebarCollapsed ? "planner-sidebar-collapsed" : "") : "")}>
         {tab === "planner" && plannerSidebarCollapsed && (
           <button className="planner-sidebar-toggle planner-sidebar-toggle-open" title="Mostrar menu" aria-label="Mostrar menu" onClick={()=>setPlannerSidebarCollapsed(false)}>
@@ -1112,11 +1115,11 @@ function App() {
             </button>
           )}
           <nav className="nav">
-            <button className={tab === "dashboard" ? "active" : ""} onClick={() => setTab("dashboard")}><BarChart3 size={16}/> Dashboard</button>
-            <button className={tab === "planner" ? "active" : ""} onClick={() => setTab("planner")}><Clipboard size={16}/> Planejamento</button>
-            <button className={tab === "entries" ? "active" : ""} onClick={() => setTab("entries")}><CheckCircle2 size={16}/> Lançamentos</button>
-            <button className={tab === "catalog" ? "active" : ""} onClick={() => setTab("catalog")}><BookOpen size={16}/> Cadastro</button>
-            <button className={tab === "settings" ? "active" : ""} onClick={() => setTab("settings")}><Settings size={16}/> Configurações</button>
+            <button className={tab === "dashboard" ? "active" : ""} onClick={() => { setTab("dashboard"); setMobileMenuOpen(false); }}><BarChart3 size={16}/> Dashboard</button>
+            <button className={tab === "planner" ? "active" : ""} onClick={() => { setTab("planner"); setMobileMenuOpen(false); }}><Clipboard size={16}/> Planejamento</button>
+            <button className={tab === "entries" ? "active" : ""} onClick={() => { setTab("entries"); setMobileMenuOpen(false); }}><CheckCircle2 size={16}/> Lançamentos</button>
+            <button className={tab === "catalog" ? "active" : ""} onClick={() => { setTab("catalog"); setMobileMenuOpen(false); }}><BookOpen size={16}/> Cadastro</button>
+            <button className={tab === "settings" ? "active" : ""} onClick={() => { setTab("settings"); setMobileMenuOpen(false); }}><Settings size={16}/> Configurações</button>
                       </nav>
         </aside>
 
