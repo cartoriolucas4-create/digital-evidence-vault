@@ -1590,12 +1590,23 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor}:{userId:s
     };
     window.addEventListener("pointermove",move);window.addEventListener("pointerup",stop,{once:true});
   };
-  const selectRow=(row:number)=>{const rows=[row];setSelectedParts([]);setSelectionMode("rows");setSelectedRows(rows);setSelectedCols([]);setSelected(Array.from({length:data.cols},(_,col)=>cellId(row,col)));};
-  const selectCol=(col:number)=>{const cols=[col];setSelectedParts([]);setSelectionMode("cols");setSelectedRows([]);setSelectedCols(cols);setSelected(Array.from({length:data.rows},(_,row)=>cellId(row,col)));};
+  const selectRowsRange=(start:number,end:number)=>{
+    const rows=Array.from({length:Math.abs(end-start)+1},(_,i)=>Math.min(start,end)+i);
+    setSelectedParts([]);setSelectionMode("rows");setSelectedRows(rows);setSelectedCols([]);
+    setSelected(rows.flatMap(row=>Array.from({length:data.cols},(_,col)=>cellId(row,col))));
+  };
+  const selectColsRange=(start:number,end:number)=>{
+    const cols=Array.from({length:Math.abs(end-start)+1},(_,i)=>Math.min(start,end)+i);
+    setSelectedParts([]);setSelectionMode("cols");setSelectedRows([]);setSelectedCols(cols);
+    setSelected(cols.flatMap(col=>Array.from({length:data.rows},(_,row)=>cellId(row,col))));
+  };
+  const selectRow=(row:number)=>selectRowsRange(row,row);
+  const selectCol=(col:number)=>selectColsRange(col,col);
   const startAxisSelection=(axis:"row"|"col",index:number,event:PointerEvent)=>{
     if(event.button!==0) return;
     event.preventDefault();
-    if(axis==="row") selectRow(index); else selectCol(index);
+    const anchor=index;
+    if(axis==="row") selectRowsRange(anchor,anchor); else selectColsRange(anchor,anchor);
     let dragging=true;
     const move=(ev:PointerEvent)=>{
       if(!dragging) return;
@@ -1604,10 +1615,10 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor}:{userId:s
       if(!head) return;
       if(axis==="row"){
         const buttons=Array.from(document.querySelectorAll<HTMLElement>(".planner-row-selector"));
-        const next=buttons.indexOf(head); if(next>=0) selectRow(next);
+        const next=buttons.indexOf(head); if(next>=0) selectRowsRange(anchor,next);
       }else{
         const heads=Array.from(document.querySelectorAll<HTMLElement>(".planner-day"));
-        const next=heads.indexOf(head); if(next>=0) selectCol(next);
+        const next=heads.indexOf(head); if(next>=0) selectColsRange(anchor,next);
       }
     };
     const stop=()=>{dragging=false;window.removeEventListener("pointermove",move);window.removeEventListener("pointerup",stop);};
@@ -1894,7 +1905,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor}:{userId:s
           ...Array.from({length:data.cols},(_,col)=>{
           const id=cellId(row,col), cell=getCell(id), active=selected.includes(id);
           return <div key={id} data-planner-row={row} data-planner-col={col} className={"planner-cell "+(active?"selected":"")} style={{backgroundColor:cell.bg}}
-            onPointerDown={e=>{const target=e.target as HTMLElement;if(target.closest("input,textarea,button,select")) return;startCellSelection(row,col,e)}}
+            onPointerDown={e=>{const target=e.target as HTMLElement;if(target.closest("input,textarea,button,select")) return;if(e.shiftKey&&selected.length){const first=selected[0].split("-").map(Number);selectRect(first[0],row,first[1],col);return;}startCellSelection(row,col,e)}}
             onClick={(e)=>{const target=e.target as HTMLElement;if(target.closest("input,textarea,button,select")) return;if(e.ctrlKey||e.metaKey)toggleSelected(id);}}>
             <span className="planner-resize-handle planner-row-resize" onPointerDown={e=>beginResize("row",row,e)} />
             <div className="planner-subject-wrap">
