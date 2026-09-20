@@ -1,0 +1,93 @@
+/* PLANEJAMENTO — BLOCOS INTERNOS EDITÁVEIS */
+.planner-cell{
+  padding:8px;
+  background:#fff;
+}
+
+.planner-content-top,
+.planner-content-bottom{
+  position:absolute;
+  left:8px;
+  width:calc(100% - 16px);
+  margin:0;
+  box-sizing:border-box;
+  border:1px solid #d8dce0;
+  border-radius:4px;
+  outline:0;
+  background:#fff;
+  color:inherit;
+  font:inherit;
+  resize:none;
+  box-shadow:none;
+  transition:border-color .15s, box-shadow .15s, background .15s;
+}
+
+.planner-content-top{
+  top:8px;
+  height:54px;
+  padding:8px 10px;
+  overflow:auto;
+  z-index:3;
+}
+
+.planner-content-bottom{
+  top:70px;
+  bottom:8px;
+  height:auto;
+  padding:8px 10px;
+  line-height:1.35;
+  overflow:auto;
+  z-index:2;
+}
+
+.planner-content-top:hover,
+.planner-content-bottom:hover{
+  border-color:#c8cdd3;
+}
+
+.planner-content-top:focus,
+.planner-content-bottom:focus{
+  border-color:var(--accent-2);
+  box-shadow:0 0 0 2px rgba(214,51,132,.10);
+  background:#fff;
+}
+
+.planner-content-top::placeholder,
+.planner-content-bottom::placeholder{
+  color:transparent;
+}
+
+html[data-theme="dark"] .planner-cell{
+  background:#171b22;
+  border-color:#343c48;
+}
+
+html[data-theme="dark"] .planner-content-top,
+html[data-theme="dark"] .planner-content-bottom{
+  background:#11151b;
+  border-color:#343c48;
+  color:#edf1f5;
+}
+
+html[data-theme="dark"] .planner-content-top:focus,
+html[data-theme="dark"] .planner-content-bottom:focus{
+  background:#11151b;
+  border-color:#d63384;
+}
+
+@media(max-width:760px){
+  .planner-cell{padding:7px}
+  .planner-content-top,
+  .planner-content-bottom{
+    left:7px;
+    width:calc(100% - 14px);
+  }
+  .planner-content-top{
+    top:7px;
+    height:50px;
+  }
+  .planner-content-bottom{
+    top:65px;
+    bottom:7px;
+  }
+}
