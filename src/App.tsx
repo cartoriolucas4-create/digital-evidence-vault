@@ -1116,7 +1116,7 @@ function LaunchModal({initial,disciplines,subjects=[],sources=[],types=[],onClos
     study_date: initial?.study_date ?? localDate(), discipline_id: initial?.discipline_id ?? "", subject_id: initial?.subject_id ?? "",
     source_id: initial?.source_id ?? "", question_type_id: initial?.question_type_id ?? "", questions: initial?.questions ?? "", correct: initial?.correct ?? "", notes: initial?.notes ?? "",
   });
-  const availableSubjects = subjects.filter((s: Subject) => s.discipline_id === value.discipline_id);
+  const availableSubjects = subjects.filter((s: Subject) => String(s.discipline_id ?? "") === String(value.discipline_id ?? ""));
   const errors = Math.max(0, Number(value.questions || 0) - Number(value.correct || 0));
 
   const submit = (event: FormEvent) => {
