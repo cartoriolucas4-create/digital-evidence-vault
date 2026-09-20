@@ -2020,7 +2020,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
               data-planner-subject={id}
               value={cell.subject}
               onChange={e=>updateCell(id,{subject:e.target.value})}
-              onClick={e=>{e.stopPropagation();selectCellPart(id,"subject",e.ctrlKey||e.metaKey);setSubjectPickerId(id)}}
+              onClick={e=>{e.stopPropagation();selectCellPart(id,"subject",e.ctrlKey||e.metaKey);if(!cell.subject.trim())setSubjectPickerId(id)}}
               onPointerDown={e=>e.stopPropagation()}
               onFocus={()=>selectCellPart(id,"subject",false)}
               style={{backgroundColor:isStudiedThisWeek(id)?completedSmallColor:(getPartStyle(id,"subject").bg||cell.subjectBg||defaultSmallColor),color:getPartStyle(id,"subject").fg,fontSize:getPartStyle(id,"subject").size,fontWeight:getPartStyle(id,"subject").bold?"700":"400",fontStyle:getPartStyle(id,"subject").italic?"italic":"normal",fontFamily:getPartStyle(id,"subject").fontFamily,textAlign:getPartStyle(id,"subject").align,textDecoration:[getPartStyle(id,"subject").underline?"underline":"",getPartStyle(id,"subject").strike?"line-through":""] .filter(Boolean).join(" "),whiteSpace:getPartStyle(id,"subject").wrap==="wrap"?"normal":getPartStyle(id,"subject").wrap==="clip"?"nowrap":"pre-wrap",padding:getPartStyle(id,"subject").vertical==="middle"?"8px":"8px",lineHeight:getPartStyle(id,"subject").vertical==="middle"?"29px":getPartStyle(id,"subject").vertical==="bottom"?"40px":"1.2"}}
@@ -2029,15 +2029,9 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
             {cell.subject.trim() && <button type="button" className={"planner-study-check "+(isStudiedThisWeek(id)?"checked":"")} aria-label={isStudiedThisWeek(id)?"Desmarcar matéria estudada":"Marcar matéria como estudada"} title={isStudiedThisWeek(id)?"Desmarcar como estudada":"Marcar como estudada"} onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();toggleStudied(id);}}>
               {isStudiedThisWeek(id) ? "✓" : ""}
             </button>}
-            {subjectPickerId===id && <div className="planner-subject-picker" onPointerDown={e=>e.stopPropagation()} onClick={e=>e.stopPropagation()}>
-              {cell.subject.trim() ? <>
-                <div className="planner-subject-picker-title">Matéria preenchida</div>
-                <button type="button" onClick={()=>focusPlannerSubject(id)}>Editar nome</button>
-                <button type="button" className="danger" onClick={()=>deletePlannerSubject(id)}>Excluir matéria</button>
-              </> : <>
-                <div className="planner-subject-picker-title">Escolha uma matéria</div>
-                {subjects.length ? subjects.map(subject=><button type="button" key={subject.id} onClick={()=>choosePlannerSubject(id,subject.name)}>{subject.name}</button>) : <div className="planner-subject-picker-empty">Nenhuma matéria cadastrada. Cadastre uma em Cadastro.</div>}
-              </>}
+            {!cell.subject.trim() && subjectPickerId===id && <div className="planner-subject-picker" onPointerDown={e=>e.stopPropagation()} onClick={e=>e.stopPropagation()}>
+              <div className="planner-subject-picker-title">Escolha uma matéria</div>
+              {subjects.length ? subjects.map(subject=><button type="button" key={subject.id} onClick={()=>choosePlannerSubject(id,subject.name)}>{subject.name}</button>) : <div className="planner-subject-picker-empty">Nenhuma matéria cadastrada. Cadastre uma em Cadastro.</div>}
             </div>}
             </div>
             <textarea
