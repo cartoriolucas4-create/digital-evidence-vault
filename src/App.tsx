@@ -1,5 +1,5 @@
 import { Component, type ErrorInfo, type FormEvent, type ReactNode, type PointerEvent, useEffect, useMemo, useRef, useState } from "react";
-import { AlignCenter, AlignJustify, AlignLeft, AlignRight, AlertTriangle, BarChart3, Bell, Bold, BookOpen, CheckCircle2, ChevronDown, Clipboard, Copy, FileDown, GripVertical, Italic, LogOut, Maximize2, Minimize2, MoreHorizontal, PaintBucket, Plus, Redo2, Settings, Sparkles, Strikethrough, Target, Trash2, Trophy, TrendingUp, Underline, Undo2, Upload, WrapText, X } from "lucide-react";
+import { AlignCenter, AlignJustify, AlignLeft, AlignRight, AlertTriangle, BarChart3, Bell, Bold, BookOpen, CheckCircle2, ChevronDown, Clipboard, Copy, FileDown, GripVertical, Italic, LogOut, Maximize2, Minimize2, MoreHorizontal, PaintBucket, Plus, Redo2, RotateCcw, Settings, Sparkles, Strikethrough, Target, Trash2, Trophy, TrendingUp, Underline, Undo2, Upload, WrapText, X } from "lucide-react";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { Discipline, Entry, Filters, PerformanceNotification, QuestionType, Source, Subject } from "./types";
@@ -1931,6 +1931,18 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
     return {...prev,cols:prev.cols+1,headers,colWidths:[...prev.colWidths,190]};
   });
   const resetPlanner=()=>{if(window.confirm("Limpar todo o conteúdo desta semana?")){commitPlannerChange(prev=>({...prev,cells:{}}));setSelected([]);}};
+  const startNextCycle=()=>{
+    commitPlannerChange(prev=>{
+      const cells={...prev.cells};
+      Object.keys(cells).forEach(id=>{cells[id]={...cells[id],studiedWeek:undefined};});
+      return {...prev,weekOffset:prev.weekOffset+1,cells};
+    });
+    setSelected([]);
+    setSelectedRows([]);
+    setSelectedCols([]);
+    setSelectionMode("cells");
+    notify("Novo ciclo iniciado. As matérias voltaram para não estudadas.");
+  };
   const copyWeek=()=>{commitPlannerChange(prev=>{const cells:{[key:string]:Cell}={...prev.cells};for(let r=0;r<prev.rows;r++)for(let col=0;col<prev.cols;col++){const id=cellId(r,col);cells[id]={...getCell(id),id:uid()};}return {...prev,cells}});notify("Semana duplicada.");};
 
   return <div className={"planner-shell "+(fullscreen?"planner-fullscreen":"")}>
@@ -1944,8 +1956,11 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
     </div> : null}
 
     <div className="planner-formatbar">
-      <button className="planner-format-btn planner-fullscreen-visible-btn" title={fullscreen ? "Sair da tela cheia" : "Abrir planejamento em tela cheia"} onClick={()=>setFullscreen(v=>!v)}>
-        {fullscreen ? <Minimize2 size={15}/> : <Maximize2 size={15}/>} {fullscreen ? "Sair da tela cheia" : "Tela cheia"}
+      <button className="planner-format-btn planner-fullscreen-visible-btn" title={fullscreen ? "Sair da tela cheia" : "Abrir planejamento em tela cheia"} aria-label={fullscreen ? "Sair da tela cheia" : "Abrir planejamento em tela cheia"} onClick={()=>setFullscreen(v=>!v)}>
+        {fullscreen ? <Minimize2 size={15}/> : <Maximize2 size={15}/>}
+      </button>
+      <button className="planner-format-btn planner-fullscreen-visible-btn" title="Iniciar próximo ciclo" aria-label="Iniciar próximo ciclo" onClick={startNextCycle}>
+        <RotateCcw size={15}/>
       </button>
       <span className="planner-format-sep"/>
       <button className="planner-icon-tool" title="Desfazer" onClick={plannerUndo}><Undo2 size={16}/></button>
