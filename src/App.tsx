@@ -1,5 +1,5 @@
 import { Component, type ErrorInfo, type FormEvent, type ReactNode, type PointerEvent, useEffect, useMemo, useRef, useState } from "react";
-import { AlignCenter, AlignJustify, AlignLeft, AlignRight, AlertTriangle, BarChart3, Bell, Bold, BookOpen, CheckCircle2, ChevronDown, Clipboard, Copy, FileDown, GripVertical, Italic, LogOut, MoreHorizontal, PaintBucket, Plus, Redo2, Settings, Sparkles, Strikethrough, Target, Trash2, Trophy, TrendingUp, Underline, Undo2, Upload, WrapText, X } from "lucide-react";
+import { AlignCenter, AlignJustify, AlignLeft, AlignRight, AlertTriangle, BarChart3, Bell, Bold, BookOpen, CheckCircle2, ChevronDown, Clipboard, Copy, FileDown, GripVertical, Italic, LogOut, Maximize2, Minimize2, MoreHorizontal, PaintBucket, Plus, Redo2, Settings, Sparkles, Strikethrough, Target, Trash2, Trophy, TrendingUp, Underline, Undo2, Upload, WrapText, X } from "lucide-react";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { Discipline, Entry, Filters, PerformanceNotification, QuestionType, Source, Subject } from "./types";
@@ -168,6 +168,18 @@ function App() {
   const [plannerDefaultColor, setPlannerDefaultColor] = useState("#fff2cc");
   const [plannerCompletedColor, setPlannerCompletedColor] = useState("#d9ead3");
   const [theme, setTheme] = useState<"light" | "dark">(() => readStore<"light" | "dark">("mcr_theme", "light"));
+  const [appFullscreen,setAppFullscreen]=useState(false);
+  useEffect(()=>{
+    const sync=()=>setAppFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener("fullscreenchange",sync);
+    return ()=>document.removeEventListener("fullscreenchange",sync);
+  },[]);
+  const toggleAppFullscreen=async()=>{
+    try{
+      if(document.fullscreenElement) await document.exitFullscreen();
+      else await document.documentElement.requestFullscreen();
+    }catch{ notify("Não foi possível alternar para tela cheia."); }
+  };
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -709,6 +721,8 @@ function App() {
         <main className={tab === "planner" ? "content planner-content" : "content"}>
           {tab === "dashboard" && (
             <Dashboard
+              fullscreen={appFullscreen}
+              onToggleFullscreen={toggleAppFullscreen}
               studentName={studentName}
               filters={filters} setFilter={setFilter} disciplines={disciplines} subjects={filteredSubjects} sources={sources}
               onApply={() => { setApplied(filters); notify("Filtros aplicados."); }}
@@ -778,7 +792,7 @@ function Dashboard(props: any) {
   return (
     <>
       <h1 className="page-title">Olá, {props.studentName || "estudante"}.</h1>
-      <div className="dashboard-heading"><p className="subtitle">Visão consolidada dos lançamentos reais do período selecionado.</p><button className="btn export-pdf-btn" onClick={props.onExportMonthly}><FileDown size={15}/> Exportar rendimento mensal</button></div>
+      <div className="dashboard-heading"><p className="subtitle">Visão consolidada dos lançamentos reais do período selecionado.</p><div className="dashboard-heading-actions"><button className="btn export-pdf-btn" onClick={props.onExportMonthly}><FileDown size={15}/> Exportar rendimento mensal</button><button className="btn" onClick={props.onToggleFullscreen} title={props.fullscreen?"Sair da tela cheia":"Entrar em tela cheia"}>{props.fullscreen?<Minimize2 size={15}/>:<Maximize2 size={15}/>} {props.fullscreen?"Sair da tela cheia":"Tela cheia"}</button></div></div>
 
       <section className="section">
         <div className="section-head">FILTROS DE ANÁLISE</div>
