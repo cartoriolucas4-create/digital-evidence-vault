@@ -1475,7 +1475,7 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
         {Array.from({length:data.cols},(_,col)=>{
           const label=data.headers?.[col]??("COLUNA "+(col+1));
           return <div className={"planner-day "+(selectedCols.includes(col)?"axis-selected":"")} key={"head-"+col} onClick={()=>selectCol(col)}>
-            <span className="planner-resize-handle planner-col-resize" onPointerDown={e=>{e.stopPropagation();beginResize("col",col,e)}} aria-hidden="true"/><input onClick={e=>e.stopPropagation()} value={label} onChange={e=>updateHeader(col,e.target.value)} aria-label={"Nome da coluna "+(col+1)} spellCheck={false}/>
+            <span className="planner-resize-handle planner-col-resize" onPointerDown={e=>{e.stopPropagation();beginResize("col",col,e)}} aria-hidden="true"/><input onClick={e=>{e.stopPropagation();selectCol(col)}} value={label} onChange={e=>updateHeader(col,e.target.value)} aria-label={"Nome da coluna "+(col+1)} spellCheck={false}/>
           </div>;
         })}
         {Array.from({length:data.rows},(_,row)=>[
