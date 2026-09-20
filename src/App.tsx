@@ -1,5 +1,5 @@
 import { Component, type ErrorInfo, type FormEvent, type ReactNode, type PointerEvent, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, BarChart3, Bell, BookOpen, CheckCircle2, Clipboard, Copy, FileDown, GripVertical, LogOut, Plus, Settings, Sparkles, Target, Trash2, Trophy, TrendingUp, Upload, X } from "lucide-react";
+import { AlignCenter, AlignJustify, AlignLeft, AlignRight, AlertTriangle, BarChart3, Bell, Bold, BookOpen, CheckCircle2, ChevronDown, Clipboard, Copy, FileDown, GripVertical, Italic, LogOut, MoreHorizontal, PaintBucket, Plus, Redo2, Settings, Sparkles, Strikethrough, Target, Trash2, Trophy, TrendingUp, Underline, Undo2, Upload, WrapText, X } from "lucide-react";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { Discipline, Entry, Filters, PerformanceNotification, QuestionType, Source, Subject } from "./types";
@@ -1252,11 +1252,36 @@ function CatalogDeleteModal({password,setPassword,busy,onClose,onConfirm}:any) {
   </div>;
 }
 
+const GOOGLE_SHEETS_FONTS=["Arial","Arial Black","Calibri","Cambria","Comic Sans MS","Courier New","EB Garamond","Georgia","Impact","Lato","Lexend","Lobster","Lora","Merriweather","Montserrat","Nunito","Oswald"];
+const GOOGLE_SHEETS_PALETTE=[
+  ["#000000","#434343","#666666","#999999","#b7b7b7","#cccccc","#d9d9d9","#efefef","#f3f3f3","#ffffff"],
+  ["#980000","#ff0000","#ff9900","#ffff00","#00ff00","#00ffff","#4a86e8","#0000ff","#9900ff","#ff00ff"],
+  ["#e6b8af","#f4cccc","#fce5cd","#fff2cc","#d9ead3","#d0e0e3","#c9daf8","#cfe2f3","#d9d2e9","#ead1dc"],
+  ["#dd7e6b","#ea9999","#f9cb9c","#ffe599","#b6d7a8","#a2c4c9","#a4c2f4","#9fc5e8","#b4a7d6","#d5a6bd"],
+  ["#cc4125","#e06666","#f6b26b","#ffd966","#93c47d","#76a5af","#6d9eeb","#6fa8dc","#8e7cc3","#c27ba0"],
+  ["#a61c00","#cc0000","#e69138","#f1c232","#6aa84f","#45818e","#3c78d8","#3d85c6","#674ea7","#a64d79"],
+  ["#85200c","#990000","#b45f06","#bf9000","#38761d","#134f5c","#1155cc","#0b5394","#351c75","#741b47"]
+];
+
+function PlannerColorPalette({title,colors,onPick,onCustom}:{title:string;colors:string[];onPick:(color:string)=>void;onCustom:(color:string)=>void}) {
+  return <div className="planner-color-popover" role="dialog" aria-label={title}>
+    <div className="planner-palette-reset"><button type="button" onClick={()=>onPick("")}><span className="planner-reset-icon">⌁</span> Redefinir</button></div>
+    <div className="planner-palette-grid">
+      {GOOGLE_SHEETS_PALETTE.flatMap((row,rowIndex)=>row.map((color,colIndex)=><button key={rowIndex+"-"+colIndex} type="button" className="planner-swatch" style={{backgroundColor:color}} aria-label={color} title={color} onClick={()=>onPick(color)} />))}
+    </div>
+    <div className="planner-palette-section">PERSONALIZADO <span>✎</span></div>
+    <div className="planner-custom-row">
+      {colors.map(color=><button key={color} type="button" className="planner-custom-swatch" style={{backgroundColor:color}} aria-label={color} onClick={()=>onPick(color)} />)}
+      <label className="planner-custom-picker" title="Escolher cor personalizada"><span>+</span><input type="color" onChange={e=>onCustom(e.target.value)} /></label>
+    </div>
+  </div>;
+}
+
 function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) {
-  type Cell = { id:string; subject:string; text:string; bg:string; fg:string; subjectBg:string; subjectFg:string; bold:boolean; italic:boolean; size:number };
+  type Cell = { id:string; subject:string; text:string; bg:string; fg:string; subjectBg:string; subjectFg:string; bold:boolean; italic:boolean; underline:boolean; strike:boolean; size:number; fontFamily:string; align:"left"|"center"|"right"; vertical:"top"|"middle"|"bottom"; wrap:"overflow"|"wrap"|"clip" };
   type PlannerData = { version:2; weekOffset:number; cols:number; rows:number; headers:string[]; colWidths:number[]; rowHeights:number[]; cells:Record<string,Cell> };
   const defaultHeaders=["SEGUNDA","TERÇA","QUARTA","QUINTA","SEXTA","SÁBADO","DOMINGO"];
-  const defaultCell=():Cell=>({id:uid(),subject:"",text:"",bg:"#ffffff",fg:"#17202a",subjectBg:"#f7f8fa",subjectFg:"#17202a",bold:false,italic:false,size:14});
+  const defaultCell=():Cell=>({id:uid(),subject:"",text:"",bg:"#ffffff",fg:"#17202a",subjectBg:"#f7f8fa",subjectFg:"#17202a",bold:false,italic:false,underline:false,strike:false,size:14,fontFamily:"Arial",align:"left",vertical:"top",wrap:"wrap"});
   const cleanPlannerField=(value:unknown)=>{const text=String(value??"").trim();const normalized=text.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toUpperCase();return normalized.startsWith("MATERIA")||normalized.startsWith("OBSERVACOES")||normalized.startsWith("OBSERVACAO")?"":text;};
   const makeInitial=():PlannerData=>({version:2,weekOffset:0,cols:7,rows:4,headers:[...defaultHeaders],colWidths:Array(7).fill(190),rowHeights:Array(4).fill(180),cells:{}});
   const key="mcr_planner_"+userId;
@@ -1281,6 +1306,8 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
   const [textColor,setTextColor]=useState("#17202a");
   const [fillColor,setFillColor]=useState("#ffffff");
   const [subjectFillColor,setSubjectFillColor]=useState("#f7f8fa");
+  const [paletteOpen,setPaletteOpen]=useState<"text"|"fill"|null>(null);
+  const [moreOpen,setMoreOpen]=useState(false);
   const [fullscreen,setFullscreen]=useState(false);
   const [shortcutHelpOpen,setShortcutHelpOpen]=useState(false);
   const plannerHistory=useRef<{past:PlannerData[];future:PlannerData[]}>({past:[],future:[]});
@@ -1477,10 +1504,26 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
     if(!selected.length) return;
     setData(prev=>{const cells={...prev.cells};selected.forEach(id=>{cells[id]={...getCell(id),subject:"",text:""};});return {...prev,cells};});
   };
-  const togglePlannerFormat=(format:"bold"|"italic")=>{
-    if(!selected.length) return;
-    setData(prev=>{const cells={...prev.cells};const next=selected.some(id=>!getCell(id)[format]);selected.forEach(id=>{cells[id]={...getCell(id),[format]:next};});return {...prev,cells};});
+  const plannerTargets=()=>selected.length?selected:[cellId(0,0)];
+  const applyPlannerPatch=(patch:Partial<Cell>)=>{
+    const targets=plannerTargets();
+    setData(prev=>{const cells={...prev.cells};targets.forEach(id=>{cells[id]={...getCell(id),...patch};});return {...prev,cells};});
   };
+  const togglePlannerFormat=(format:"bold"|"italic"|"underline"|"strike")=>{
+    const targets=plannerTargets();
+    setData(prev=>{const cells={...prev.cells};const next=targets.some(id=>!getCell(id)[format]);targets.forEach(id=>{cells[id]={...getCell(id),[format]:next};});return {...prev,cells};});
+  };
+  const applyPlannerColor=(kind:"text"|"fill",color:string)=>{
+    if(!color)return;
+    if(kind==="text"){setTextColor(color);applyPlannerPatch({fg:color});}
+    else{setFillColor(color);applyPlannerPatch({bg:color});}
+    setPaletteOpen(null);
+  };
+  const applyPlannerFont=(fontFamily:string)=>applyPlannerPatch({fontFamily});
+  const applyPlannerSize=(size:number)=>applyPlannerPatch({size});
+  const applyPlannerAlignment=(align:"left"|"center"|"right")=>applyPlannerPatch({align});
+  const applyPlannerVertical=(vertical:"top"|"middle"|"bottom")=>applyPlannerPatch({vertical});
+  const applyPlannerWrap=(wrap:"overflow"|"wrap"|"clip")=>applyPlannerPatch({wrap});
   const fillPlannerDirection=(direction:"down"|"right")=>{
     if(selected.length<2) return;
     const {minRow,maxRow,minCol,maxCol}=plannerSelectionBounds();
@@ -1606,29 +1649,70 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
 
     <div className="planner-toolbar">
       <div className="planner-title-wrap"><div className="planner-eyebrow">PLANEJAMENTO LIVRE</div><h1>Minha semana</h1><span>{weekLabel}</span></div>
-      <div className="planner-tools">
-        <button className="planner-tool" onClick={()=>setData(p=>({...p,weekOffset:p.weekOffset-1}))}>←</button>
-        <button className="planner-tool planner-today" onClick={()=>setData(p=>({...p,weekOffset:0}))}>Hoje</button>
-        <button className="planner-tool" onClick={()=>setData(p=>({...p,weekOffset:p.weekOffset+1}))}>→</button>
-        <span className="planner-sep"/>
-        <label className="planner-color" title="Cor do texto"><span>A</span><input type="color" value={textColor} onChange={e=>setTextColor(e.target.value)}/></label>
-        <label className="planner-color" title="Cor"><span>📝</span><input type="color" value={fillColor} onChange={e=>setFillColor(e.target.value)}/></label>
-        <label className="planner-color" title="Cor"><span>📚</span><input type="color" value={subjectFillColor} onChange={e=>setSubjectFillColor(e.target.value)}/></label>
-        <button className="planner-tool" onClick={applyText} disabled={!selected.length}>Texto</button>
-        <button className="planner-tool" onClick={applyFill} disabled={!selected.length}>Fundo observ.</button>
-        <button className="planner-tool" onClick={applySubjectFill} disabled={!selected.length}>Fundo matéria</button>
-        <button className="planner-tool" onClick={selectAll}>Selecionar tudo</button>
-        <button className="planner-tool" onClick={addCol}>+ Coluna</button>
-        <button className="planner-tool" onClick={addRow}>+ Linha</button>
-        <button className="planner-tool planner-danger" onClick={deleteSelectedCols} disabled={!selectedCols.length || data.cols<=1}>− Coluna</button>
-        <button className="planner-tool planner-danger" onClick={deleteSelectedRows} disabled={!selectedRows.length || data.rows<=1}>− Linha</button>
-        <button className="planner-tool" onClick={copyWeek}>Duplicar</button>
-        <button className="planner-tool" onClick={()=>setFullscreen(v=>!v)}>{fullscreen?"⛶ Sair":"⛶ Tela cheia"}</button>
-        <button className="planner-tool planner-danger" onClick={resetPlanner}>Limpar</button>
+      <div className="planner-week-tools">
+        <button className="planner-icon-tool" title="Semana anterior" onClick={()=>setData(p=>({...p,weekOffset:p.weekOffset-1}))}>‹</button>
+        <button className="planner-today-tool" onClick={()=>setData(p=>({...p,weekOffset:0}))}>Hoje</button>
+        <button className="planner-icon-tool" title="Próxima semana" onClick={()=>setData(p=>({...p,weekOffset:p.weekOffset+1}))}>›</button>
       </div>
     </div>
-    
-    <div className="planner-grid-wrap">
+    <div className="planner-formatbar">
+      <button className="planner-icon-tool" title="Desfazer" onClick={plannerUndo}><Undo2 size={16}/></button>
+      <button className="planner-icon-tool" title="Refazer" onClick={plannerRedo}><Redo2 size={16}/></button>
+      <span className="planner-format-sep"/>
+      <select className="planner-format-select planner-font-select" title="Fonte" value={getCell(selected[0]??"0-0").fontFamily} onChange={e=>applyPlannerFont(e.target.value)}>
+        {GOOGLE_SHEETS_FONTS.map(font=><option key={font} value={font}>{font}</option>)}
+      </select>
+      <select className="planner-format-select planner-size-select" title="Tamanho da fonte" value={getCell(selected[0]??"0-0").size} onChange={e=>applyPlannerSize(Number(e.target.value))}>
+        {[8,9,10,11,12,14,16,18,20,22,24,28,32,36].map(size=><option key={size} value={size}>{size}</option>)}
+      </select>
+      <span className="planner-format-sep"/>
+      <button className={"planner-format-btn "+(getCell(selected[0]??"0-0").bold?"active":"")} title="Negrito" onClick={()=>togglePlannerFormat("bold")}><Bold size={15}/></button>
+      <button className={"planner-format-btn "+(getCell(selected[0]??"0-0").italic?"active":"")} title="Itálico" onClick={()=>togglePlannerFormat("italic")}><Italic size={15}/></button>
+      <button className={"planner-format-btn "+(getCell(selected[0]??"0-0").underline?"active":"")} title="Sublinhado" onClick={()=>togglePlannerFormat("underline")}><Underline size={15}/></button>
+      <button className={"planner-format-btn "+(getCell(selected[0]??"0-0").strike?"active":"")} title="Tachado" onClick={()=>togglePlannerFormat("strike")}><Strikethrough size={15}/></button>
+
+      <div className="planner-popover-wrap">
+        <button className="planner-format-btn planner-color-btn" title="Cor do texto" onClick={()=>{setPaletteOpen(p=>p==="text"?null:"text");setMoreOpen(false)}}><span className="planner-color-A">A</span><span className="planner-color-line" style={{backgroundColor:textColor}}/><ChevronDown size={11}/></button>
+        {paletteOpen==="text" && <PlannerColorPalette title="Cor do texto" colors={[textColor,"#000000","#ffffff","#d63384","#4285f4","#34a853","#fbbc04","#ea4335"]} onPick={color=>applyPlannerColor("text",color)} onCustom={color=>applyPlannerColor("text",color)}/>}
+      </div>
+
+      <div className="planner-popover-wrap">
+        <button className="planner-format-btn" title="Cor de preenchimento" onClick={()=>{setPaletteOpen(p=>p==="fill"?null:"fill");setMoreOpen(false)}}><PaintBucket size={15}/><span className="planner-fill-indicator" style={{backgroundColor:fillColor}}/><ChevronDown size={11}/></button>
+        {paletteOpen==="fill" && <PlannerColorPalette title="Cor de preenchimento" colors={[fillColor,"#ffffff","#fff2cc","#d9ead3","#cfe2f3","#ead1dc","#fce5cd","#f4cccc"]} onPick={color=>applyPlannerColor("fill",color)} onCustom={color=>applyPlannerColor("fill",color)}/>}
+      </div>
+
+      <div className="planner-popover-wrap">
+        <button className="planner-format-btn" title="Alinhamento horizontal" onClick={()=>setMoreOpen(false)} onDoubleClick={()=>applyPlannerAlignment("center")}><AlignLeft size={15}/><ChevronDown size={11}/></button>
+        <div className="planner-align-menu">
+          <button title="Alinhar à esquerda" onClick={()=>applyPlannerAlignment("left")}><AlignLeft size={15}/> Esquerda</button>
+          <button title="Centralizar" onClick={()=>applyPlannerAlignment("center")}><AlignCenter size={15}/> Centro</button>
+          <button title="Alinhar à direita" onClick={()=>applyPlannerAlignment("right")}><AlignRight size={15}/> Direita</button>
+        </div>
+      </div>
+      <div className="planner-popover-wrap planner-static-menu">
+        <button className="planner-format-btn" title="Mais opções" onClick={()=>{setMoreOpen(v=>!v);setPaletteOpen(null)}}><MoreHorizontal size={16}/></button>
+        {moreOpen && <div className="planner-more-menu">
+          <div className="planner-menu-title">FORMATAÇÃO</div>
+          <button onClick={()=>applyPlannerVertical("top")}>Alinhar no topo</button>
+          <button onClick={()=>applyPlannerVertical("middle")}>Centralizar verticalmente</button>
+          <button onClick={()=>applyPlannerVertical("bottom")}>Alinhar embaixo</button>
+          <button onClick={()=>applyPlannerWrap("wrap")}><WrapText size={14}/> Quebrar texto</button>
+          <button onClick={()=>applyPlannerWrap("overflow")}>Transbordar</button>
+          <button onClick={()=>applyPlannerWrap("clip")}>Cortar</button>
+          <div className="planner-menu-divider"/>
+          <button onClick={addRow}>+ Adicionar linha</button>
+          <button onClick={addCol}>+ Adicionar coluna</button>
+          <button onClick={deleteSelectedRows} disabled={!selectedRows.length || data.rows<=1}>− Excluir linha</button>
+          <button onClick={deleteSelectedCols} disabled={!selectedCols.length || data.cols<=1}>− Excluir coluna</button>
+          <button onClick={copyWeek}>Duplicar semana</button>
+          <button onClick={()=>setFullscreen(v=>!v)}>{fullscreen?"Sair da tela cheia":"Tela cheia"}</button>
+          <button onClick={resetPlanner}>Limpar semana</button>
+          <button onClick={selectAll}>Selecionar tudo</button>
+          <button onClick={()=>setShortcutHelpOpen(true)}>Atalhos</button>
+        </div>}
+      </div>
+    </div>
+
       <div className="planner-grid" style={{gridTemplateColumns:["30px",...data.colWidths.map(w=>w+"px")].join(" "),gridTemplateRows:["34px",...data.rowHeights.map(h=>h+"px")].join(" ")}}>
         <button className="planner-corner-selector" title="Selecionar toda a planilha" onClick={selectAll}>□</button>
         {Array.from({length:data.cols},(_,col)=>{
@@ -1641,7 +1725,7 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
           <button key={"row-head-"+row} className={"planner-row-selector "+(selectedRows.includes(row)?"axis-selected":"")} onClick={()=>selectRow(row)}>{row+1}</button>,
           ...Array.from({length:data.cols},(_,col)=>{
           const id=cellId(row,col), cell=getCell(id), active=selected.includes(id);
-          return <div key={id} data-planner-row={row} data-planner-col={col} className={"planner-cell "+(active?"selected":"")} style={{backgroundColor:cell.bg,color:cell.fg,fontSize:cell.size,fontWeight:cell.bold?800:500,fontStyle:cell.italic?"italic":"normal"}} onPointerDown={e=>startCellSelection(row,col,e)} onClick={(e)=>{if(e.ctrlKey||e.metaKey)toggleSelected(id);}}>
+          return <div key={id} data-planner-row={row} data-planner-col={col} className={"planner-cell "+(active?"selected":"")} style={{backgroundColor:cell.bg,color:cell.fg,fontSize:cell.size,fontWeight:cell.bold?800:500,fontStyle:cell.italic?"italic":"normal",fontFamily:cell.fontFamily,textAlign:cell.align,verticalAlign:cell.vertical,textDecoration:[cell.underline?"underline":"",cell.strike?"line-through":""].filter(Boolean).join(" "),whiteSpace:cell.wrap==="wrap"?"normal":cell.wrap==="clip"?"nowrap":"pre-wrap"}} onPointerDown={e=>startCellSelection(row,col,e)} onClick={(e)=>{if(e.ctrlKey||e.metaKey)toggleSelected(id);}}>
             <span className="planner-resize-handle planner-row-resize" onPointerDown={e=>beginResize("row",row,e)} />
             <input
               className="planner-content-top"
