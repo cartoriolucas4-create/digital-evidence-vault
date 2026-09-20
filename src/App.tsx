@@ -1379,7 +1379,7 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
     const rect=cellsInRect(r1,r2,c1,c2);
     setSelectionMode("cells");setSelectedRows([]);setSelectedCols([]);setSelected(rect.ids);
   };
-  const startCellSelection=(row:number,col:number,event:React.PointerEvent)=>{
+  const startCellSelection=(row:number,col:number,event:PointerEvent)=>{
     if(event.button!==0) return;
     event.preventDefault();
     const anchor=dragSelection.current={anchorRow:row,anchorCol:col,dragging:true};
