@@ -315,3 +315,99 @@ body.planner-resizing{cursor:col-resize!important}
 .planner-notes-wrap{isolation:isolate!important}
 .planner-subject-wrap .planner-subject{background:transparent!important}
 .planner-notes-wrap .planner-notes{background:transparent!important}
+
+/* PLANEJAMENTO — DIVISÃO ESTRUTURAL ENTRE MATÉRIA E OBSERVAÇÕES */
+.planner-cell{
+  display:grid!important;
+  grid-template-rows:48px 1fr!important;
+  gap:0!important;
+  padding:38px 0 0!important;
+  background:#eef0f3!important;
+}
+.planner-subject-wrap{
+  position:relative!important;
+  box-sizing:border-box!important;
+  width:100%!important;
+  height:48px!important;
+  min-height:48px!important;
+  margin:0!important;
+  padding:0!important;
+  border:0!important;
+  border-radius:0!important;
+  border-bottom:3px solid var(--accent-2)!important;
+  background:var(--planner-subject-bg,#fff)!important;
+  box-shadow:none!important;
+  display:flex!important;
+  align-items:center!important;
+}
+.planner-subject-wrap::before{
+  content:"MATÉRIA"!important;
+  position:absolute!important;
+  left:8px!important;
+  top:3px!important;
+  z-index:5!important;
+  background:transparent!important;
+  color:var(--accent-2)!important;
+  font-size:7px!important;
+  line-height:9px!important;
+  font-weight:900!important;
+  letter-spacing:.08em!important;
+}
+.planner-subject-wrap .planner-subject{
+  box-sizing:border-box!important;
+  width:100%!important;
+  height:48px!important;
+  min-height:48px!important;
+  margin:0!important;
+  padding:13px 34px 7px 9px!important;
+  border:0!important;
+  border-radius:0!important;
+  outline:0!important;
+  background:transparent!important;
+  color:inherit!important;
+  font-size:11px!important;
+  font-weight:850!important;
+}
+.planner-notes-wrap{
+  position:relative!important;
+  box-sizing:border-box!important;
+  width:100%!important;
+  height:100%!important;
+  min-height:90px!important;
+  margin:0!important;
+  padding:0!important;
+  border:0!important;
+  border-radius:0!important;
+  background:var(--planner-notes-bg,#fff)!important;
+  box-shadow:none!important;
+  overflow:hidden!important;
+}
+.planner-notes-wrap::before{
+  content:"OBSERVAÇÕES"!important;
+  display:block!important;
+  box-sizing:border-box!important;
+  width:100%!important;
+  height:25px!important;
+  padding:7px 8px 5px!important;
+  border-bottom:1px solid #dfe3e7!important;
+  background:rgba(250,251,252,.72)!important;
+  color:#7d858e!important;
+  font-size:7px!important;
+  line-height:10px!important;
+  font-weight:900!important;
+  letter-spacing:.08em!important;
+}
+.planner-notes-wrap .planner-notes{
+  box-sizing:border-box!important;
+  width:100%!important;
+  height:calc(100% - 25px)!important;
+  min-height:55px!important;
+  margin:0!important;
+  padding:9px!important;
+  border:0!important;
+  outline:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+}
+.planner-subject-wrap .planner-mini-color{top:14px!important;right:7px!important}
+.planner-notes-wrap .planner-notes-color{top:3px!important;right:7px!important}
