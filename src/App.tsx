@@ -1257,6 +1257,7 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
   type PlannerData = { version:2; weekOffset:number; cols:number; rows:number; headers:string[]; colWidths:number[]; rowHeights:number[]; cells:Record<string,Cell> };
   const defaultHeaders=["SEGUNDA","TERÇA","QUARTA","QUINTA","SEXTA","SÁBADO","DOMINGO"];
   const defaultCell=():Cell=>({id:uid(),subject:"",text:"",bg:"#ffffff",fg:"#17202a",subjectBg:"#f7f8fa",subjectFg:"#17202a",bold:false,italic:false,size:14});
+  const cleanPlannerField=(value:unknown)=>{const text=String(value??"").trim();const normalized=text.normalize("NFD").replace(/[\\u0300-\\u036f]/g,"").toUpperCase();return normalized==="MATERIA"||normalized==="OBSERVACOES"||normalized==="OBSERVACAO"?"":text;};
   const makeInitial=():PlannerData=>({version:2,weekOffset:0,cols:7,rows:4,headers:[...defaultHeaders],colWidths:Array(7).fill(190),rowHeights:Array(4).fill(180),cells:{}});
   const key="mcr_planner_"+userId;
   const normalizePlanner=(raw:any):PlannerData=>{
@@ -1267,7 +1268,7 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
     const rowHeights=Array.from({length:rows},(_,i)=>{const v=Number(raw?.rowHeights?.[i]);return Number.isFinite(v)&&v>=90?v:180;});
     const cells:Record<string,Cell>={};
     Object.entries(raw?.cells??{}).forEach(([id,value]:any)=>{
-      const subject=String(value?.subject??""); const text=String(value?.text??""); cells[id]={...defaultCell(),...(value||{}),id,subject:/^MATÉRIA$/i.test(subject)?"":subject,text:/^OBSERVAÇÕES$/i.test(text)?"":text,subjectBg:String(value?.subjectBg??"#f7f8fa"),subjectFg:String(value?.subjectFg??value?.fg??"#17202a")};
+      const subject=cleanPlannerField(value?.subject); const text=cleanPlannerField(value?.text); cells[id]={...defaultCell(),...(value||{}),id,subject,text,subjectBg:String(value?.subjectBg??"#f7f8fa"),subjectFg:String(value?.subjectFg??value?.fg??"#17202a")};
     });
     return {version:2,weekOffset:Number(raw?.weekOffset)||0,cols,rows,headers,colWidths,rowHeights,cells};
   };
@@ -1299,7 +1300,7 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
       });
       const cells:Record<string,Cell>={};
       Object.entries(legacy.cells??{}).forEach(([id,value]:any)=>{
-        const subject=String(value?.subject??""); const text=String(value?.text??""); cells[id]={...defaultCell(),...(value||{}),id,subject:/^MATÉRIA$/i.test(subject)?"":subject,text:/^OBSERVAÇÕES$/i.test(text)?"":text};
+        const subject=cleanPlannerField(value?.subject); const text=cleanPlannerField(value?.text); cells[id]={...defaultCell(),...(value||{}),id,subject,text};
       });
       return {version:2,weekOffset:Number(legacy.weekOffset)||0,cols,rows,headers,colWidths,rowHeights,cells};
     });
