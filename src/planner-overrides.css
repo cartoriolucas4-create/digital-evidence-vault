@@ -223,3 +223,11 @@ html[data-theme="dark"] .planner-content-bottom:focus{
   z-index:5;
   pointer-events:auto;
 }
+
+/* Campos internos devem sempre receber o clique e o teclado antes da seleção da célula. */
+.planner-content-top,
+.planner-content-bottom{
+  pointer-events:auto !important;
+  user-select:text !important;
+  -webkit-user-select:text !important;
+}
