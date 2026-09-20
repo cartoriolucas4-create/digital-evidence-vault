@@ -8,12 +8,12 @@ import { MapPin, Camera, CheckCircle2, AlertCircle, ShieldCheck } from "lucide-r
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/acesso/$id")({
-  head: ({ loaderData }) => ({
+  head: (ctx: { loaderData?: { title?: string; description?: string } }) => ({
     meta: [
-      { title: loaderData?.title ? `${loaderData.title}` : "Acesso" },
-      { name: "description", content: loaderData?.description ?? "Acesso registrado." },
-      { property: "og:title", content: loaderData?.title ?? "Acesso" },
-      { property: "og:description", content: loaderData?.description ?? "" },
+      { title: ctx.loaderData?.title ?? "Acesso" },
+      { name: "description", content: ctx.loaderData?.description ?? "Acesso registrado." },
+      { property: "og:title", content: ctx.loaderData?.title ?? "Acesso" },
+      { property: "og:description", content: ctx.loaderData?.description ?? "" },
       { name: "robots", content: "noindex" },
     ],
   }),
