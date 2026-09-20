@@ -165,6 +165,8 @@ function App() {
   const [weeklyGoal, setWeeklyGoal] = useState(500);
   const [monthlyGoal, setMonthlyGoal] = useState(2000);
   const [targetAccuracy, setTargetAccuracy] = useState(80);
+  const [plannerDefaultColor, setPlannerDefaultColor] = useState("#fff2cc");
+  const [plannerCompletedColor, setPlannerCompletedColor] = useState("#d9ead3");
   const [theme, setTheme] = useState<"light" | "dark">(() => readStore<"light" | "dark">("mcr_theme", "light"));
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
@@ -182,6 +184,18 @@ function App() {
     document.documentElement.dataset.theme = theme;
     writeStore("mcr_theme", theme);
   }, [theme]);
+
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    const saved = readStore<{defaultColor?:string;completedColor?:string}>(`mcr_planner_colors_${session.user.id}`, {});
+    if (saved.defaultColor) setPlannerDefaultColor(saved.defaultColor);
+    if (saved.completedColor) setPlannerCompletedColor(saved.completedColor);
+  }, [session?.user?.id]);
+
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    writeStore(`mcr_planner_colors_${session.user.id}`, {defaultColor: plannerDefaultColor, completedColor: plannerCompletedColor});
+  }, [session?.user?.id, plannerDefaultColor, plannerCompletedColor]);
 
   useEffect(() => {
     let mounted = true;
@@ -704,7 +718,7 @@ function App() {
               byDiscipline={byDiscipline} attention={attention} targetAccuracy={targetAccuracy} entries={entries} onExportMonthly={() => exportMonthlyPdf()}
             />
           )}
-          {tab === "planner" && <Planner userId={session.user.id} notify={notify}/>}
+          {tab === "planner" && <Planner userId={session.user.id} notify={notify} defaultSmallColor={plannerDefaultColor} completedSmallColor={plannerCompletedColor}/>}
           {tab === "entries" && <Entries disciplines={disciplines} subjects={subjects} sources={sources} types={types} entries={entries} refresh={() => loadEntries().catch((error) => notify(error instanceof Error ? error.message : "Não foi possível carregar os lançamentos."))} notify={notify}/>}
           {tab === "catalog" && <Catalog disciplines={disciplines} subjects={subjects} sources={sources} types={types} refresh={() => loadCatalog().catch((error) => notify(error instanceof Error ? error.message : "Não foi possível carregar o cadastro."))} notify={notify} catalogDeleteOpen={catalogDeleteOpen} setCatalogDeleteOpen={setCatalogDeleteOpen} catalogDeletePassword={catalogDeletePassword} setCatalogDeletePassword={setCatalogDeletePassword} catalogDeleteBusy={catalogDeleteBusy} deleteAllCatalogData={deleteAllCatalogData}/>}
           {tab === "settings" && (
@@ -715,6 +729,10 @@ function App() {
               weeklyGoal={weeklyGoal}
               monthlyGoal={monthlyGoal}
               targetAccuracy={targetAccuracy}
+              plannerDefaultColor={plannerDefaultColor}
+              setPlannerDefaultColor={setPlannerDefaultColor}
+              plannerCompletedColor={plannerCompletedColor}
+              setPlannerCompletedColor={setPlannerCompletedColor}
               theme={theme}
               setTheme={setTheme}
               setDailyGoal={setDailyGoal}
@@ -1277,9 +1295,9 @@ function PlannerColorPalette({title,colors,onPick,onCustom}:{title:string;colors
   </div>;
 }
 
-function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) {
+function Planner({userId,notify,defaultSmallColor,completedSmallColor}:{userId:string;notify:(message:string)=>void;defaultSmallColor:string;completedSmallColor:string}) {
   type CellPartStyle = { bg:string; fg:string; bold:boolean; italic:boolean; underline:boolean; strike:boolean; size:number; fontFamily:string; align:"left"|"center"|"right"; vertical:"top"|"middle"|"bottom"; wrap:"overflow"|"wrap"|"clip" };
-  type Cell = { id:string; subject:string; text:string; bg:string; fg:string; subjectBg:string; subjectFg:string; bold:boolean; italic:boolean; underline:boolean; strike:boolean; size:number; fontFamily:string; align:"left"|"center"|"right"; vertical:"top"|"middle"|"bottom"; wrap:"overflow"|"wrap"|"clip"; subjectStyle?:CellPartStyle; textStyle?:CellPartStyle };
+  type Cell = { id:string; subject:string; text:string; studiedWeek?:string; bg:string; fg:string; subjectBg:string; subjectFg:string; bold:boolean; italic:boolean; underline:boolean; strike:boolean; size:number; fontFamily:string; align:"left"|"center"|"right"; vertical:"top"|"middle"|"bottom"; wrap:"overflow"|"wrap"|"clip"; subjectStyle?:CellPartStyle; textStyle?:CellPartStyle };
   type PlannerData = { version:2; weekOffset:number; cols:number; rows:number; headers:string[]; colWidths:number[]; rowHeights:number[]; cells:Record<string,Cell> };
   const defaultHeaders=["SEGUNDA","TERÇA","QUARTA","QUINTA","SEXTA","SÁBADO","DOMINGO"];
   const defaultPartStyle=(kind:"subject"|"text"):CellPartStyle=>kind==="subject"?({bg:"#f7f8fa",fg:"#17202a",bold:false,italic:false,underline:false,strike:false,size:14,fontFamily:"Arial",align:"left",vertical:"top",wrap:"wrap"}):({bg:"#ffffff",fg:"#17202a",bold:false,italic:false,underline:false,strike:false,size:14,fontFamily:"Arial",align:"left",vertical:"top",wrap:"wrap"});
@@ -1412,6 +1430,16 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
     const f=(d:Date)=>d.toLocaleDateString("pt-BR",{day:"2-digit",month:"short"}).replace(".","");
     return f(weekStart)+" — "+f(end);
   },[weekStart]);
+
+  const weekKey=useMemo(()=>weekStart.toISOString().slice(0,10),[weekStart]);
+  const isStudiedThisWeek=(id:string)=>getCell(id).studiedWeek===weekKey;
+  const toggleStudied=(id:string)=>{
+    setData(prev=>{
+      const cell={...getCell(id)};
+      const next={...cell,studiedWeek:cell.studiedWeek===weekKey?undefined:weekKey};
+      return {...prev,cells:{...prev.cells,[id]:next}};
+    });
+  };
 
   const cellId=(r:number,col:number)=>r+"-"+col;
   const getCell=(id:string):Cell=>data.cells[id]??defaultCell();
@@ -1780,6 +1808,7 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
           const id=cellId(row,col), cell=getCell(id), active=selected.includes(id);
           return <div key={id} data-planner-row={row} data-planner-col={col} className={"planner-cell "+(active?"selected":"")} style={{backgroundColor:cell.bg}} onPointerDown={e=>startCellSelection(row,col,e)} onClick={(e)=>{if(e.ctrlKey||e.metaKey)toggleSelected(id);}}>
             <span className="planner-resize-handle planner-row-resize" onPointerDown={e=>beginResize("row",row,e)} />
+            <div className="planner-subject-wrap">
             <input
               className={"planner-content-top "+(selectedParts.includes(partKey(id,"subject"))?"planner-part-selected":"")}
               aria-label="Conteúdo superior da célula sem rótulo visível"
@@ -1788,9 +1817,13 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
               onClick={e=>{e.stopPropagation();selectCellPart(id,"subject",e.ctrlKey||e.metaKey)}}
               onPointerDown={e=>e.stopPropagation()}
               onFocus={()=>selectCellPart(id,"subject",false)}
-              style={{backgroundColor:"transparent",color:getPartStyle(id,"subject").fg,fontSize:getPartStyle(id,"subject").size,fontWeight:getPartStyle(id,"subject").bold?800:500,fontStyle:getPartStyle(id,"subject").italic?"italic":"normal",fontFamily:getPartStyle(id,"subject").fontFamily,textAlign:getPartStyle(id,"subject").align,textDecoration:[getPartStyle(id,"subject").underline?"underline":"",getPartStyle(id,"subject").strike?"line-through":""] .filter(Boolean).join(" "),whiteSpace:getPartStyle(id,"subject").wrap==="wrap"?"normal":getPartStyle(id,"subject").wrap==="clip"?"nowrap":"pre-wrap"}}
+              style={{backgroundColor:isStudiedThisWeek(id)?completedSmallColor:defaultSmallColor,color:getPartStyle(id,"subject").fg,fontSize:getPartStyle(id,"subject").size,fontWeight:getPartStyle(id,"subject").bold?800:500,fontStyle:getPartStyle(id,"subject").italic?"italic":"normal",fontFamily:getPartStyle(id,"subject").fontFamily,textAlign:getPartStyle(id,"subject").align,textDecoration:[getPartStyle(id,"subject").underline?"underline":"",getPartStyle(id,"subject").strike?"line-through":""] .filter(Boolean).join(" "),whiteSpace:getPartStyle(id,"subject").wrap==="wrap"?"normal":getPartStyle(id,"subject").wrap==="clip"?"nowrap":"pre-wrap"}}
               spellCheck={false}
             />
+            <button type="button" className={"planner-study-check "+(isStudiedThisWeek(id)?"checked":"")} aria-label={isStudiedThisWeek(id)?"Desmarcar matéria estudada":"Marcar matéria como estudada"} title={isStudiedThisWeek(id)?"Desmarcar como estudada":"Marcar como estudada"} onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();toggleStudied(id);}}>
+              {isStudiedThisWeek(id) ? "✓" : ""}
+            </button>
+            </div>
             <textarea
               className={"planner-content-bottom "+(selectedParts.includes(partKey(id,"text"))?"planner-part-selected":"")}
               aria-label="Conteúdo inferior da célula sem rótulo visível"
@@ -1812,12 +1845,15 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
 
 function SettingsPage({
   studentName,setStudentName,
-  dailyGoal,weeklyGoal,monthlyGoal,targetAccuracy,theme,setTheme,
+  dailyGoal,weeklyGoal,monthlyGoal,targetAccuracy,
+  plannerDefaultColor,setPlannerDefaultColor,plannerCompletedColor,setPlannerCompletedColor,
+  theme,setTheme,
   setDailyGoal,setWeeklyGoal,setMonthlyGoal,setTargetAccuracy,save,
   session,passwordModalOpen,setPasswordModalOpen,currentPassword,setCurrentPassword,
   newPassword,setNewPassword,confirmPassword,setConfirmPassword,passwordBusy,
   changePassword,signOutOtherSessions,logout
 }:any) {
+  const [plannerSettingsPalette,setPlannerSettingsPalette] = useState<"default"|"completed"|null>(null);
   return <>
     <h1 className="page-title">Configurações</h1>
     <p className="subtitle">Personalize suas metas, aparência e segurança da conta.</p>
@@ -1840,6 +1876,37 @@ function SettingsPage({
           <Field label="Meta de aproveitamento (%)"><input type="number" min="0" max="100" value={targetAccuracy} onChange={(e)=>setTargetAccuracy(Number(e.target.value))}/></Field>
         </div>
         <button className="btn primary settings-save" onClick={save}><Target size={15}/> Salvar metas</button>
+      </div>
+    </section>
+    <section className="section">
+      <div className="section-head">🟨 CORES DAS MATÉRIAS</div>
+      <div className="section-body">
+        <p className="subtitle planner-color-note">Escolha as cores usadas nos quadradinhos pequenos da matéria. A primeira é a cor inicial; a segunda aparece quando você marcar a matéria como estudada na semana.</p>
+        <div className="planner-settings-colors">
+          <div className="planner-setting-color">
+            <div>
+              <strong>Matéria não estudada</strong>
+              <small>Cor padrão no início da semana</small>
+            </div>
+            <div className="planner-setting-color-control">
+              <button type="button" className="planner-setting-color-button" style={{backgroundColor:plannerDefaultColor}} aria-label="Escolher cor padrão da matéria" onClick={()=>setPlannerSettingsPalette(v=>v==="default"?null:"default")}/>
+              <span>{plannerDefaultColor}</span>
+              {plannerSettingsPalette==="default" && <PlannerColorPalette title="Cor padrão da matéria" colors={[plannerDefaultColor,plannerCompletedColor]} onPick={color=>{if(color){setPlannerDefaultColor(color);setPlannerSettingsPalette(null)}}} onCustom={color=>{setPlannerDefaultColor(color);setPlannerSettingsPalette(null)}}/>}
+            </div>
+          </div>
+          <div className="planner-setting-color">
+            <div>
+              <strong>Matéria estudada</strong>
+              <small>Cor após marcar ✓ na semana</small>
+            </div>
+            <div className="planner-setting-color-control">
+              <button type="button" className="planner-setting-color-button" style={{backgroundColor:plannerCompletedColor}} aria-label="Escolher cor de matéria estudada" onClick={()=>setPlannerSettingsPalette(v=>v==="completed"?null:"completed")}/>
+              <span>{plannerCompletedColor}</span>
+              {plannerSettingsPalette==="completed" && <PlannerColorPalette title="Cor de matéria estudada" colors={[plannerCompletedColor,plannerDefaultColor]} onPick={color=>{if(color){setPlannerCompletedColor(color);setPlannerSettingsPalette(null)}}} onCustom={color=>{setPlannerCompletedColor(color);setPlannerSettingsPalette(null)}}/>}
+            </div>
+          </div>
+        </div>
+        <div className="notice">O ✓ é apenas um marcador discreto. Ao marcar, somente o quadradinho pequeno da matéria muda para a cor de concluído.</div>
       </div>
     </section>
     <section className="section">
