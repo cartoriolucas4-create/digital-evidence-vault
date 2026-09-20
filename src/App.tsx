@@ -1495,13 +1495,12 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
   },[]);
 
   useEffect(()=>{writeStore(key,data)},[key,data]);
-  useEffect(()=>{
-    if(plannerPreviousData.current!==data){
-      if(plannerHistoryMode.current){plannerHistoryMode.current=null;}
-      else{plannerHistory.current.past=[...plannerHistory.current.past.slice(-49),plannerPreviousData.current];plannerHistory.current.future=[];}
-      plannerPreviousData.current=data;
-    }
-  },[data]);
+  const commitPlannerChange=(updater:(prev:PlannerData)=>PlannerData)=>{
+    plannerHistory.current.past=[...plannerHistory.current.past.slice(-99),data];
+    plannerHistory.current.future=[];
+    plannerHistoryMode.current=null;
+    setData(updater);
+  };
 
   const plannerUndo=()=>{const previous=plannerHistory.current.past.pop();if(!previous)return;plannerHistory.current.future.push(data);plannerHistoryMode.current="undo";plannerPreviousData.current=previous;setData(previous);};
   const plannerRedo=()=>{const next=plannerHistory.current.future.pop();if(!next)return;plannerHistory.current.past.push(data);plannerHistoryMode.current="redo";plannerPreviousData.current=next;setData(next);};
@@ -1528,7 +1527,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
       const min=r.type==="col"?120:90;
       const max=r.type==="col"?700:600;
       const next=Math.max(min,Math.min(max,r.size+delta));
-      setData(prev=>r.type==="col"
+      commitPlannerChange(prev=>r.type==="col"
         ? {...prev,colWidths:prev.colWidths.map((v,i)=>i===r.index?next:v)}
         : {...prev,rowHeights:prev.rowHeights.map((v,i)=>i===r.index?next:v)}
       );
@@ -1563,7 +1562,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
   const weekKey=useMemo(()=>weekStart.toISOString().slice(0,10),[weekStart]);
   const isStudiedThisWeek=(id:string)=>getCell(id).studiedWeek===weekKey;
   const toggleStudied=(id:string)=>{
-    setData(prev=>{
+    commitPlannerChange(prev=>{
       const cell={...getCell(id)};
       const next={...cell,studiedWeek:cell.studiedWeek===weekKey?undefined:weekKey};
       return {...prev,cells:{...prev.cells,[id]:next}};
@@ -1573,7 +1572,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
   const cellId=(r:number,col:number)=>r+"-"+col;
   const getCell=(id:string):Cell=>data.cells[id]??defaultCell();
   const updateCell=(id:string,patch:Partial<Cell>)=>{
-    setData(prev=>({...prev,cells:{...prev.cells,[id]:{...getCell(id),...patch}}}));
+    commitPlannerChange(prev=>({...prev,cells:{...prev.cells,[id]:{...getCell(id),...patch}}}));
   };
   const getPartStyle=(id:string,part:"subject"|"text"):CellPartStyle=>{
     const cell=getCell(id);
@@ -1594,7 +1593,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
   const partTargets=()=>selectedParts.length?selectedParts.map(key=>{const [id,part]=key.split(":") as [string,"subject"|"text"];return {id,part};}):selected.flatMap(id=>[{id,part:"subject" as const},{id,part:"text" as const}]);
   const applyPartPatch=(patch:Partial<CellPartStyle>)=>{
     const targets=partTargets();
-    setData(prev=>{
+    commitPlannerChange(prev=>{
       const cells={...prev.cells};
       targets.forEach(({id,part})=>{
         const cell=cells[id]??getCell(id);
@@ -1608,7 +1607,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
   const togglePartFormat=(format:"bold"|"italic"|"underline"|"strike")=>{
     const targets=partTargets();
     const next=targets.some(({id,part})=>!getPartStyle(id,part)[format]);
-    setData(prev=>{
+    commitPlannerChange(prev=>{
       const cells={...prev.cells};
       targets.forEach(({id,part})=>{
         const cell={...getCell(id)};
@@ -1618,7 +1617,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
     });
   };
   const updateHeader=(col:number,value:string)=>{
-    setData(prev=>{
+    commitPlannerChange(prev=>{
       const headers=[...(prev.headers??[])];
       while(headers.length<prev.cols) headers.push("COLUNA "+(headers.length+1));
       headers[col]=value.slice(0,40);
@@ -1712,7 +1711,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
       document.body.appendChild(area); area.select(); document.execCommand("copy"); area.remove();
     }
     if(cut){
-      setData(prev=>{
+      commitPlannerChange(prev=>{
         const cells={...prev.cells};
         selected.forEach(id=>{cells[id]={...getCell(id),subject:"",text:""};});
         return {...prev,cells};
@@ -1727,7 +1726,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
     if(rows.length&&rows[rows.length-1]==="") rows.pop();
     const matrix=rows.map(row=>row.split("\\t"));
     const {minRow,minCol}=plannerSelectionBounds();
-    setData(prev=>{
+    commitPlannerChange(prev=>{
       const cells={...prev.cells};
       matrix.forEach((row,rowOffset)=>row.forEach((raw,colOffset)=>{
         const r=minRow+rowOffset,col=minCol+colOffset;
@@ -1743,7 +1742,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
   };
   const clearPlannerSelection=()=>{
     if(!selected.length) return;
-    setData(prev=>{const cells={...prev.cells};selected.forEach(id=>{cells[id]={...getCell(id),subject:"",text:""};});return {...prev,cells};});
+    commitPlannerChange(prev=>{const cells={...prev.cells};selected.forEach(id=>{cells[id]={...getCell(id),subject:"",text:""};});return {...prev,cells};});
   };
   const plannerTargets=()=>selected.length?selected:[cellId(0,0)];
   const activeStyle=()=>getPartStyle(selected[0]??cellId(0,0),activePart);
@@ -1752,7 +1751,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
     const ids=selected.length?selected:[cellId(0,0)];
     const first=getCell(ids[0]);
     const next=format==="bold"?true:!(first.subjectStyle??defaultPartStyle("subject"))[format];
-    setData(prev=>{const cells={...prev.cells};ids.forEach(id=>{const cell=cells[id]??getCell(id);cells[id]={...cell,subjectStyle:{...(cell.subjectStyle??defaultPartStyle("subject")),[format]:next},textStyle:{...(cell.textStyle??defaultPartStyle("text")),[format]:next}};});return {...prev,cells};});
+    commitPlannerChange(prev=>{const cells={...prev.cells};ids.forEach(id=>{const cell=cells[id]??getCell(id);cells[id]={...cell,subjectStyle:{...(cell.subjectStyle??defaultPartStyle("subject")),[format]:next},textStyle:{...(cell.textStyle??defaultPartStyle("text")),[format]:next}};});return {...prev,cells};});
   };
   const applyPlannerColor=(kind:"text"|"fill",color:string)=>{
     if(!color)return;
@@ -1762,7 +1761,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
     }else{
       setFillColor(color);
       const targets=plannerTargets();
-      setData(prev=>{
+      commitPlannerChange(prev=>{
         const cells={...prev.cells};
         targets.forEach(id=>{
           const cell=cells[id]??getCell(id);
@@ -1781,15 +1780,15 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
   };
   const applyPlannerFont=(fontFamily:string)=>{
     const ids=selected.length?selected:[cellId(0,0)];
-    setData(prev=>{const cells={...prev.cells};ids.forEach(id=>{const cell=cells[id]??getCell(id);cells[id]={...cell,subjectStyle:{...(cell.subjectStyle??defaultPartStyle("subject")),fontFamily},textStyle:{...(cell.textStyle??defaultPartStyle("text")),fontFamily}};});return {...prev,cells};});
+    commitPlannerChange(prev=>{const cells={...prev.cells};ids.forEach(id=>{const cell=cells[id]??getCell(id);cells[id]={...cell,subjectStyle:{...(cell.subjectStyle??defaultPartStyle("subject")),fontFamily},textStyle:{...(cell.textStyle??defaultPartStyle("text")),fontFamily}};});return {...prev,cells};});
   };
   const applyPlannerSize=(size:number)=>{
     const ids=selected.length?selected:[cellId(0,0)];
-    setData(prev=>{const cells={...prev.cells};ids.forEach(id=>{const cell=cells[id]??getCell(id);cells[id]={...cell,subjectStyle:{...(cell.subjectStyle??defaultPartStyle("subject")),size},textStyle:{...(cell.textStyle??defaultPartStyle("text")),size}};});return {...prev,cells};});
+    commitPlannerChange(prev=>{const cells={...prev.cells};ids.forEach(id=>{const cell=cells[id]??getCell(id);cells[id]={...cell,subjectStyle:{...(cell.subjectStyle??defaultPartStyle("subject")),size},textStyle:{...(cell.textStyle??defaultPartStyle("text")),size}};});return {...prev,cells};});
   };
   const applyPlannerAlignment=(align:"left"|"center"|"right")=>{
     const ids=selected.length?selected:[cellId(0,0)];
-    setData(prev=>{
+    commitPlannerChange(prev=>{
       const cells={...prev.cells};
       ids.forEach(id=>{
         const cell=cells[id]??getCell(id);
@@ -1804,7 +1803,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
   };
   const applyPlannerVertical=(vertical:"top"|"middle"|"bottom")=>{
     const ids=selected.length?selected:[cellId(0,0)];
-    setData(prev=>{
+    commitPlannerChange(prev=>{
       const cells={...prev.cells};
       ids.forEach(id=>{
         const cell=cells[id]??getCell(id);
@@ -1822,7 +1821,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
     if(selected.length<2) return;
     const {minRow,maxRow,minCol,maxCol}=plannerSelectionBounds();
     const source=getCell(cellId(minRow,minCol));
-    setData(prev=>{
+    commitPlannerChange(prev=>{
       const cells={...prev.cells};
       if(direction==="down"){for(let r=minRow+1;r<=maxRow;r++) cells[cellId(r,minCol)]={...getCell(cellId(r,minCol)),subject:source.subject,text:source.text};}
       else{for(let col=minCol+1;col<=maxCol;col++) cells[cellId(minRow,col)]={...getCell(cellId(minRow,col)),subject:source.subject,text:source.text};}
@@ -1868,7 +1867,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
       else if(key==="i"){event.preventDefault();togglePlannerFormat("italic");}
       else if(key==="d"){event.preventDefault();fillPlannerDirection("down");}
       else if(key==="r"){event.preventDefault();fillPlannerDirection("right");}
-      else if(key==="enter"){event.preventDefault();const first=selected[0];if(first){const source=getCell(first);setData(prev=>{const cells={...prev.cells};selected.forEach(id=>{cells[id]={...getCell(id),subject:source.subject,text:source.text};});return {...prev,cells};});}}
+      else if(key==="enter"){event.preventDefault();const first=selected[0];if(first){const source=getCell(first);commitPlannerChange(prev=>{const cells={...prev.cells};selected.forEach(id=>{cells[id]={...getCell(id),subject:source.subject,text:source.text};});return {...prev,cells};});}}
       else if(key==="s"){event.preventDefault();notify("Planejamento salvo automaticamente.");}
       else if(key==="z"&&!event.shiftKey){event.preventDefault();plannerUndo();}
       else if((key==="z"&&event.shiftKey)||key==="y"){event.preventDefault();plannerRedo();}
@@ -1897,7 +1896,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
     if(!selectedRows.length || data.rows<=1) return;
     if(!window.confirm(`Excluir ${selectedRows.length} linha(s) selecionada(s)?`)) return;
     const remove=new Set(selectedRows);
-    setData(prev=>{
+    commitPlannerChange(prev=>{
       const rowsToKeep=Array.from({length:prev.rows},(_,r)=>r).filter(r=>!remove.has(r));
       const cells:Record<string,Cell>={};
       rowsToKeep.forEach((oldR,newR)=>{for(let col=0;col<prev.cols;col++){const oldId=cellId(oldR,col);const value=prev.cells[oldId];if(value) cells[cellId(newR,col)]={...value,id:cellId(newR,col)};}});
@@ -1909,7 +1908,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
     if(!selectedCols.length || data.cols<=1) return;
     if(!window.confirm(`Excluir ${selectedCols.length} coluna(s) selecionada(s)?`)) return;
     const remove=new Set(selectedCols);
-    setData(prev=>{
+    commitPlannerChange(prev=>{
       const colsToKeep=Array.from({length:prev.cols},(_,col)=>col).filter(col=>!remove.has(col));
       const headers=colsToKeep.map(col=>prev.headers[col]??("COLUNA "+(col+1)));
       const cells:Record<string,Cell>={};
@@ -1918,18 +1917,18 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
     });
     setSelected([]);setSelectedCols([]);setSelectionMode("cells");
   };
-  const applyFill=()=>{setData(prev=>{const cells={...prev.cells};selected.forEach(id=>{cells[id]={...getCell(id),bg:fillColor}});return {...prev,cells}});notify("Cor aplicada.");};
-  const applyText=()=>{setData(prev=>{const cells={...prev.cells};selected.forEach(id=>{cells[id]={...getCell(id),fg:textColor}});return {...prev,cells}});notify("Cor do texto das observações aplicada.");};
-  const applySubjectFill=()=>{setData(prev=>{const cells={...prev.cells};selected.forEach(id=>{cells[id]={...getCell(id),subjectBg:subjectFillColor}});return {...prev,cells}});notify("Cor da matéria aplicada.");};
+  const applyFill=()=>{commitPlannerChange(prev=>{const cells={...prev.cells};selected.forEach(id=>{cells[id]={...getCell(id),bg:fillColor}});return {...prev,cells}});notify("Cor aplicada.");};
+  const applyText=()=>{commitPlannerChange(prev=>{const cells={...prev.cells};selected.forEach(id=>{cells[id]={...getCell(id),fg:textColor}});return {...prev,cells}});notify("Cor do texto das observações aplicada.");};
+  const applySubjectFill=()=>{commitPlannerChange(prev=>{const cells={...prev.cells};selected.forEach(id=>{cells[id]={...getCell(id),subjectBg:subjectFillColor}});return {...prev,cells}});notify("Cor da matéria aplicada.");};
   const clearSelection=()=>{setSelected([]);setSelectedRows([]);setSelectedCols([]);setSelectionMode("cells");};
-  const addRow=()=>setData(prev=>({...prev,rows:prev.rows+1,rowHeights:[...prev.rowHeights,180]}));
-  const addCol=()=>setData(prev=>{
+  const addRow=()=>commitPlannerChange(prev=>({...prev,rows:prev.rows+1,rowHeights:[...prev.rowHeights,180]}));
+  const addCol=()=>commitPlannerChange(prev=>{
     const headers=[...(prev.headers??[])];
     headers.push("COLUNA "+(prev.cols+1));
     return {...prev,cols:prev.cols+1,headers,colWidths:[...prev.colWidths,190]};
   });
-  const resetPlanner=()=>{if(window.confirm("Limpar todo o conteúdo desta semana?")){setData(prev=>({...prev,cells:{}}));setSelected([]);}};
-  const copyWeek=()=>{setData(prev=>{const cells:{[key:string]:Cell}={...prev.cells};for(let r=0;r<prev.rows;r++)for(let col=0;col<prev.cols;col++){const id=cellId(r,col);cells[id]={...getCell(id),id:uid()};}return {...prev,cells}});notify("Semana duplicada.");};
+  const resetPlanner=()=>{if(window.confirm("Limpar todo o conteúdo desta semana?")){commitPlannerChange(prev=>({...prev,cells:{}}));setSelected([]);}};
+  const copyWeek=()=>{commitPlannerChange(prev=>{const cells:{[key:string]:Cell}={...prev.cells};for(let r=0;r<prev.rows;r++)for(let col=0;col<prev.cols;col++){const id=cellId(r,col);cells[id]={...getCell(id),id:uid()};}return {...prev,cells}});notify("Semana duplicada.");};
 
   return <div className={"planner-shell "+(fullscreen?"planner-fullscreen":"")}>
     {shortcutHelpOpen ? <div className="planner-shortcuts-backdrop" role="dialog" aria-modal="true" onClick={()=>setShortcutHelpOpen(false)}>
