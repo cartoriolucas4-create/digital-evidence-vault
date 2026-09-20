@@ -681,8 +681,16 @@ function App() {
         notify("Senha incorreta. O cadastro não foi alterado.");
         return;
       }
-      const { error } = await (client as any).rpc("clear_study_catalog", { p_user_id: session.user.id });
-      if (error) throw error;
+      const { error: rpcError } = await (client as any).rpc("clear_study_catalog", { p_user_id: session.user.id });
+      if (rpcError) {
+        // Fallback for databases where the reset RPC migration has not reached production yet.
+        // The entries are preserved; their catalog references use ON DELETE SET NULL.
+        const fallbackTables = ["study_subjects", "study_disciplines", "study_sources", "study_question_types"];
+        for (const table of fallbackTables) {
+          const { error: deleteError } = await (client as any).from(table).delete().eq("user_id", session.user.id);
+          if (deleteError) throw deleteError;
+        }
+      }
       writeStore("mcr_discipline_order", []);
       setDisciplines([]); setSubjects([]); setSources([]); setTypes([]);
       setCatalogDeletePassword(""); setCatalogDeleteOpen(false);
