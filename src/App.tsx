@@ -767,7 +767,7 @@ function App() {
             />
           )}
           {tab === "planner" && <Planner userId={session.user.id} notify={notify} defaultSmallColor={plannerDefaultColor} completedSmallColor={plannerCompletedColor} />}
-          {tab === "entries" && <Entries disciplines={disciplines}  sources={sources} types={types} entries={entries} refresh={() => loadEntries().catch((error) => notify(error instanceof Error ? error.message : "Não foi possível carregar os lançamentos."))} notify={notify}/>}
+          {tab === "entries" && <Entries disciplines={disciplines} subjects={subjects} sources={sources} types={types} entries={entries} refresh={() => loadEntries().catch((error) => notify(error instanceof Error ? error.message : "Não foi possível carregar os lançamentos."))} notify={notify}/>}
           {tab === "catalog" && <Catalog disciplines={disciplines}  sources={sources} types={types} refresh={() => loadCatalog().catch((error) => notify(error instanceof Error ? error.message : "Não foi possível carregar o cadastro."))} notify={notify} catalogDeleteOpen={catalogDeleteOpen} setCatalogDeleteOpen={setCatalogDeleteOpen} catalogDeletePassword={catalogDeletePassword} setCatalogDeletePassword={setCatalogDeletePassword} catalogDeleteBusy={catalogDeleteBusy} deleteAllCatalogData={deleteAllCatalogData}/>}
           {tab === "settings" && (
             <SettingsPage
