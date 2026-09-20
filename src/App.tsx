@@ -1254,7 +1254,19 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
   const defaultCell=():Cell=>({id:uid(),subject:"",text:"",bg:"#ffffff",fg:"#17202a",bold:false,italic:false,size:14});
   const makeInitial=():PlannerData=>({version:2,weekOffset:0,cols:7,rows:4,headers:[...defaultHeaders],colWidths:Array(7).fill(190),rowHeights:Array(4).fill(180),cells:{}});
   const key="mcr_planner_"+userId;
-  const [data,setData]=useState<PlannerData>(()=>readStore<PlannerData>(key,makeInitial()));
+  const normalizePlanner=(raw:any):PlannerData=>{
+    const cols=Math.max(1,Number(raw?.cols)||7);
+    const rows=Math.max(1,Number(raw?.rows)||4);
+    const headers=Array.from({length:cols},(_,i)=>String(raw?.headers?.[i]??defaultHeaders[i]??("COLUNA "+(i+1))));
+    const colWidths=Array.from({length:cols},(_,i)=>{const v=Number(raw?.colWidths?.[i]);return Number.isFinite(v)&&v>=120?v:190;});
+    const rowHeights=Array.from({length:rows},(_,i)=>{const v=Number(raw?.rowHeights?.[i]);return Number.isFinite(v)&&v>=90?v:180;});
+    const cells:Record<string,Cell>={};
+    Object.entries(raw?.cells??{}).forEach(([id,value]:any)=>{
+      cells[id]={...defaultCell(),...(value||{}),id,subject:String(value?.subject??""),text:String(value?.text??"")};
+    });
+    return {version:2,weekOffset:Number(raw?.weekOffset)||0,cols,rows,headers,colWidths,rowHeights,cells};
+  };
+  const [data,setData]=useState<PlannerData>(()=>normalizePlanner(readStore<PlannerData>(key,makeInitial())));
   const [selected,setSelected]=useState<string[]>([]);
   const [textColor,setTextColor]=useState("#17202a");
   const [fillColor,setFillColor]=useState("#ffffff");
