@@ -132,3 +132,47 @@ html[data-theme="dark"] .auth-card>p,html[data-theme="dark"] .fatal-card p{color
 html[data-theme="dark"] .auth-switch{color:#f08abd}
 html[data-theme="dark"] .toast{background:#f3f5f7;color:#171b22}
 @media(max-width:760px){.theme-choice-grid,.password-grid{grid-template-columns:1fr}.account-actions .btn{width:100%}.account-row{align-items:flex-start;flex-direction:column}}
+
+/* PLANEJAMENTO LIVRE */
+.planner-content{padding:10px;max-width:none}
+.planner-shell{min-height:calc(100vh - 86px);display:flex;flex-direction:column;background:#fff;border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.planner-fullscreen{position:fixed;inset:0;z-index:80;border-radius:0;min-height:100vh;background:#fff}
+.planner-toolbar{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:10px 12px;border-bottom:1px solid var(--border);background:#fff;flex-wrap:wrap}
+.planner-title-wrap{display:flex;align-items:baseline;gap:9px;min-width:max-content}
+.planner-eyebrow{font-size:9px;font-weight:900;letter-spacing:.12em;color:var(--accent)}
+.planner-title-wrap h1{font-size:17px;margin:0;color:var(--text)}
+.planner-title-wrap span{font-size:11px;color:var(--muted)}
+.planner-tools{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.planner-tool{height:31px;padding:0 9px;border:1px solid var(--border);border-radius:6px;background:#fff;color:#4b5563;font-size:10px;font-weight:800}
+.planner-tool:hover{border-color:#e4a8c6;color:var(--accent);background:#fff8fb}
+.planner-tool:disabled{opacity:.4;cursor:not-allowed}
+.planner-tool.planner-danger{color:#a61b1b}
+.planner-tool.planner-today{color:var(--accent);background:var(--accent-soft)}
+.planner-sep{width:1px;height:24px;background:var(--border);margin:0 2px}
+.planner-color{height:31px;display:flex;align-items:center;gap:5px;border:1px solid var(--border);border-radius:6px;padding:0 5px;background:#fff;font-size:11px;font-weight:900}
+.planner-color input{width:22px;height:22px;padding:0;border:0;background:none;cursor:pointer}
+.planner-hint{padding:6px 12px;background:#fcfafc;border-bottom:1px solid #edf0f3;color:#8a7a84;font-size:10px}
+.planner-grid-wrap{flex:1;overflow:auto;background:#e7e9ec}
+.planner-grid{min-width:max-content;display:grid;grid-auto-rows:minmax(150px,1fr);align-content:stretch}
+.planner-day{position:sticky;top:0;z-index:3;min-width:150px;padding:9px 10px;background:var(--accent-2);color:#fff;border-right:1px solid rgba(255,255,255,.35);font-size:10px;font-weight:900;letter-spacing:.06em;text-align:left}
+.planner-cell{position:relative;min-width:150px;min-height:150px;border-right:1px solid #d8dce0;border-bottom:1px solid #d8dce0;padding:27px 8px 8px;transition:box-shadow .1s,outline .1s}
+.planner-cell.selected{outline:2px solid var(--accent-2);outline-offset:-2px;z-index:2}
+.planner-cell textarea{display:block;width:100%;height:100%;min-height:115px;resize:both;border:0;outline:0;background:transparent;color:inherit;font:inherit;line-height:1.35;padding:0;overflow:auto}
+.planner-cell textarea::placeholder{color:#9aa1a9;opacity:.8}
+.planner-cell-actions{position:absolute;right:5px;top:5px;display:flex;gap:2px;opacity:.25;transition:opacity .15s;z-index:2}
+.planner-cell:hover .planner-cell-actions,.planner-cell.selected .planner-cell-actions{opacity:1}
+.planner-cell-actions button{border:1px solid #dfe3e8;background:rgba(255,255,255,.92);border-radius:4px;height:22px;min-width:22px;padding:0 4px;font-size:9px;font-weight:900;color:#59616b}
+.planner-cell-actions button:hover{color:var(--accent);border-color:#e5b0ca}
+.planner-footer{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 10px;border-top:1px solid var(--border);background:#fff;color:#87909a;font-size:9px}
+.planner-footer .btn{font-size:9px;padding:5px 8px}
+@media(max-width:760px){
+  .planner-content{padding:0}
+  .planner-shell{border-radius:0;border-left:0;border-right:0}
+  .planner-toolbar{padding:8px;align-items:flex-start}
+  .planner-title-wrap{width:100%}
+  .planner-tools{width:100%;overflow-x:auto;flex-wrap:nowrap;padding-bottom:2px}
+  .planner-tool{white-space:nowrap}
+  .planner-grid{grid-auto-rows:minmax(180px,1fr)}
+  .planner-cell{min-height:180px}
+  .planner-footer{font-size:8px}
+}
