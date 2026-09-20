@@ -187,3 +187,21 @@ html[data-theme="dark"] .planner-content-bottom:focus{
   .planner-setting-color{align-items:flex-start}
   .planner-study-check{top:12px;right:12px}
 }
+
+/* A paleta das configurações precisa ultrapassar o limite do cartão para não ser cortada. */
+.section:has(.planner-settings-colors){
+  overflow:visible;
+  position:relative;
+  z-index:20;
+}
+.planner-settings-colors{
+  position:relative;
+  z-index:21;
+}
+.planner-setting-color-control{
+  z-index:22;
+}
+.planner-setting-color-control .planner-color-popover{
+  z-index:9999;
+  min-height:250px;
+}
