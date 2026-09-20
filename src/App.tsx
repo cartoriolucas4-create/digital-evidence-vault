@@ -1278,10 +1278,12 @@ function PlannerColorPalette({title,colors,onPick,onCustom}:{title:string;colors
 }
 
 function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) {
-  type Cell = { id:string; subject:string; text:string; bg:string; fg:string; subjectBg:string; subjectFg:string; bold:boolean; italic:boolean; underline:boolean; strike:boolean; size:number; fontFamily:string; align:"left"|"center"|"right"; vertical:"top"|"middle"|"bottom"; wrap:"overflow"|"wrap"|"clip" };
+  type CellPartStyle = { bg:string; fg:string; bold:boolean; italic:boolean; underline:boolean; strike:boolean; size:number; fontFamily:string; align:"left"|"center"|"right"; vertical:"top"|"middle"|"bottom"; wrap:"overflow"|"wrap"|"clip" };
+  type Cell = { id:string; subject:string; text:string; bg:string; fg:string; subjectBg:string; subjectFg:string; bold:boolean; italic:boolean; underline:boolean; strike:boolean; size:number; fontFamily:string; align:"left"|"center"|"right"; vertical:"top"|"middle"|"bottom"; wrap:"overflow"|"wrap"|"clip"; subjectStyle?:CellPartStyle; textStyle?:CellPartStyle };
   type PlannerData = { version:2; weekOffset:number; cols:number; rows:number; headers:string[]; colWidths:number[]; rowHeights:number[]; cells:Record<string,Cell> };
   const defaultHeaders=["SEGUNDA","TERÇA","QUARTA","QUINTA","SEXTA","SÁBADO","DOMINGO"];
-  const defaultCell=():Cell=>({id:uid(),subject:"",text:"",bg:"#ffffff",fg:"#17202a",subjectBg:"#f7f8fa",subjectFg:"#17202a",bold:false,italic:false,underline:false,strike:false,size:14,fontFamily:"Arial",align:"left",vertical:"top",wrap:"wrap"});
+  const defaultPartStyle=(kind:"subject"|"text"):CellPartStyle=>kind==="subject"?({bg:"#f7f8fa",fg:"#17202a",bold:false,italic:false,underline:false,strike:false,size:14,fontFamily:"Arial",align:"left",vertical:"top",wrap:"wrap"}):({bg:"#ffffff",fg:"#17202a",bold:false,italic:false,underline:false,strike:false,size:14,fontFamily:"Arial",align:"left",vertical:"top",wrap:"wrap"});
+  const defaultCell=():Cell=>({id:uid(),subject:"",text:"",bg:"#ffffff",fg:"#17202a",subjectBg:"#f7f8fa",subjectFg:"#17202a",bold:false,italic:false,underline:false,strike:false,size:14,fontFamily:"Arial",align:"left",vertical:"top",wrap:"wrap",subjectStyle:defaultPartStyle("subject"),textStyle:defaultPartStyle("text")});
   const cleanPlannerField=(value:unknown)=>{const text=String(value??"").trim();const normalized=text.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toUpperCase();return normalized.startsWith("MATERIA")||normalized.startsWith("OBSERVACOES")||normalized.startsWith("OBSERVACAO")?"":text;};
   const makeInitial=():PlannerData=>({version:2,weekOffset:0,cols:7,rows:4,headers:[...defaultHeaders],colWidths:Array(7).fill(190),rowHeights:Array(4).fill(180),cells:{}});
   const key="mcr_planner_"+userId;
@@ -1293,12 +1295,20 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
     const rowHeights=Array.from({length:rows},(_,i)=>{const v=Number(raw?.rowHeights?.[i]);return Number.isFinite(v)&&v>=90?v:180;});
     const cells:Record<string,Cell>={};
     Object.entries(raw?.cells??{}).forEach(([id,value]:any)=>{
-      const subject=cleanPlannerField(value?.subject); const text=cleanPlannerField(value?.text); cells[id]={...defaultCell(),...(value||{}),id,subject,text,subjectBg:String(value?.subjectBg??"#f7f8fa"),subjectFg:String(value?.subjectFg??value?.fg??"#17202a")};
+      const subject=cleanPlannerField(value?.subject); const text=cleanPlannerField(value?.text); {
+        const base={...defaultCell(),...(value||{}),id,subject,text,subjectBg:String(value?.subjectBg??"#f7f8fa"),subjectFg:String(value?.subjectFg??value?.fg??"#17202a")};
+        const legacy={bg:String(value?.bg??"#ffffff"),fg:String(value?.fg??"#17202a"),bold:Boolean(value?.bold),italic:Boolean(value?.italic),underline:Boolean(value?.underline),strike:Boolean(value?.strike),size:Number(value?.size)||14,fontFamily:String(value?.fontFamily??"Arial"),align:(value?.align??"left") as CellPartStyle["align"],vertical:(value?.vertical??"top") as CellPartStyle["vertical"],wrap:(value?.wrap??"wrap") as CellPartStyle["wrap"]};
+        const subjectStyle={...defaultPartStyle("subject"),...legacy,bg:String(value?.subjectStyle?.bg??value?.subjectBg??"#f7f8fa"),fg:String(value?.subjectStyle?.fg??value?.subjectFg??legacy.fg),...(value?.subjectStyle??{})};
+        const textStyle={...defaultPartStyle("text"),...legacy,...(value?.textStyle??{})};
+        cells[id]={...base,subjectStyle,textStyle};
+      }
     });
     return {version:2,weekOffset:Number(raw?.weekOffset)||0,cols,rows,headers,colWidths,rowHeights,cells};
   };
   const [data,setData]=useState<PlannerData>(()=>normalizePlanner(readStore<PlannerData>(key,makeInitial())));
   const [selected,setSelected]=useState<string[]>([]);
+  const [selectedParts,setSelectedParts]=useState<string[]>([]);
+  const [activePart,setActivePart]=useState<"subject"|"text">("subject");
   const [selectionMode,setSelectionMode]=useState<"cells"|"rows"|"cols">("cells");
   const [selectedRows,setSelectedRows]=useState<number[]>([]);
   const [selectedCols,setSelectedCols]=useState<number[]>([]);
@@ -1408,6 +1418,46 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
   const updateCell=(id:string,patch:Partial<Cell>)=>{
     setData(prev=>({...prev,cells:{...prev.cells,[id]:{...getCell(id),...patch}}}));
   };
+  const getPartStyle=(id:string,part:"subject"|"text"):CellPartStyle=>{
+    const cell=getCell(id);
+    return part==="subject"?(cell.subjectStyle??defaultPartStyle("subject")):(cell.textStyle??defaultPartStyle("text"));
+  };
+  const partKey=(id:string,part:"subject"|"text")=>id+":"+part;
+  const selectCellPart=(id:string,part:"subject"|"text",additive=false)=>{
+    setActivePart(part);
+    setSelectionMode("cells");setSelectedRows([]);setSelectedCols([]);
+    if(additive){
+      setSelectedParts(prev=>prev.includes(partKey(id,part))?prev.filter(key=>key!==partKey(id,part)):[...prev,partKey(id,part)]);
+      setSelected(prev=>prev.includes(id)?prev:[...prev,id]);
+    }else{
+      setSelectedParts([partKey(id,part)]);
+      setSelected([id]);
+    }
+  };
+  const partTargets=()=>selectedParts.length?selectedParts.map(key=>{const [id,part]=key.split(":") as [string,"subject"|"text"];return {id,part};}):selected.flatMap(id=>[{id,part:"subject" as const},{id,part:"text" as const}]);
+  const applyPartPatch=(patch:Partial<CellPartStyle>)=>{
+    const targets=partTargets();
+    setData(prev=>{
+      const cells={...prev.cells};
+      targets.forEach(({id,part})=>{
+        const cell={...getCell(id)};
+        cells[id]={...cell,[part==="subject"?"subjectStyle":"textStyle"]:{...getPartStyle(id,part),...patch}};
+      });
+      return {...prev,cells};
+    });
+  };
+  const togglePartFormat=(format:"bold"|"italic"|"underline"|"strike")=>{
+    const targets=partTargets();
+    const next=targets.some(({id,part})=>!getPartStyle(id,part)[format]);
+    setData(prev=>{
+      const cells={...prev.cells};
+      targets.forEach(({id,part})=>{
+        const cell={...getCell(id)};
+        cells[id]={...cell,[part==="subject"?"subjectStyle":"textStyle"]:{...getPartStyle(id,part),[format]:next}};
+      });
+      return {...prev,cells};
+    });
+  };
   const updateHeader=(col:number,value:string)=>{
     setData(prev=>{
       const headers=[...(prev.headers??[])];
@@ -1425,7 +1475,7 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
   };
   const selectRect=(r1:number,r2:number,c1:number,c2:number)=>{
     const rect=cellsInRect(r1,r2,c1,c2);
-    setSelectionMode("cells");setSelectedRows([]);setSelectedCols([]);setSelected(rect.ids);
+    setSelectionMode("cells");setSelectedRows([]);setSelectedCols([]);setSelected(rect.ids);setSelectedParts([]);
   };
   const startCellSelection=(row:number,col:number,event:PointerEvent)=>{
     if(event.button!==0) return;
@@ -1442,9 +1492,9 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
     };
     window.addEventListener("pointermove",move);window.addEventListener("pointerup",stop,{once:true});
   };
-  const selectRow=(row:number)=>{const rows=[row];setSelectionMode("rows");setSelectedRows(rows);setSelectedCols([]);setSelected(Array.from({length:data.cols},(_,col)=>cellId(row,col)));};
-  const selectCol=(col:number)=>{const cols=[col];setSelectionMode("cols");setSelectedRows([]);setSelectedCols(cols);setSelected(Array.from({length:data.rows},(_,row)=>cellId(row,col)));};
-  const selectAll=()=>{const ids=Array.from({length:data.rows*data.cols},(_,i)=>cellId(Math.floor(i/data.cols),i%data.cols));setSelectionMode("cells");setSelectedRows([]);setSelectedCols([]);setSelected(ids);};
+  const selectRow=(row:number)=>{const rows=[row];setSelectedParts([]);setSelectionMode("rows");setSelectedRows(rows);setSelectedCols([]);setSelected(Array.from({length:data.cols},(_,col)=>cellId(row,col)));};
+  const selectCol=(col:number)=>{const cols=[col];setSelectedParts([]);setSelectionMode("cols");setSelectedRows([]);setSelectedCols(cols);setSelected(Array.from({length:data.rows},(_,row)=>cellId(row,col)));};
+  const selectAll=()=>{setSelectedParts([]);const ids=Array.from({length:data.rows*data.cols},(_,i)=>cellId(Math.floor(i/data.cols),i%data.cols));setSelectionMode("cells");setSelectedRows([]);setSelectedCols([]);setSelected(ids);};
   const plannerSelectionBounds=()=>{
     const ids=selected.length?selected:[cellId(0,0)];
     const coords=ids.map(id=>{const [r,col]=id.split("-").map(Number);return {r,col};}).filter(v=>Number.isFinite(v.r)&&Number.isFinite(v.col));
@@ -1505,25 +1555,20 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
     setData(prev=>{const cells={...prev.cells};selected.forEach(id=>{cells[id]={...getCell(id),subject:"",text:""};});return {...prev,cells};});
   };
   const plannerTargets=()=>selected.length?selected:[cellId(0,0)];
-  const applyPlannerPatch=(patch:Partial<Cell>)=>{
-    const targets=plannerTargets();
-    setData(prev=>{const cells={...prev.cells};targets.forEach(id=>{cells[id]={...getCell(id),...patch};});return {...prev,cells};});
-  };
-  const togglePlannerFormat=(format:"bold"|"italic"|"underline"|"strike")=>{
-    const targets=plannerTargets();
-    setData(prev=>{const cells={...prev.cells};const next=targets.some(id=>!getCell(id)[format]);targets.forEach(id=>{cells[id]={...getCell(id),[format]:next};});return {...prev,cells};});
-  };
+  const activeStyle=()=>getPartStyle(selected[0]??cellId(0,0),activePart);
+  const applyPlannerPatch=(patch:Partial<CellPartStyle>)=>applyPartPatch(patch);
+  const togglePlannerFormat=(format:"bold"|"italic"|"underline"|"strike")=>togglePartFormat(format);
   const applyPlannerColor=(kind:"text"|"fill",color:string)=>{
     if(!color)return;
-    if(kind==="text"){setTextColor(color);applyPlannerPatch({fg:color});}
-    else{setFillColor(color);applyPlannerPatch({bg:color});}
+    if(kind==="text"){setTextColor(color);applyPartPatch({fg:color});}
+    else{setFillColor(color);applyPartPatch({bg:color});}
     setPaletteOpen(null);
   };
-  const applyPlannerFont=(fontFamily:string)=>applyPlannerPatch({fontFamily});
-  const applyPlannerSize=(size:number)=>applyPlannerPatch({size});
-  const applyPlannerAlignment=(align:"left"|"center"|"right")=>applyPlannerPatch({align});
-  const applyPlannerVertical=(vertical:"top"|"middle"|"bottom")=>applyPlannerPatch({vertical});
-  const applyPlannerWrap=(wrap:"overflow"|"wrap"|"clip")=>applyPlannerPatch({wrap});
+  const applyPlannerFont=(fontFamily:string)=>applyPartPatch({fontFamily});
+  const applyPlannerSize=(size:number)=>applyPartPatch({size});
+  const applyPlannerAlignment=(align:"left"|"center"|"right")=>applyPartPatch({align});
+  const applyPlannerVertical=(vertical:"top"|"middle"|"bottom")=>applyPartPatch({vertical});
+  const applyPlannerWrap=(wrap:"overflow"|"wrap"|"clip")=>applyPartPatch({wrap});
   const fillPlannerDirection=(direction:"down"|"right")=>{
     if(selected.length<2) return;
     const {minRow,maxRow,minCol,maxCol}=plannerSelectionBounds();
@@ -1659,17 +1704,17 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
       <button className="planner-icon-tool" title="Desfazer" onClick={plannerUndo}><Undo2 size={16}/></button>
       <button className="planner-icon-tool" title="Refazer" onClick={plannerRedo}><Redo2 size={16}/></button>
       <span className="planner-format-sep"/>
-      <select className="planner-format-select planner-font-select" title="Fonte" value={getCell(selected[0]??"0-0").fontFamily} onChange={e=>applyPlannerFont(e.target.value)}>
+      <select className="planner-format-select planner-font-select" title="Fonte" value={activeStyle().fontFamily} onChange={e=>applyPlannerFont(e.target.value)}>
         {GOOGLE_SHEETS_FONTS.map(font=><option key={font} value={font}>{font}</option>)}
       </select>
-      <select className="planner-format-select planner-size-select" title="Tamanho da fonte" value={getCell(selected[0]??"0-0").size} onChange={e=>applyPlannerSize(Number(e.target.value))}>
+      <select className="planner-format-select planner-size-select" title="Tamanho da fonte" value={activeStyle().size} onChange={e=>applyPlannerSize(Number(e.target.value))}>
         {[8,9,10,11,12,14,16,18,20,22,24,28,32,36].map(size=><option key={size} value={size}>{size}</option>)}
       </select>
       <span className="planner-format-sep"/>
-      <button className={"planner-format-btn "+(getCell(selected[0]??"0-0").bold?"active":"")} title="Negrito" onClick={()=>togglePlannerFormat("bold")}><Bold size={15}/></button>
-      <button className={"planner-format-btn "+(getCell(selected[0]??"0-0").italic?"active":"")} title="Itálico" onClick={()=>togglePlannerFormat("italic")}><Italic size={15}/></button>
-      <button className={"planner-format-btn "+(getCell(selected[0]??"0-0").underline?"active":"")} title="Sublinhado" onClick={()=>togglePlannerFormat("underline")}><Underline size={15}/></button>
-      <button className={"planner-format-btn "+(getCell(selected[0]??"0-0").strike?"active":"")} title="Tachado" onClick={()=>togglePlannerFormat("strike")}><Strikethrough size={15}/></button>
+      <button className={"planner-format-btn "+(activeStyle().bold?"active":"")} title="Negrito" onClick={()=>togglePlannerFormat("bold")}><Bold size={15}/></button>
+      <button className={"planner-format-btn "+(activeStyle().italic?"active":"")} title="Itálico" onClick={()=>togglePlannerFormat("italic")}><Italic size={15}/></button>
+      <button className={"planner-format-btn "+(activeStyle().underline?"active":"")} title="Sublinhado" onClick={()=>togglePlannerFormat("underline")}><Underline size={15}/></button>
+      <button className={"planner-format-btn "+(activeStyle().strike?"active":"")} title="Tachado" onClick={()=>togglePlannerFormat("strike")}><Strikethrough size={15}/></button>
 
       <div className="planner-popover-wrap">
         <button className="planner-format-btn planner-color-btn" title="Cor do texto" onClick={()=>{setPaletteOpen(p=>p==="text"?null:"text");setMoreOpen(false)}}><span className="planner-color-A">A</span><span className="planner-color-line" style={{backgroundColor:textColor}}/><ChevronDown size={11}/></button>
@@ -1725,26 +1770,28 @@ function Planner({userId,notify}:{userId:string;notify:(message:string)=>void}) 
           <button key={"row-head-"+row} className={"planner-row-selector "+(selectedRows.includes(row)?"axis-selected":"")} onClick={()=>selectRow(row)}>{row+1}</button>,
           ...Array.from({length:data.cols},(_,col)=>{
           const id=cellId(row,col), cell=getCell(id), active=selected.includes(id);
-          return <div key={id} data-planner-row={row} data-planner-col={col} className={"planner-cell "+(active?"selected":"")} style={{backgroundColor:cell.bg,color:cell.fg,fontSize:cell.size,fontWeight:cell.bold?800:500,fontStyle:cell.italic?"italic":"normal",fontFamily:cell.fontFamily,textAlign:cell.align,verticalAlign:cell.vertical,textDecoration:[cell.underline?"underline":"",cell.strike?"line-through":""].filter(Boolean).join(" "),whiteSpace:cell.wrap==="wrap"?"normal":cell.wrap==="clip"?"nowrap":"pre-wrap"}} onPointerDown={e=>startCellSelection(row,col,e)} onClick={(e)=>{if(e.ctrlKey||e.metaKey)toggleSelected(id);}}>
+          return <div key={id} data-planner-row={row} data-planner-col={col} className={"planner-cell "+(active?"selected":"")} style={{backgroundColor:"#ffffff"}} onPointerDown={e=>startCellSelection(row,col,e)} onClick={(e)=>{if(e.ctrlKey||e.metaKey)toggleSelected(id);}}>
             <span className="planner-resize-handle planner-row-resize" onPointerDown={e=>beginResize("row",row,e)} />
             <input
-              className="planner-content-top"
+              className={"planner-content-top "+(selectedParts.includes(partKey(id,"subject"))?"planner-part-selected":"")}
               aria-label="Conteúdo superior da célula sem rótulo visível"
               value={cell.subject}
               onChange={e=>updateCell(id,{subject:e.target.value})}
-              onClick={e=>e.stopPropagation()}
+              onClick={e=>{e.stopPropagation();selectCellPart(id,"subject",e.ctrlKey||e.metaKey)}}
               onPointerDown={e=>e.stopPropagation()}
-              onFocus={()=>{setSelectionMode("cells");setSelectedRows([]);setSelectedCols([]);setSelected(prev=>prev.includes(id)?prev:[id]);}}
+              onFocus={()=>selectCellPart(id,"subject",false)}
+              style={{backgroundColor:getPartStyle(id,"subject").bg,color:getPartStyle(id,"subject").fg,fontSize:getPartStyle(id,"subject").size,fontWeight:getPartStyle(id,"subject").bold?800:500,fontStyle:getPartStyle(id,"subject").italic?"italic":"normal",fontFamily:getPartStyle(id,"subject").fontFamily,textAlign:getPartStyle(id,"subject").align,textDecoration:[getPartStyle(id,"subject").underline?"underline":"",getPartStyle(id,"subject").strike?"line-through":""] .filter(Boolean).join(" "),whiteSpace:getPartStyle(id,"subject").wrap==="wrap"?"normal":getPartStyle(id,"subject").wrap==="clip"?"nowrap":"pre-wrap"}}
               spellCheck={false}
             />
             <textarea
-              className="planner-content-bottom"
+              className={"planner-content-bottom "+(selectedParts.includes(partKey(id,"text"))?"planner-part-selected":"")}
               aria-label="Conteúdo inferior da célula sem rótulo visível"
               value={cell.text}
               onChange={e=>updateCell(id,{text:e.target.value})}
-              onClick={e=>e.stopPropagation()}
+              onClick={e=>{e.stopPropagation();selectCellPart(id,"text",e.ctrlKey||e.metaKey)}}
               onPointerDown={e=>e.stopPropagation()}
-              onFocus={()=>{setSelectionMode("cells");setSelectedRows([]);setSelectedCols([]);setSelected(prev=>prev.includes(id)?prev:[id]);}}
+              onFocus={()=>selectCellPart(id,"text",false)}
+              style={{backgroundColor:getPartStyle(id,"text").bg,color:getPartStyle(id,"text").fg,fontSize:getPartStyle(id,"text").size,fontWeight:getPartStyle(id,"text").bold?800:500,fontStyle:getPartStyle(id,"text").italic?"italic":"normal",fontFamily:getPartStyle(id,"text").fontFamily,textAlign:getPartStyle(id,"text").align,textDecoration:[getPartStyle(id,"text").underline?"underline":"",getPartStyle(id,"text").strike?"line-through":""] .filter(Boolean).join(" "),whiteSpace:getPartStyle(id,"text").wrap==="wrap"?"normal":getPartStyle(id,"text").wrap==="clip"?"nowrap":"pre-wrap"}}
               spellCheck={false}
             />
           </div>;
