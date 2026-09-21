@@ -488,6 +488,6 @@ html[data-theme="dark"] .status.warn{
 }
 
 /* Posicionamento da logo MCR no cabeçalho */
-.topbar .brand{justify-content:flex-start;margin-left:-55px;transform:none}
+.topbar .brand{justify-content:flex-start;margin-left:0!important;transform:translateX(-55px)!important;position:relative;left:0!important}
 .topbar .mcr-logo-header{display:block}
-@media(max-width:760px){.topbar .brand{margin-left:-60px}.topbar .mcr-logo-header{object-position:left center}}
+@media(max-width:760px){.topbar .brand{margin-left:0!important;transform:translateX(-60px)!important}.topbar .mcr-logo-header{object-position:left center}}
