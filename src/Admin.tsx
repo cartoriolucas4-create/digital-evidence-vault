@@ -13,9 +13,6 @@ type AdminUser = {
 };
 
 const TOKEN_KEY = "mcr_admin_session";
-const LOCAL_ADMIN_HASH = "e628bf13707b4a929d1465e5d6af4a4c4da416138d39d02bb65c40830106e3d8";
-const ADMIN_DATA_KEY = "MCR-ADMIN-2026";
-
 const formatDate = (value: string | null) =>
   value ? new Date(value).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "—";
 
@@ -48,15 +45,10 @@ export default function AdminPage() {
   const [notificationTitle, setNotificationTitle] = useState("");
   const [notificationMessage, setNotificationMessage] = useState("");
 
-  const sha256 = async (value: string) => {
-    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
-    return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, "0")).join("");
-  };
-
   const loadUsers = async () => {
     setBusy(true);
     setError("");
-    const { data, error: rpcError } = await (supabase as any).rpc("mcr_users_for_admin", { p_key: ADMIN_DATA_KEY });
+    const { data, error: rpcError } = await (supabase as any).rpc("admin_list_users", { p_token: token });
     setBusy(false);
     if (rpcError || !data) {
       setError("Não foi possível carregar os alunos. Tente novamente em Atualizar.");
@@ -115,10 +107,6 @@ export default function AdminPage() {
 
   const adminAction = async (action: "block"|"unblock"|"password") => {
     if (!selected) return;
-    if (token === "local-admin") {
-      setActionMessage("Sua sessão atual é local. Saia e entre novamente para criar a sessão administrativa segura e liberar este controle.");
-      return;
-    }
     setActionBusy(true); setActionMessage("");
     const { data, error } = await (supabase as any).rpc("admin_manage_student", {
       p_token: token, p_user_id: selected.id, p_action: action, p_password: action === "password" ? newPassword : null
