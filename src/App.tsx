@@ -896,6 +896,17 @@ function App() {
     });
   }, [session?.user.id, applied.from, applied.to, applied.disciplineId, applied.subjectId, applied.sourceId]);
 
+  // Fallback de sincronização para dados de conta que não dependem do Realtime.
+  // O Supabase continua sendo a fonte de verdade; o localStorage é apenas cache.
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    const timer = window.setInterval(() => {
+      void loadCatalog().catch(() => undefined);
+      void loadEntries().catch(() => undefined);
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [session?.user?.id, applied.from, applied.to, applied.disciplineId, applied.subjectId, applied.sourceId]);
+
   const totalQuestions = entries.reduce((sum, entry) => sum + Number(entry.questions || 0), 0);
   const totalCorrect = entries.reduce((sum, entry) => sum + Number(entry.correct || 0), 0);
   const totalErrors = totalQuestions - totalCorrect;
