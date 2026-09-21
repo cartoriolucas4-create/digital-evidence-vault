@@ -11,6 +11,6 @@ export type Entry = {
 export type Filters = { disciplineId:string; subjectId:string; sourceId:string; from:string; to:string; };
 export type PerformanceNotification = {
   id:string; user_id:string; subject_id:string|null; subject_name:string; discipline_name:string|null;
-  notification_type:"drop_severe"|"drop"|"attention"|"recovery"|"record"|"exceptional"|"evolution";
+  notification_type:"drop_severe"|"drop"|"attention"|"recovery"|"record"|"exceptional"|"evolution"|"stagnation";
   title:string; message:string; created_at:string; read_at:string|null;
 };
