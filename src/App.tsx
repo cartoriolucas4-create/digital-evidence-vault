@@ -121,12 +121,31 @@ function readStore<T>(key: string, fallback: T): T {
   }
 }
 
+type ContextualNotification = {
+  id: string;
+  category: "first_three_days" | "mid_month" | "last_three_days" | "monthly_goal_near";
+  title: string;
+  message: string;
+  created_at: string;
+  read_at: string | null;
+  period_key: string;
+};
+
+type ContextualNotificationState = {
+  notifications: ContextualNotification[];
+  rotation: Record<string, number>;
+  sentPeriod: Record<string, string>;
+};
+
 type UserCloudPreferences = {
   theme?: "light" | "dark";
   buttonColor?: string;
   plannerDefaultColor?: string;
   plannerCompletedColor?: string;
   plannerSidebarCollapsed?: boolean;
+  contextualNotifications?: ContextualNotification[];
+  contextualNotificationRotation?: Record<string, number>;
+  contextualNotificationSentPeriod?: Record<string, string>;
 };
 
 function writeStore(key: string, value: unknown) {
@@ -284,6 +303,8 @@ function App() {
   const [performanceNotifications, setPerformanceNotifications] = useState<PerformanceNotification[]>([]);
   const [lucasDailyNotification, setLucasDailyNotification] = useState<{message:string;sequence:number;sentDate:string}|null>(null);
   const [adminStudentNotifications, setAdminStudentNotifications] = useState<Array<{id:string;title:string;message:string;created_at:string;read_at:string|null}>>([]);
+  const [contextualNotifications, setContextualNotifications] = useState<ContextualNotification[]>([]);
+  const contextualNotificationStateRef = useRef<ContextualNotificationState>({ notifications: [], rotation: {}, sentPeriod: {} });
 
   const [inactivityNotificationRead, setInactivityNotificationRead] = useState(false);
   const [, setNotificationClock] = useState(Date.now());
@@ -323,6 +344,14 @@ function App() {
       else if (localPlanner.completedColor) setPlannerCompletedColor(localPlanner.completedColor);
       if (typeof prefs.plannerSidebarCollapsed === "boolean") setPlannerSidebarCollapsed(prefs.plannerSidebarCollapsed);
       else setPlannerSidebarCollapsed(localSidebarCollapsed);
+
+      const contextualState: ContextualNotificationState = {
+        notifications: Array.isArray(prefs.contextualNotifications) ? prefs.contextualNotifications : [],
+        rotation: prefs.contextualNotificationRotation ?? {},
+        sentPeriod: prefs.contextualNotificationSentPeriod ?? {},
+      };
+      contextualNotificationStateRef.current = contextualState;
+      setContextualNotifications(contextualState.notifications.slice(0, 5));
       setCloudStateReady(true);
     };
     void loadCloudState();
@@ -344,6 +373,13 @@ function App() {
         if(prefs.plannerDefaultColor) setPlannerDefaultColor(prefs.plannerDefaultColor);
         if(prefs.plannerCompletedColor) setPlannerCompletedColor(prefs.plannerCompletedColor);
         if(typeof prefs.plannerSidebarCollapsed==="boolean") setPlannerSidebarCollapsed(prefs.plannerSidebarCollapsed);
+        const contextualState: ContextualNotificationState = {
+          notifications: Array.isArray(prefs.contextualNotifications) ? prefs.contextualNotifications : [],
+          rotation: prefs.contextualNotificationRotation ?? {},
+          sentPeriod: prefs.contextualNotificationSentPeriod ?? {},
+        };
+        contextualNotificationStateRef.current = contextualState;
+        setContextualNotifications(contextualState.notifications.slice(0, 5));
       })
       .subscribe();
     return()=>{ preferencesSyncChannel.current=null; void supabase.removeChannel(channel); };
@@ -359,6 +395,9 @@ function App() {
       plannerDefaultColor,
       plannerCompletedColor,
       plannerSidebarCollapsed,
+      contextualNotifications: contextualNotificationStateRef.current.notifications,
+      contextualNotificationRotation: contextualNotificationStateRef.current.rotation,
+      contextualNotificationSentPeriod: contextualNotificationStateRef.current.sentPeriod,
     };
     const preferencesJson=JSON.stringify(preferences);
     if(preferencesJson===cloudPreferencesRemoteJson.current) return;
@@ -924,6 +963,142 @@ function App() {
     }
   };
 
+  const CONTEXTUAL_NOTIFICATION_MESSAGES: Record<ContextualNotification["category"], { title: string; messages: string[] }> = {
+    first_three_days: {
+      title: "🚀 Começo de mês",
+      messages: [
+        "O mês começou! Bora dar o primeiro passo rumo à sua meta mensal.",
+        "Primeiros dias do mês! Comece agora a construir sua meta mensal.",
+        "O mês está só começando. Bora buscar sua meta mensal!",
+        "Começo de mês! Mantenha o foco e avance rumo à sua meta.",
+        "Ainda estamos no início do mês. É hora de começar forte!",
+      ],
+    },
+    mid_month: {
+      title: "📊 Meio do mês",
+      messages: [
+        "Metade do mês! Continue avançando rumo à sua meta mensal.",
+        "O mês chegou à metade. Como está sua caminhada até a meta?",
+        "Metade do mês passou. Bora manter o ritmo da sua meta mensal!",
+        "O mês está na metade. Ainda dá tempo de buscar sua meta!",
+        "Metade do mês! Continue firme para alcançar sua meta mensal.",
+      ],
+    },
+    last_three_days: {
+      title: "🏁 Reta final do mês",
+      messages: [
+        "Últimos dias! Dê um gás para alcançar sua meta mensal.",
+        "O mês está acabando! Ainda dá tempo de bater sua meta mensal.",
+        "Reta final do mês! Bora buscar sua meta de estudos.",
+        "Faltam poucos dias! Continue estudando para fechar sua meta mensal.",
+        "Últimos dias do mês! Não pare agora, sua meta ainda pode ser alcançada.",
+      ],
+    },
+    monthly_goal_near: {
+      title: "🎯 Meta mensal",
+      messages: [
+        "Você está quase batendo sua meta mensal!",
+        "Falta pouco para você alcançar sua meta mensal!",
+        "Sua meta mensal está próxima! Continue nesse ritmo.",
+        "Você já está perto de completar sua meta mensal!",
+        "Quase lá! Continue estudando para bater sua meta mensal.",
+      ],
+    },
+  };
+
+  const saveContextualNotificationState = async (state: ContextualNotificationState) => {
+    if (!session?.user?.id) return;
+    contextualNotificationStateRef.current = state;
+    setContextualNotifications(state.notifications.slice(0, 5));
+    const { data: current, error: readError } = await (supabase as any)
+      .from("study_user_state")
+      .select("preferences")
+      .eq("user_id", session.user.id)
+      .maybeSingle();
+    if (readError) return;
+    const preferences = {
+      ...((current?.preferences ?? {}) as Record<string, unknown>),
+      contextualNotifications: state.notifications,
+      contextualNotificationRotation: state.rotation,
+      contextualNotificationSentPeriod: state.sentPeriod,
+    };
+    const { error } = await (supabase as any)
+      .from("study_user_state")
+      .upsert({ user_id: session.user.id, preferences }, { onConflict: "user_id" });
+    if (!error) {
+      cloudPreferencesRemoteJson.current = JSON.stringify(preferences);
+      void preferencesSyncChannel.current?.send({
+        type: "broadcast",
+        event: "preferences_updated",
+        payload: { preferences },
+      });
+    }
+  };
+
+  const maybeCreateContextualNotification = async (
+    category: ContextualNotification["category"],
+    periodKey: string,
+  ) => {
+    if (!session?.user?.id || !settingsReady || monthlyGoal <= 0) return;
+    const state = contextualNotificationStateRef.current;
+    if (state.sentPeriod[category] === periodKey) return;
+
+    const config = CONTEXTUAL_NOTIFICATION_MESSAGES[category];
+    const currentRotation = Number(state.rotation[category] ?? 0);
+    const message = config.messages[currentRotation % config.messages.length];
+    const nextRotation = (currentRotation + 1) % config.messages.length;
+    const now = new Date().toISOString();
+    const notification: ContextualNotification = {
+      id: uid(),
+      category,
+      title: config.title,
+      message,
+      created_at: now,
+      read_at: null,
+      period_key: periodKey,
+    };
+
+    const nextState: ContextualNotificationState = {
+      notifications: [notification, ...state.notifications].slice(0, 50),
+      rotation: { ...state.rotation, [category]: nextRotation },
+      sentPeriod: { ...state.sentPeriod, [category]: periodKey },
+    };
+    await saveContextualNotificationState(nextState);
+    notify(message);
+    if ("Notification" in window && Notification.permission === "granted") {
+      try { new Notification(config.title, { body: message }); } catch {}
+    }
+  };
+
+  const evaluateContextualNotifications = async () => {
+    if (!session?.user?.id || !settingsReady) return;
+    const now = new Date();
+    const day = now.getDate();
+    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
+    if (day <= 3) {
+      await maybeCreateContextualNotification("first_three_days", monthKey);
+    } else if (day === 15) {
+      await maybeCreateContextualNotification("mid_month", monthKey);
+    } else if (day >= lastDay - 2) {
+      await maybeCreateContextualNotification("last_three_days", monthKey);
+    }
+
+    const { from, to } = monthBounds(now);
+    const { data, error } = await (supabase as any)
+      .from("study_entries")
+      .select("questions")
+      .gte("study_date", from)
+      .lte("study_date", to);
+    if (error) return;
+    const monthQuestions = (data ?? []).reduce((sum: number, item: any) => sum + Number(item.questions || 0), 0);
+    const monthlyProgress = monthlyGoal > 0 ? (monthQuestions / monthlyGoal) * 100 : 0;
+    if (monthlyProgress >= 80 && monthlyProgress <= 85) {
+      await maybeCreateContextualNotification("monthly_goal_near", monthKey);
+    }
+  };
+
   const markAdminStudentNotificationRead = async (id: string) => {
     const readAt = new Date().toISOString();
     const { error } = await (supabase as any)
@@ -1101,6 +1276,15 @@ function App() {
   // Fallback de sincronização para dados de conta que não dependem do Realtime.
   // O Supabase continua sendo a fonte de verdade; o localStorage é apenas cache.
   useEffect(() => {
+    if (!session?.user?.id || !settingsReady) return;
+    void evaluateContextualNotifications();
+    const timer = window.setInterval(() => {
+      void evaluateContextualNotifications();
+    }, 60_000);
+    return () => window.clearInterval(timer);
+  }, [session?.user?.id, settingsReady, monthlyGoal]);
+
+  useEffect(() => {
     if (!session?.user?.id) return;
     const timer = window.setInterval(() => {
       void loadCatalog().catch(() => undefined);
@@ -1251,7 +1435,7 @@ function App() {
     : 0;
   const inactiveFor24Hours = Boolean(latestQuestionTimestamp && Date.now() - latestQuestionTimestamp >= 24 * 60 * 60 * 1000);
   const unreadPerformanceCount = performanceNotifications.filter((item) => !item.read_at).length;
-  const notificationCount = unreadPerformanceCount + (inactiveFor24Hours && !inactivityNotificationRead ? 1 : 0) + (isLastDayOfMonth() ? 2 : 0) + (lucasDailyNotification ? 1 : 0) + adminStudentNotifications.filter((item) => !item.read_at).length;
+  const notificationCount = unreadPerformanceCount + (inactiveFor24Hours && !inactivityNotificationRead ? 1 : 0) + (isLastDayOfMonth() ? 2 : 0) + (lucasDailyNotification ? 1 : 0) + adminStudentNotifications.filter((item) => !item.read_at).length + contextualNotifications.filter((item) => !item.read_at).length;
 
   useEffect(() => {
     const timer = window.setInterval(() => setNotificationClock(Date.now()), 60_000);
@@ -1433,6 +1617,10 @@ function App() {
                   <button onClick={() => setNotificationOpen(false)} aria-label="Fechar"><X size={14}/></button>
                 </div>
               </div>
+              {contextualNotifications.slice(0, 5).map((n) => <button key={n.id} className={"monthly-notification performance-notification " + (n.read_at ? "read" : "unread")} onClick={(event) => { event.preventDefault(); event.stopPropagation(); }}>
+                <span className="notification-icon performance-exceptional"><Bell size={15}/></span>
+                <span><strong>{n.title}</strong><small>{n.message}</small><small className="notification-date">{new Date(n.created_at).toLocaleString("pt-BR")} • {n.read_at ? "Lida" : "Não lida"}</small></span>
+              </button>)}
               {adminStudentNotifications.slice(0, 5).map((n) => <button key={n.id} className={"monthly-notification performance-notification " + (n.read_at ? "read" : "unread")} onClick={(event) => { event.preventDefault(); event.stopPropagation(); }}>
                 <span className="notification-icon performance-exceptional"><Bell size={15}/></span>
                 <span><strong>{n.title}</strong><small>{n.message}</small><small className="notification-date">{new Date(n.created_at).toLocaleString("pt-BR")} • {n.read_at ? "Lida" : "Não lida"}</small></span>
