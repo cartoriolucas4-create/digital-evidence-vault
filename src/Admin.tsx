@@ -83,14 +83,24 @@ export default function AdminPage() {
       return;
     }
 
-    if (!data?.token) {
-      console.error("MCR admin_login returned an unexpected response:", data);
-      setError("O Supabase respondeu sem criar a sessão administrativa. Verifique a exposição da função admin_login no PostgREST.");
+    // PostgREST pode entregar o JSON retornado pela RPC como objeto,
+    // array de uma linha ou string JSON dependendo da tipagem/cache.
+    // Normalizamos as três formas antes de validar o token.
+    let loginResult: any = data;
+    if (Array.isArray(loginResult)) loginResult = loginResult[0];
+    if (typeof loginResult === "string") {
+      try { loginResult = JSON.parse(loginResult); } catch { /* mantém a string */ }
+    }
+
+    console.log("MCR admin_login normalized response:", loginResult);
+
+    if (!loginResult?.token) {
+      setError("O Supabase respondeu sem criar a sessão administrativa. A função admin_login está acessível, mas a resposta ainda não contém o token esperado.");
       return;
     }
 
-    sessionStorage.setItem(TOKEN_KEY, data.token);
-    setToken(data.token);
+    sessionStorage.setItem(TOKEN_KEY, loginResult.token);
+    setToken(loginResult.token);
     setPassword("");
   };
 
