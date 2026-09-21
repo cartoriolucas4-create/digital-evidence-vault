@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "supabase/migrations/20260921235900_fix_admin_login_credentials.sql"
+      - "supabase/migrations/**"
   workflow_dispatch:
 
 jobs:
