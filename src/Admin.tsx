@@ -59,23 +59,26 @@ export default function AdminPage() {
     event.preventDefault();
     setBusy(true);
     setError("");
+
+    // Login administrativo local primeiro: isso evita que uma RPC ausente
+    // no banco impeça o administrador de entrar.
+    const localHash = await sha256(password);
+    if (username.trim().toLowerCase() === "jonathan.barros" && localHash === LOCAL_ADMIN_HASH) {
+      sessionStorage.setItem(TOKEN_KEY, "local-admin");
+      setToken("local-admin");
+      setPassword("");
+      setBusy(false);
+      setError("");
+      return;
+    }
+
+    // Se as RPCs já estiverem disponíveis, mantém o login por banco como alternativa.
     const { data, error: rpcError } = await (supabase as any).rpc("admin_login", {
       p_username: username.trim(),
       p_password: password,
     });
     setBusy(false);
     if (rpcError || !data?.token) {
-      // Fallback temporário para produção enquanto as RPCs administrativas
-      // não estiverem disponíveis no banco. A senha não fica armazenada em texto.
-      const localHash = await sha256(password);
-      if (username.trim().toLowerCase() === "jonathan.barros" && localHash === LOCAL_ADMIN_HASH) {
-        sessionStorage.setItem(TOKEN_KEY, "local-admin");
-        setToken("local-admin");
-        setPassword("");
-        setError("");
-        await loadUsers("local-admin");
-        return;
-      }
       setError("Usuário ou senha administrativa inválidos.");
       return;
     }
