@@ -55,6 +55,8 @@ function readStore<T>(key: string, fallback: T): T {
   }
 }
 
+type UserCloudPreferences = { theme?: "light" | "dark"; buttonColor?: string; plannerDefaultColor?: string; plannerCompletedColor?: string; };
+
 function writeStore(key: string, value: unknown) {
   try {
     window.localStorage.setItem(key, JSON.stringify(value));
@@ -182,7 +184,9 @@ function App() {
   const [buttonColor, setButtonColor] = useState("#d63384");
   const [appFullscreen,setAppFullscreen]=useState(false);
   const [plannerSidebarCollapsed,setPlannerSidebarCollapsed]=useState(false);
-  const [mobileMenuOpen,setMobileMenuOpen]=useState(false);
+  const [mobileMenuOpen,setMobileMenuOpen]=useState(false);\n  const [cloudStateReady,setCloudStateReady]=useState(false);
+  const [cloudStateLoaded,setCloudStateLoaded]=useState(false);
+
   useEffect(()=>{
     const sync=()=>setAppFullscreen(Boolean(document.fullscreenElement));
     document.addEventListener("fullscreenchange",sync);
@@ -214,27 +218,65 @@ function App() {
 
   useEffect(() => {
     if (!session?.user?.id) return;
-    const saved = readStore<string>(`mcr_button_color_${session.user.id}`, "#d63384");
-    setButtonColor(saved || "#d63384");
+    const localTheme = readStore<"light" | "dark">("mcr_theme", "light");
+    const localButton = readStore<string>(`mcr_button_color_${session.user.id}`, "#d63384");
+    const localPlanner = readStore<{defaultColor?:string;completedColor?:string}>(`mcr_planner_colors_${session.user.id}`, {});
+    const loadCloudState = async () => {
+      const { data, error } = await (supabase as any)
+        .from("study_user_state")
+        .select("preferences")
+        .eq("user_id", session.user.id)
+        .maybeSingle();
+      if (error) {
+        setCloudStateReady(true);
+        setCloudStateLoaded(false);
+        return;
+      }
+      const prefs = (data?.preferences ?? {}) as UserCloudPreferences;
+      if (prefs.theme) setTheme(prefs.theme); else setTheme(localTheme);
+      if (prefs.buttonColor) setButtonColor(prefs.buttonColor); else setButtonColor(localButton);
+      if (prefs.plannerDefaultColor) setPlannerDefaultColor(prefs.plannerDefaultColor);
+      else if (localPlanner.defaultColor) setPlannerDefaultColor(localPlanner.defaultColor);
+      if (prefs.plannerCompletedColor) setPlannerCompletedColor(prefs.plannerCompletedColor);
+      else if (localPlanner.completedColor) setPlannerCompletedColor(localPlanner.completedColor);
+      setCloudStateLoaded(Boolean(data));
+      setCloudStateReady(true);
+    };
+    void loadCloudState();
   }, [session?.user?.id]);
 
   useEffect(() => {
     document.documentElement.style.setProperty("--accent-2", buttonColor);
     document.documentElement.style.setProperty("--accent", buttonColor);
-    if (session?.user?.id) writeStore(`mcr_button_color_${session.user.id}`, buttonColor);
-  }, [buttonColor, session?.user?.id]);
+    if (session?.user?.id && cloudStateReady) {
+      const persistPreferences = async () => {
+        const { data: current } = await (supabase as any)
+          .from("study_user_state")
+          .select("preferences")
+          .eq("user_id", session.user.id)
+          .maybeSingle();
+        const preferences = {
+          ...((current?.preferences ?? {}) as UserCloudPreferences),
+          theme,
+          buttonColor,
+          plannerDefaultColor,
+          plannerCompletedColor,
+        };
+        await (supabase as any).from("study_user_state").upsert(
+          { user_id: session.user.id, preferences },
+          { onConflict: "user_id" }
+        );
+      };
+      void persistPreferences();
+    }
+  }, [theme, buttonColor, plannerDefaultColor, plannerCompletedColor, session?.user?.id, cloudStateReady]);
 
   useEffect(() => {
-    if (!session?.user?.id) return;
-    const saved = readStore<{defaultColor?:string;completedColor?:string}>(`mcr_planner_colors_${session.user.id}`, {});
-    if (saved.defaultColor) setPlannerDefaultColor(saved.defaultColor);
-    if (saved.completedColor) setPlannerCompletedColor(saved.completedColor);
-  }, [session?.user?.id]);
-
-  useEffect(() => {
-    if (!session?.user?.id) return;
-    writeStore(`mcr_planner_colors_${session.user.id}`, {defaultColor: plannerDefaultColor, completedColor: plannerCompletedColor});
-  }, [session?.user?.id, plannerDefaultColor, plannerCompletedColor]);
+    if (session?.user?.id && cloudStateReady) {
+      writeStore(`mcr_button_color_${session.user.id}`, buttonColor);
+      writeStore(`mcr_planner_colors_${session.user.id}`, {defaultColor: plannerDefaultColor, completedColor: plannerCompletedColor});
+    }
+  }, [buttonColor, plannerDefaultColor, plannerCompletedColor, session?.user?.id, cloudStateReady]);
 
   useEffect(() => {
     let mounted = true;
