@@ -55,7 +55,13 @@ function readStore<T>(key: string, fallback: T): T {
   }
 }
 
-type UserCloudPreferences = { theme?: "light" | "dark"; buttonColor?: string; plannerDefaultColor?: string; plannerCompletedColor?: string; };
+type UserCloudPreferences = {
+  theme?: "light" | "dark";
+  buttonColor?: string;
+  plannerDefaultColor?: string;
+  plannerCompletedColor?: string;
+  plannerSidebarCollapsed?: boolean;
+};
 
 function writeStore(key: string, value: unknown) {
   try {
@@ -221,6 +227,7 @@ function App() {
     const localTheme = readStore<"light" | "dark">("mcr_theme", "light");
     const localButton = readStore<string>(`mcr_button_color_${session.user.id}`, "#d63384");
     const localPlanner = readStore<{defaultColor?:string;completedColor?:string}>(`mcr_planner_colors_${session.user.id}`, {});
+    const localSidebarCollapsed = readStore<boolean>(`mcr_planner_sidebar_collapsed_${session.user.id}`, false);
     const loadCloudState = async () => {
       const { data, error } = await (supabase as any)
         .from("study_user_state")
@@ -238,6 +245,8 @@ function App() {
       else if (localPlanner.defaultColor) setPlannerDefaultColor(localPlanner.defaultColor);
       if (prefs.plannerCompletedColor) setPlannerCompletedColor(prefs.plannerCompletedColor);
       else if (localPlanner.completedColor) setPlannerCompletedColor(localPlanner.completedColor);
+      if (typeof prefs.plannerSidebarCollapsed === "boolean") setPlannerSidebarCollapsed(prefs.plannerSidebarCollapsed);
+      else setPlannerSidebarCollapsed(localSidebarCollapsed);
       setCloudStateReady(true);
     };
     void loadCloudState();
@@ -259,6 +268,7 @@ function App() {
           buttonColor,
           plannerDefaultColor,
           plannerCompletedColor,
+          plannerSidebarCollapsed,
         };
         await (supabase as any).from("study_user_state").upsert(
           { user_id: session.user.id, preferences },
@@ -267,12 +277,13 @@ function App() {
       };
       void persistPreferences();
     }
-  }, [theme, buttonColor, plannerDefaultColor, plannerCompletedColor, session?.user?.id, cloudStateReady]);
+  }, [theme, buttonColor, plannerDefaultColor, plannerCompletedColor, plannerSidebarCollapsed, session?.user?.id, cloudStateReady]);
 
   useEffect(() => {
     if (session?.user?.id && cloudStateReady) {
       writeStore(`mcr_button_color_${session.user.id}`, buttonColor);
       writeStore(`mcr_planner_colors_${session.user.id}`, {defaultColor: plannerDefaultColor, completedColor: plannerCompletedColor});
+      writeStore(`mcr_planner_sidebar_collapsed_${session.user.id}`, plannerSidebarCollapsed);
     }
   }, [buttonColor, plannerDefaultColor, plannerCompletedColor, session?.user?.id, cloudStateReady]);
 
