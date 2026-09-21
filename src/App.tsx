@@ -184,7 +184,7 @@ function App() {
   const [buttonColor, setButtonColor] = useState("#d63384");
   const [appFullscreen,setAppFullscreen]=useState(false);
   const [plannerSidebarCollapsed,setPlannerSidebarCollapsed]=useState(false);
-  const [mobileMenuOpen,setMobileMenuOpen]=useState(false);\n  const [cloudStateReady,setCloudStateReady]=useState(false);
+  const [mobileMenuOpen,setMobileMenuOpen]=useState(false);\n  const [cloudStateReady,setCloudStateReady]=useState(false);\n  const [settingsReady,setSettingsReady]=useState(false);
   
 
   useEffect(()=>{
@@ -752,6 +752,7 @@ function App() {
 
   const loadCatalog = async () => {
     if (!session?.user.id) return;
+    setSettingsReady(false);
     const client = supabase as any;
     const [disciplinesResult, subjectsResult, sourcesResult, typesResult, settingsResult] = await Promise.all([
       client.from("study_disciplines").select("*").order("created_at", { ascending: true }),
@@ -779,6 +780,7 @@ function App() {
       setMonthlyGoal(2000);
       setTargetAccuracy(80);
     }
+    setSettingsReady(true);
   };
 
   const loadPerformanceNotifications = async () => {
@@ -902,12 +904,12 @@ function App() {
   };
 
   useEffect(() => {
-    if (!session?.user?.id) return;
+    if (!session?.user?.id || !settingsReady) return;
     const timer = window.setTimeout(() => {
       void saveSettings(false);
     }, 500);
     return () => window.clearTimeout(timer);
-  }, [session?.user?.id, studentName, dailyGoal, weeklyGoal, monthlyGoal, targetAccuracy]);
+  }, [session?.user?.id, settingsReady, studentName, dailyGoal, weeklyGoal, monthlyGoal, targetAccuracy]);
 
   const changePassword = async () => {
     if (!session?.user.email || !currentPassword || !newPassword || !confirmPassword) return;
