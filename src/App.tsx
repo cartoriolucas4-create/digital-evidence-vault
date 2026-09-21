@@ -185,7 +185,7 @@ function App() {
   const [appFullscreen,setAppFullscreen]=useState(false);
   const [plannerSidebarCollapsed,setPlannerSidebarCollapsed]=useState(false);
   const [mobileMenuOpen,setMobileMenuOpen]=useState(false);\n  const [cloudStateReady,setCloudStateReady]=useState(false);
-  const [cloudStateLoaded,setCloudStateLoaded]=useState(false);
+  
 
   useEffect(()=>{
     const sync=()=>setAppFullscreen(Boolean(document.fullscreenElement));
@@ -2607,7 +2607,7 @@ function SettingsPage({
             <span><strong>Tema escuro</strong><small>Mais confortável em ambientes com pouca luz</small></span>
           </button>
         </div>
-        <div className="notice theme-note">O tema claro é o padrão. A preferência fica salva neste navegador e pode ser alterada a qualquer momento.</div>
+        <div className="notice theme-note">O tema claro é o padrão. A preferência fica salva na sua conta e será carregada em qualquer dispositivo ou navegador após o login.</div>
       </div>
     </section>
     <section className="section">
