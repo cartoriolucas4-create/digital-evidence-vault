@@ -38,6 +38,7 @@ jobs:
         run: bunx vite build --config vite.pages.config.ts
 
       # Keep the Pages build tied to the current main branch revision.
+      # Administrative panel is included in the same SPA build.
 
       - name: Verify Pages artifact
         run: |
