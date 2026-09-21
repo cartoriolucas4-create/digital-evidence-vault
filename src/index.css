@@ -448,3 +448,12 @@ html[data-theme="dark"] .subject-performance-track{background:#2a3038}
 html[data-theme="dark"] .status.good{background:#39e75f!important;color:#07120a!important;border:1px solid #6cff82!important;box-shadow:0 0 8px rgba(57,231,95,.28)!important}
 html[data-theme="dark"] .status.warn{background:#ffd1e3!important;color:#7d1748!important;border:1px solid #ff9fc4!important;box-shadow:0 0 8px rgba(255,161,197,.22)!important}
 html[data-theme="dark"] .status.bad{background:#ffb8cf!important;color:#7a123f!important;border:1px solid #ff86b0!important;box-shadow:0 0 8px rgba(255,134,176,.22)!important}
+
+/* CONTRASTE FORTE — status no tema escuro */
+html[data-theme="dark"] .table .status.good,
+html[data-theme="dark"] span.status.good{background:#32e657!important;color:#06130a!important;border:1px solid #72ff8b!important;font-weight:900!important;opacity:1!important;}
+html[data-theme="dark"] .table .status.bad,
+html[data-theme="dark"] span.status.bad{background:#ffd0e1!important;color:#8a164d!important;border:1px solid #ff9cbe!important;font-weight:900!important;opacity:1!important;}
+html[data-theme="dark"] .table .status.warn,
+html[data-theme="dark"] span.status.warn{background:#ffe0ec!important;color:#8a164d!important;border:1px solid #ffafd0!important;font-weight:900!important;opacity:1!important;}
+html[data-theme="dark"] .status{font-size:10px!important;min-width:42px!important;text-align:center!important;padding:4px 8px!important;}
