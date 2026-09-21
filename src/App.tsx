@@ -1,5 +1,5 @@
 import { Component, type ErrorInfo, type FormEvent, type ReactNode, type PointerEvent, useEffect, useMemo, useRef, useState } from "react";
-import { AlignCenter, AlignJustify, AlignLeft, AlignRight, AlertTriangle, BarChart3, Bell, Bold, BookOpen, CheckCircle2, ChevronDown, Clipboard, Copy, FileDown, GripVertical, Italic, LogOut, Maximize2, Minimize2, MoreHorizontal, Menu, PaintBucket, PanelLeftClose, PanelLeftOpen, Plus, Redo2, RotateCcw, Settings, Sparkles, Strikethrough, Target, Trash2, Trophy, TrendingUp, Underline, Undo2, Upload, WrapText, X } from "lucide-react";
+import { AlignCenter, AlignJustify, AlignLeft, AlignRight, AlertTriangle, BarChart3, Bell, Bold, BookOpen, CheckCircle2, ChevronDown, Clipboard, Copy, FileDown, GripVertical, Italic, LogOut, Maximize2, Minimize2, MoreHorizontal, Menu, PaintBucket, PanelLeftClose, PanelLeftOpen, Plus, PauseCircle, Redo2, RotateCcw, Settings, Sparkles, Strikethrough, Target, Trash2, Trophy, TrendingUp, Underline, Undo2, Upload, WrapText, X } from "lucide-react";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { Discipline, Entry, Filters, PerformanceNotification, QuestionType, Source, Subject } from "./types";
@@ -1073,6 +1073,17 @@ function App() {
       const prior3 = weighted(previous.slice(3, 6));
       const priorBelowTarget = previous.slice(0, 3).every((item) => percent(Number(item.correct || 0), Number(item.questions || 0)) < targetAccuracy);
       const previousBest = Math.max(...previous.map((item) => percent(Number(item.correct || 0), Number(item.questions || 0))));
+       const allHistory = [entry, ...previous].sort((a, b) => new Date(b.study_date).getTime() - new Date(a.study_date).getTime());
+       const fourWeeksAgo = Date.now() - 28 * 24 * 60 * 60 * 1000;
+       const stagnationHistory = allHistory.filter((item) => new Date(item.study_date).getTime() >= fourWeeksAgo && new Date(item.study_date).getTime() <= Date.now());
+       const stagnationAccuracies = stagnationHistory.map((item) => percent(Number(item.correct || 0), Number(item.questions || 0)));
+       const stagnationSpan = stagnationHistory.length >= 2
+         ? new Date(stagnationHistory[0].study_date).getTime() - new Date(stagnationHistory[stagnationHistory.length - 1].study_date).getTime()
+         : 0;
+       const stagnatedForFourWeeks =
+         stagnationHistory.length >= 4 &&
+         stagnationSpan >= 28 * 24 * 60 * 60 * 1000 &&
+         Math.max(...stagnationAccuracies) - Math.min(...stagnationAccuracies) <= 1;
       const subject = subjects.find((item) => item.id === entry.subject_id);
       const discipline = disciplines.find((item) => item.id === entry.discipline_id);
       const subjectName = subject?.name ?? entry.subject_name_snapshot ?? "este assunto";
@@ -1082,7 +1093,11 @@ function App() {
       let title = "";
       let message = "";
 
-      if (currentAccuracy <= baseline - 25) {
+      if (stagnatedForFourWeeks) {
+         notificationType = "stagnation";
+         title = "⏸️ Desempenho estagnado em " + subjectName;
+         message = "Seu aproveitamento está praticamente no mesmo nível há mais de 4 semanas (" + Math.min(...stagnationAccuracies).toFixed(0) + "%–" + Math.max(...stagnationAccuracies).toFixed(0) + "%). Vale revisar a estratégia de estudo desse assunto.";
+       } else if (currentAccuracy <= baseline - 25) {
         notificationType = "drop_severe";
         title = "⚠️ Queda forte detectada";
         message = "Seu resultado em " + subjectName + " foi " + currentAccuracy.toFixed(0) + "%, enquanto seu padrão recente está em " + baseline.toFixed(0) + "%. Pode ser um bom momento para revisar esse assunto.";
@@ -1114,7 +1129,7 @@ function App() {
 
       if (!notificationType) return;
 
-      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const sevenDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
       const { data: recentSameType } = await client
         .from("study_performance_notifications")
         .select("id")
@@ -1130,7 +1145,7 @@ function App() {
         .from("study_performance_notifications")
         .select("id", { count: "exact", head: true })
         .gte("created_at", startOfDay.toISOString());
-      if (Number(todayCount || 0) >= 2) return;
+      if (Number(todayCount || 0) >= 4) return;
 
       const { data: inserted, error: insertError } = await client
         .from("study_performance_notifications")
@@ -1205,7 +1220,7 @@ function App() {
               </button>}
               {performanceNotifications.map((item) => <button key={item.id} className={"monthly-notification performance-notification " + (item.read_at ? "read" : "unread")} onClick={() => markPerformanceNotificationRead(item.id)}>
                 <span className={"notification-icon performance-" + item.notification_type}>
-                  {item.notification_type === "drop" || item.notification_type === "drop_severe" || item.notification_type === "attention" ? <AlertTriangle size={15}/> : item.notification_type === "record" ? <Trophy size={15}/> : item.notification_type === "evolution" ? <TrendingUp size={15}/> : item.notification_type === "recovery" ? <Sparkles size={15}/> : <Target size={15}/>}
+                  {item.notification_type === "drop" || item.notification_type === "drop_severe" || item.notification_type === "attention" ? <AlertTriangle size={15}/> : item.notification_type === "record" ? <Trophy size={15}/> : item.notification_type === "evolution" ? <TrendingUp size={15}/> : item.notification_type === "stagnation" ? <PauseCircle size={15}/> : item.notification_type === "recovery" ? <Sparkles size={15}/> : <Target size={15}/>}
                 </span>
                 <span><strong>{personalizeNotificationTitle(item.title, studentName)}</strong><small>{personalizeNotificationText(item.message, studentName)}</small><small className="notification-date">{new Date(item.created_at).toLocaleDateString("pt-BR")}</small></span>
               </button>)}
@@ -1574,12 +1589,13 @@ function Entries({disciplines,subjects=[],sources,types,entries,refresh,notify,o
     let result: any;
     let createdEntry: Entry | null = null;
     if (editing) {
-      result = await client.from("study_entries").update(payload).eq("id", editing.id);
+      result = await client.from("study_entries").update(payload).eq("id", editing.id).select("*").single();
     } else {
       result = await client.from("study_entries").insert(payload).select("*").single();
       createdEntry = result.data as Entry | null;
     }
     if (result.error) return notify(result.error.message);
+    if (editing) createdEntry = result.data as Entry | null;
     notify(editing ? "Lançamento atualizado." : "Lançamento criado.");
     setOpen(false); setEditing(null); refresh();
     if (createdEntry && onPerformanceEntry) void onPerformanceEntry(createdEntry);
