@@ -83,19 +83,60 @@ export default function AdminPage() {
       return;
     }
 
-    // PostgREST pode entregar o JSON retornado pela RPC como objeto,
-    // array de uma linha ou string JSON dependendo da tipagem/cache.
-    // Normalizamos as três formas antes de validar o token.
+    // Normaliza a resposta do SDK.
     let loginResult: any = data;
     if (Array.isArray(loginResult)) loginResult = loginResult[0];
     if (typeof loginResult === "string") {
-      try { loginResult = JSON.parse(loginResult); } catch { /* mantém a string */ }
+      try { loginResult = JSON.parse(loginResult); } catch { /* mantém */ }
     }
 
-    console.log("MCR admin_login normalized response:", loginResult);
+    // Se o SDK não expôs o token, consulta o endpoint REST diretamente.
+    // Isso elimina qualquer diferença de tipagem/cache do supabase-js.
+    if (!loginResult?.token) {
+      try {
+        const url = import.meta.env["VITE_SUPABASE_URL"];
+        const key = import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"];
+        const response = await fetch(`${url}/rest/v1/rpc/admin_login`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "apikey": key,
+            "Accept": "application/json",
+          },
+          body: JSON.stringify({
+            p_username: username.trim(),
+            p_password: password,
+          }),
+        });
+        const raw = await response.text();
+        let directResult: any = null;
+        try { directResult = JSON.parse(raw); } catch { /* resposta não JSON */ }
+        if (Array.isArray(directResult)) directResult = directResult[0];
+        if (typeof directResult === "string") {
+          try { directResult = JSON.parse(directResult); } catch { /* mantém */ }
+        }
+
+        console.log("MCR admin_login direct REST:", {
+          status: response.status,
+          ok: response.ok,
+          body: directResult ?? raw,
+        });
+
+        if (!response.ok) {
+          setError(`Erro no Supabase (HTTP ${response.status}): ${directResult?.message || directResult?.error || raw || "resposta vazia"}`);
+          return;
+        }
+        loginResult = directResult;
+      } catch (directError: any) {
+        console.error("MCR direct admin_login error:", directError);
+        setError(`Não foi possível acessar o endpoint de login do Supabase: ${directError?.message || "erro de rede"}`);
+        return;
+      }
+    }
 
     if (!loginResult?.token) {
-      setError("O Supabase respondeu sem criar a sessão administrativa. A função admin_login está acessível, mas a resposta ainda não contém o token esperado.");
+      setError("A função admin_login respondeu, mas não devolveu o token de sessão. Vou verificar o retorno bruto do endpoint.");
+      console.error("MCR admin_login final response:", loginResult);
       return;
     }
 
