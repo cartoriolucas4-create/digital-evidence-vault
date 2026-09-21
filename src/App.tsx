@@ -275,19 +275,30 @@ function App() {
         if(prefs.plannerCompletedColor) setPlannerCompletedColor(prefs.plannerCompletedColor);
         if(typeof prefs.plannerSidebarCollapsed==="boolean") setPlannerSidebarCollapsed(prefs.plannerSidebarCollapsed);
       })
-      .on("postgres_changes",{event:"*",schema:"public",table:"study_user_state",filter:`user_id=eq.${userId}`},(payload:any)=>{
-        const prefs=(payload.new?.preferences ?? {}) as UserCloudPreferences;
-        const json=JSON.stringify(prefs);
-        if(json===cloudPreferencesRemoteJson.current) return;
-        cloudPreferencesRemoteJson.current=json;
-        if(prefs.theme) setTheme(prefs.theme);
-        if(prefs.buttonColor) setButtonColor(prefs.buttonColor);
-        if(prefs.plannerDefaultColor) setPlannerDefaultColor(prefs.plannerDefaultColor);
-        if(prefs.plannerCompletedColor) setPlannerCompletedColor(prefs.plannerCompletedColor);
-        if(typeof prefs.plannerSidebarCollapsed==="boolean") setPlannerSidebarCollapsed(prefs.plannerSidebarCollapsed);
-      })
       .subscribe();
     return()=>{ preferencesSyncChannel.current=null; void supabase.removeChannel(channel); };
+  },[session?.user?.id]);
+
+  // Confirma a preferência diretamente na nuvem a cada 2s. O Broadcast entrega a mudança imediatamente;
+  // esta leitura evita que um navegador fique preso em uma versão antiga caso o Realtime esteja indisponível.
+  useEffect(() => {
+    if(!session?.user?.id) return;
+    const userId=session.user.id;
+    const syncPreferencesFromCloud=async()=>{
+      const {data,error}=await (supabase as any).from("study_user_state").select("preferences").eq("user_id",userId).maybeSingle();
+      if(error || !data) return;
+      const prefs=(data.preferences ?? {}) as UserCloudPreferences;
+      const json=JSON.stringify(prefs);
+      if(json===cloudPreferencesRemoteJson.current) return;
+      cloudPreferencesRemoteJson.current=json;
+      if(prefs.theme) setTheme(prefs.theme);
+      if(prefs.buttonColor) setButtonColor(prefs.buttonColor);
+      if(prefs.plannerDefaultColor) setPlannerDefaultColor(prefs.plannerDefaultColor);
+      if(prefs.plannerCompletedColor) setPlannerCompletedColor(prefs.plannerCompletedColor);
+      if(typeof prefs.plannerSidebarCollapsed==="boolean") setPlannerSidebarCollapsed(prefs.plannerSidebarCollapsed);
+    };
+    const timer=window.setInterval(()=>{void syncPreferencesFromCloud();},2000);
+    return()=>window.clearInterval(timer);
   },[session?.user?.id]);
 
   useEffect(() => {
@@ -2097,20 +2108,26 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
         setData(next);
         writeStore(key,next);
       })
-      .on("postgres_changes",{
-        event:"*",schema:"public",table:"study_user_state",filter:`user_id=eq.${userId}`
-      },(payload:any)=>{
-        const incoming=payload.new?.planner_data;
-        if(!incoming) return;
-        const next=normalizePlanner(incoming);
-        const json=JSON.stringify(next);
-        if(json===plannerLastRemoteJson.current) return;
-        plannerLastRemoteJson.current=json;
-        setData(next);
-        writeStore(key,next);
-      })
       .subscribe();
     return()=>{ plannerSyncChannel.current=null; void supabase.removeChannel(channel); };
+  },[userId,key]);
+
+  // Confirma periodicamente o Planejamento oficial da nuvem. Assim, mesmo sem Realtime,
+  // qualquer dispositivo converge para a última versão salva na conta.
+  useEffect(()=>{
+    if(!userId) return;
+    const syncPlannerFromCloud=async()=>{
+      const {data:remote,error}=await (supabase as any).from("study_user_state").select("planner_data").eq("user_id",userId).maybeSingle();
+      if(error || !remote?.planner_data) return;
+      const next=normalizePlanner(remote.planner_data);
+      const json=JSON.stringify(next);
+      if(json===plannerLastRemoteJson.current) return;
+      plannerLastRemoteJson.current=json;
+      setData(next);
+      writeStore(key,next);
+    };
+    const timer=window.setInterval(()=>{void syncPlannerFromCloud();},2000);
+    return()=>window.clearInterval(timer);
   },[userId,key]);
 
   useEffect(()=>{
