@@ -64,37 +64,18 @@ export default function AdminPage() {
     event.preventDefault();
     setBusy(true);
     setError("");
-    const localHash = await sha256(password);
-    const isLocalCredential = username.trim().toLowerCase() === "jonathan.barros" && localHash === LOCAL_ADMIN_HASH;
-
-    // Primeiro tenta criar uma sessão administrativa real no banco.
-    // Isso é necessário para que bloquear, alterar senha e enviar notificações
-    // sejam autorizados pelo backend.
     const { data, error: rpcError } = await (supabase as any).rpc("admin_login", {
       p_username: username.trim(),
       p_password: password,
     });
-
-    if (!rpcError && data?.token) {
-      sessionStorage.setItem(TOKEN_KEY, data.token);
-      setToken(data.token);
-      setPassword("");
-      setBusy(false);
-      return;
-    }
-
-    // Fallback somente para permitir acesso ao painel quando o RPC de login
-    // ainda não estiver disponível. Os controles de aluno permanecem protegidos.
-    if (isLocalCredential) {
-      sessionStorage.setItem(TOKEN_KEY, "local-admin");
-      setToken("local-admin");
-      setPassword("");
-      setBusy(false);
-      return;
-    }
-
     setBusy(false);
-    setError("Usuário ou senha administrativa inválidos.");
+    if (rpcError || !data?.token) {
+      setError("Usuário ou senha administrativa inválidos. A sessão segura não foi criada.");
+      return;
+    }
+    sessionStorage.setItem(TOKEN_KEY, data.token);
+    setToken(data.token);
+    setPassword("");
   };
 
   const logout = async () => {
