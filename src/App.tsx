@@ -1907,6 +1907,12 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
     });
     return {version:3,weekOffset:Number(raw?.weekOffset)||0,cols,rows,headers,colWidths,rowHeights,cells};
   };
+  const plannerHasContent=(planner:PlannerData)=>{
+    if(Object.keys(planner.cells).length>0) return true;
+    if(planner.weekOffset!==0) return true;
+    if(planner.headers.some((header,index)=>header!==defaultHeaders[index])) return true;
+    return planner.colWidths.some(width=>width!==190)||planner.rowHeights.some(height=>height!==180);
+  };
   const [data,setData]=useState<PlannerData>(()=>normalizePlanner(readStore<PlannerData>(key,makeInitial())));
   const plannerRemoteReady=useRef(false);
   const plannerRemoteTimer=useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1951,11 +1957,13 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
       }
 
       const remoteData=remote?.planner_data ? normalizePlanner(remote.planner_data) : null;
+      const localHasContent=plannerHasContent(localData);
+      const remoteHasContent=remoteData ? plannerHasContent(remoteData) : false;
 
-      if(remoteData){
+      if(remoteData && remoteHasContent){
         setData(remoteData);
         writeStore(key,remoteData);
-      }else{
+      }else if(localHasContent){
         const {data:saved,error:saveError}=await client
           .from("study_user_state")
           .upsert(
