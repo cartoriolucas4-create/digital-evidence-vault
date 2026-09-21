@@ -190,7 +190,9 @@ function App() {
   const [buttonColor, setButtonColor] = useState("#d63384");
   const [appFullscreen,setAppFullscreen]=useState(false);
   const [plannerSidebarCollapsed,setPlannerSidebarCollapsed]=useState(false);
-  const [mobileMenuOpen,setMobileMenuOpen]=useState(false);\n  const [cloudStateReady,setCloudStateReady]=useState(false);\n  const [settingsReady,setSettingsReady]=useState(false);
+  const [mobileMenuOpen,setMobileMenuOpen]=useState(false);
+  const [cloudStateReady,setCloudStateReady]=useState(false);
+  const [settingsReady,setSettingsReady]=useState(false);
   
 
   useEffect(()=>{
