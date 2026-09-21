@@ -204,12 +204,12 @@ export default function AdminPage() {
           <select className="admin-select" style={{width:"auto"}} value={sort} onChange={e=>setSort(e.target.value as any)}><option value="created">Mais recentes</option><option value="name">Nome A–Z</option><option value="last">Último acesso</option></select>
         </div>
       </div>
-      <div style={{opacity:.6,fontSize:12,marginBottom:8}}>{filtered.length} aluno(s) exibido(s)</div>
-      <table className="admin-table"><thead><tr><th>Nome</th><th>E-mail</th><th>Cadastro</th><th>Último acesso</th><th>Status</th></tr></thead><tbody>
+      <div style={{opacity:.6,fontSize:12,marginBottom:8}}>{filtered.length} aluno(s) exibido(s) · Use <strong>Gerenciar</strong> para bloquear, alterar senha ou enviar notificação.</div>
+      <table className="admin-table"><thead><tr><th>Nome</th><th>E-mail</th><th>Cadastro</th><th>Último acesso</th><th>Status</th><th>Ações</th></tr></thead><tbody>
         {filtered.map(u=><tr key={u.id} onClick={()=>setSelected(u)}>
-          <td><strong>{getName(u)}</strong></td><td><div className="admin-email"><span>{u.email || "—"}</span>{u.email && <button className="admin-copy" title="Copiar e-mail" onClick={e=>{e.stopPropagation();void copyEmail(u.email)}}><Copy size={14}/></button>}</div></td><td>{formatDate(u.created_at)}</td><td>{formatDate(u.last_sign_in_at)}</td><td><span className={"admin-badge "+(!u.email_confirmed_at?"pending":"")}>{u.email_confirmed_at?"Confirmado":"Pendente"}</span></td>
+          <td><strong>{getName(u)}</strong></td><td><div className="admin-email"><span>{u.email || "—"}</span>{u.email && <button className="admin-copy" title="Copiar e-mail" onClick={e=>{e.stopPropagation();void copyEmail(u.email)}}><Copy size={14}/></button>}</div></td><td>{formatDate(u.created_at)}</td><td>{formatDate(u.last_sign_in_at)}</td><td><span className={"admin-badge "+(!u.email_confirmed_at?"pending":"")}>{u.email_confirmed_at?"Confirmado":"Pendente"}</span></td><td><button className="admin-chip" style={{padding:"6px 10px"}} onClick={e=>{e.stopPropagation();setSelected(u)}}>Gerenciar</button></td>
         </tr>)}
-        {!filtered.length && <tr><td colSpan={5} className="admin-empty">{busy?"Carregando alunos...":"Nenhum aluno encontrado."}</td></tr>}
+        {!filtered.length && <tr><td colSpan={6} className="admin-empty">{busy?"Carregando alunos...":"Nenhum aluno encontrado."}</td></tr>}
       </tbody></table>
     </div>
   </div>
