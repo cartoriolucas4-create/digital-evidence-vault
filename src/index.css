@@ -100,7 +100,7 @@ html[data-theme="dark"] .nav button{color:#aeb7c2}
 html[data-theme="dark"] .nav button:hover,html[data-theme="dark"] .nav button.active{background:#30202a;color:#f08abd}
 html[data-theme="dark"] .field input,html[data-theme="dark"] .field select,html[data-theme="dark"] .field textarea,html[data-theme="dark"] .add-row input,html[data-theme="dark"] .add-row select,html[data-theme="dark"] .search{background:#11151b;color:#edf1f5;border-color:#343c48}
 html[data-theme="dark"] .btn{background:#1c222b;color:#e5e9ee;border-color:#343c48}
-html[data-theme="dark"] .btn.primary{background:#d63384;border-color:#d63384;color:#fff}
+html[data-theme="dark"] .btn.primary{background:var(--accent-2)!important;border-color:var(--accent-2)!important;color:#fff!important}
 html[data-theme="dark"] .table th{background:#30202a;color:#f08abd}
 html[data-theme="dark"] .table td{border-bottom-color:#2b323c;color:#dce2e8}
 html[data-theme="dark"] .table tr:nth-child(even) td{background:#1a1f27}
