@@ -488,5 +488,6 @@ html[data-theme="dark"] .status.warn{
 }
 
 /* Posicionamento da logo MCR no cabeçalho */
-.topbar .brand{justify-content:flex-start;transform:translateX(-12px)}
-@media(max-width:760px){.topbar .brand{transform:translateX(-24px)}.topbar .mcr-logo-header{object-position:left center}}
+.topbar .brand{justify-content:flex-start;margin-left:-28px;transform:none}
+.topbar .mcr-logo-header{display:block}
+@media(max-width:760px){.topbar .brand{margin-left:-34px}.topbar .mcr-logo-header{object-position:left center}}
