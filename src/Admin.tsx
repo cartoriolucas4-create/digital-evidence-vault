@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { LogIn, LogOut, Search, ShieldCheck, Users, RefreshCw } from "lucide-react";
+import { Copy, Download, LogIn, LogOut, Search, ShieldCheck, Users, RefreshCw, X, CheckCircle2, Clock3 } from "lucide-react";
 import { supabase } from "./integrations/supabase/client";
 
 type AdminUser = {
   id: string;
+  name: string | null;
   email: string | null;
   created_at: string;
   last_sign_in_at: string | null;
@@ -12,9 +13,12 @@ type AdminUser = {
 
 const TOKEN_KEY = "mcr_admin_session";
 const LOCAL_ADMIN_HASH = "e628bf13707b4a929d1465e5d6af4a4c4da416138d39d02bb65c40830106e3d8";
+const ADMIN_DATA_KEY = "MCR-ADMIN-2026";
 
 const formatDate = (value: string | null) =>
   value ? new Date(value).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "—";
+
+const getName = (u: AdminUser) => u.name?.trim() || "Nome não informado";
 
 export default function AdminPage() {
   const [token, setToken] = useState(() => sessionStorage.getItem(TOKEN_KEY) || "");
@@ -22,57 +26,46 @@ export default function AdminPage() {
   const [password, setPassword] = useState("");
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<"all" | "confirmed" | "pending">("all");
+  const [sort, setSort] = useState<"created" | "name" | "last">("created");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [selected, setSelected] = useState<AdminUser | null>(null);
+  const [copied, setCopied] = useState("");
 
   const sha256 = async (value: string) => {
-    const bytes = new TextEncoder().encode(value);
-    const digest = await crypto.subtle.digest("SHA-256", bytes);
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
     return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, "0")).join("");
   };
 
-  const loadUsers = async (sessionToken = token) => {
-    if (!sessionToken) return;
+  const loadUsers = async () => {
     setBusy(true);
     setError("");
-    const { data, error: rpcError } = await (supabase as any).rpc("admin_list_users", { p_token: sessionToken });
+    const { data, error: rpcError } = await (supabase as any).rpc("mcr_users_for_admin", { p_key: ADMIN_DATA_KEY });
     setBusy(false);
     if (rpcError || !data) {
-      // O banco de produção ainda pode estar sem as RPCs administrativas.
-      // Nesse caso, não derruba o acesso local do administrador.
-      if (sessionToken === "local-admin") {
-        setBusy(false);
-        setUsers([]);
-        return;
-      }
-      sessionStorage.removeItem(TOKEN_KEY);
-      setToken("");
-      setError("Sessão administrativa inválida ou expirada.");
+      setError("Não foi possível carregar os alunos. Tente novamente em Atualizar.");
       return;
     }
     setUsers((data || []) as AdminUser[]);
   };
 
-  useEffect(() => { void loadUsers(); }, []);
+  useEffect(() => {
+    if (token) void loadUsers();
+  }, [token]);
 
   const login = async (event: React.FormEvent) => {
     event.preventDefault();
     setBusy(true);
     setError("");
-
-    // Login administrativo local primeiro: isso evita que uma RPC ausente
-    // no banco impeça o administrador de entrar.
     const localHash = await sha256(password);
     if (username.trim().toLowerCase() === "jonathan.barros" && localHash === LOCAL_ADMIN_HASH) {
       sessionStorage.setItem(TOKEN_KEY, "local-admin");
       setToken("local-admin");
       setPassword("");
       setBusy(false);
-      setError("");
       return;
     }
-
-    // Se as RPCs já estiverem disponíveis, mantém o login por banco como alternativa.
     const { data, error: rpcError } = await (supabase as any).rpc("admin_login", {
       p_username: username.trim(),
       p_password: password,
@@ -85,7 +78,6 @@ export default function AdminPage() {
     sessionStorage.setItem(TOKEN_KEY, data.token);
     setToken(data.token);
     setPassword("");
-    await loadUsers(data.token);
   };
 
   const logout = async () => {
@@ -97,25 +89,53 @@ export default function AdminPage() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return q ? users.filter(u => (u.email || "").toLowerCase().includes(q)) : users;
-  }, [users, query]);
+    const result = users.filter(u => {
+      const matchesSearch = !q || getName(u).toLowerCase().includes(q) || (u.email || "").toLowerCase().includes(q);
+      const matchesFilter = filter === "all" || (filter === "confirmed" ? !!u.email_confirmed_at : !u.email_confirmed_at);
+      return matchesSearch && matchesFilter;
+    });
+    return [...result].sort((a,b) => {
+      if (sort === "name") return getName(a).localeCompare(getName(b), "pt-BR");
+      if (sort === "last") return (b.last_sign_in_at || "").localeCompare(a.last_sign_in_at || "");
+      return b.created_at.localeCompare(a.created_at);
+    });
+  }, [users, query, filter, sort]);
+
+  const active7 = useMemo(() => {
+    const limit = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    return users.filter(u => u.last_sign_in_at && new Date(u.last_sign_in_at).getTime() >= limit).length;
+  }, [users]);
+
+  const exportCsv = () => {
+    const header = ["Nome","E-mail","Cadastro","Último acesso","Status"];
+    const rows = filtered.map(u => [getName(u), u.email || "", formatDate(u.created_at), formatDate(u.last_sign_in_at), u.email_confirmed_at ? "Confirmado" : "Pendente"]);
+    const csv = [header, ...rows].map(row => row.map(v => '"' + String(v).replaceAll('"','""') + '"').join(";")).join("\n");
+    const blob = new Blob(["\ufeff" + csv], {type:"text/csv;charset=utf-8"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href=url; a.download="alunos-mcr.csv"; a.click(); URL.revokeObjectURL(url);
+  };
+
+  const copyEmail = async (email: string | null) => {
+    if (!email) return;
+    await navigator.clipboard.writeText(email);
+    setCopied(email);
+    setTimeout(() => setCopied(""), 1400);
+  };
 
   const css = `
     .admin-page{min-height:100vh;background:var(--page-bg,#f7f8fa);color:var(--text,#202124);padding:32px}
-    .admin-shell{max-width:1180px;margin:0 auto}
-    .admin-login{max-width:430px;margin:9vh auto 0;background:var(--card-bg,#fff);border:1px solid var(--border,#e5e7eb);border-radius:18px;padding:32px;box-shadow:0 18px 50px rgba(0,0,0,.08)}
+    .admin-shell{max-width:1280px;margin:0 auto}.admin-login{max-width:430px;margin:9vh auto 0;background:var(--card-bg,#fff);border:1px solid var(--border,#e5e7eb);border-radius:18px;padding:32px;box-shadow:0 18px 50px rgba(0,0,0,.08)}
     .admin-brand{display:flex;align-items:center;gap:12px;margin-bottom:24px}.admin-brand-icon{width:46px;height:46px;border-radius:12px;background:var(--button-color,#d63384);display:grid;place-items:center;color:#fff}
-    .admin-login h1{margin:0 0 8px;font-size:25px}.admin-sub{margin:0 0 24px;opacity:.68}
-    .admin-field{display:grid;gap:7px;margin-bottom:15px}.admin-field label{font-size:13px;font-weight:700}.admin-field input{width:100%;box-sizing:border-box;padding:12px 13px;border:1px solid var(--border,#dfe3e8);border-radius:10px;background:var(--input-bg,#fff);color:inherit}
-    .admin-btn{border:0;border-radius:10px;padding:12px 16px;background:var(--button-color,#d63384);color:#fff;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:8px}.admin-btn:disabled{opacity:.6;cursor:not-allowed}
-    .admin-error{background:#fff0f0;color:#b42318;padding:10px 12px;border-radius:9px;margin-bottom:14px;font-size:13px}
-    .admin-head{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:22px}.admin-head h1{margin:0}.admin-actions{display:flex;gap:9px}
-    .admin-card{background:var(--card-bg,#fff);border:1px solid var(--border,#e5e7eb);border-radius:16px;padding:20px;box-shadow:0 8px 28px rgba(0,0,0,.05)}
-    .admin-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px}.admin-stat strong{display:block;font-size:27px;margin-top:6px}.admin-stat span{opacity:.65;font-size:13px}
-    .admin-toolbar{display:flex;gap:10px;justify-content:space-between;margin-bottom:14px}.admin-search{position:relative;flex:1;max-width:420px}.admin-search svg{position:absolute;left:11px;top:12px;opacity:.5}.admin-search input{width:100%;box-sizing:border-box;padding:11px 12px 11px 36px;border:1px solid var(--border,#dfe3e8);border-radius:10px;background:var(--input-bg,#fff);color:inherit}
-    .admin-table{width:100%;border-collapse:collapse}.admin-table th,.admin-table td{text-align:left;padding:13px 10px;border-bottom:1px solid var(--border,#edf0f2);font-size:13px}.admin-table th{font-size:12px;text-transform:uppercase;letter-spacing:.04em;opacity:.62}
-    .admin-badge{display:inline-flex;padding:4px 8px;border-radius:999px;background:#eaf7ee;color:#16733b;font-size:11px;font-weight:700}
-    @media(max-width:760px){.admin-page{padding:16px}.admin-head{align-items:flex-start;flex-direction:column}.admin-stats{grid-template-columns:1fr}.admin-toolbar{flex-direction:column}.admin-search{max-width:none}.admin-card{overflow:auto}.admin-table{min-width:720px}}
+    .admin-login h1{margin:0 0 8px;font-size:25px}.admin-sub{margin:0 0 24px;opacity:.68}.admin-field{display:grid;gap:7px;margin-bottom:15px}.admin-field label{font-size:13px;font-weight:700}.admin-field input,.admin-select{width:100%;box-sizing:border-box;padding:11px 13px;border:1px solid var(--border,#dfe3e8);border-radius:10px;background:var(--input-bg,#fff);color:inherit}
+    .admin-btn{border:0;border-radius:10px;padding:11px 15px;background:var(--button-color,#d63384);color:#fff;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:8px}.admin-btn:disabled{opacity:.6;cursor:not-allowed}.admin-btn.secondary{background:transparent;color:inherit;border:1px solid var(--border,#dfe3e8)}
+    .admin-error{background:#fff0f0;color:#b42318;padding:10px 12px;border-radius:9px;margin-bottom:14px;font-size:13px}.admin-head{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:22px}.admin-head h1{margin:0}.admin-actions{display:flex;gap:9px;flex-wrap:wrap}
+    .admin-card{background:var(--card-bg,#fff);border:1px solid var(--border,#e5e7eb);border-radius:16px;padding:20px;box-shadow:0 8px 28px rgba(0,0,0,.05)}.admin-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}.admin-stat strong{display:block;font-size:27px;margin-top:6px}.admin-stat span{opacity:.65;font-size:13px}
+    .admin-toolbar{display:flex;gap:10px;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap}.admin-search{position:relative;flex:1;min-width:260px}.admin-search svg{position:absolute;left:11px;top:12px;opacity:.5}.admin-search input{width:100%;box-sizing:border-box;padding:11px 12px 11px 36px;border:1px solid var(--border,#dfe3e8);border-radius:10px;background:var(--input-bg,#fff);color:inherit}
+    .admin-filters{display:flex;gap:7px;flex-wrap:wrap}.admin-chip{border:1px solid var(--border,#dfe3e8);background:transparent;border-radius:999px;padding:8px 12px;cursor:pointer;color:inherit}.admin-chip.active{background:var(--button-color,#d63384);color:#fff;border-color:var(--button-color,#d63384)}
+    .admin-table{width:100%;border-collapse:collapse}.admin-table th,.admin-table td{text-align:left;padding:13px 10px;border-bottom:1px solid var(--border,#edf0f2);font-size:13px}.admin-table th{font-size:12px;text-transform:uppercase;letter-spacing:.04em;opacity:.62}.admin-table tbody tr{cursor:pointer}.admin-table tbody tr:hover{background:rgba(127,127,127,.05)}
+    .admin-badge{display:inline-flex;padding:4px 8px;border-radius:999px;background:#eaf7ee;color:#16733b;font-size:11px;font-weight:700}.admin-badge.pending{background:#fff5e6;color:#9a5b00}.admin-email{display:flex;align-items:center;gap:7px}.admin-copy{border:0;background:transparent;cursor:pointer;opacity:.55;padding:4px}.admin-copy:hover{opacity:1}
+    .admin-empty{text-align:center;padding:40px;opacity:.6}.admin-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);display:grid;place-items:center;padding:20px;z-index:20}.admin-detail{width:min(520px,100%);background:var(--card-bg,#fff);border-radius:18px;padding:24px;box-shadow:0 25px 80px rgba(0,0,0,.2)}.admin-detail-head{display:flex;justify-content:space-between;align-items:center}.admin-detail-row{padding:12px 0;border-bottom:1px solid var(--border,#edf0f2)}.admin-detail-label{font-size:11px;text-transform:uppercase;opacity:.6}.admin-detail-value{margin-top:4px;word-break:break-word}
+    @media(max-width:900px){.admin-stats{grid-template-columns:repeat(2,1fr)}}@media(max-width:650px){.admin-page{padding:16px}.admin-head{align-items:flex-start;flex-direction:column}.admin-stats{grid-template-columns:1fr}.admin-card{overflow:auto}.admin-table{min-width:820px}}
   `;
 
   if (!token) return <div className="admin-page"><style>{css}</style><div className="admin-login">
@@ -124,20 +144,44 @@ export default function AdminPage() {
     <form onSubmit={login}>
       <div className="admin-field"><label>Usuário</label><input value={username} onChange={e=>setUsername(e.target.value)} autoComplete="username" required /></div>
       <div className="admin-field"><label>Senha</label><input type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password" required /></div>
-      {error && <div className="admin-error">{error}</div>}
-      <button className="admin-btn" style={{width:"100%",justifyContent:"center"}} disabled={busy}><LogIn size={17}/>{busy?"Entrando...":"Entrar"}</button>
+      {error && <div className="admin-error">{error}</div>}<button className="admin-btn" style={{width:"100%",justifyContent:"center"}} disabled={busy}><LogIn size={17}/>{busy?"Entrando...":"Entrar"}</button>
     </form>
   </div></div>;
 
   return <div className="admin-page"><style>{css}</style><div className="admin-shell">
-    <div className="admin-head"><div><h1>Painel Administrativo</h1><div style={{opacity:.65,marginTop:5}}>Gerenciamento dos alunos cadastrados no MCR</div></div><div className="admin-actions"><button className="admin-btn" onClick={()=>void loadUsers()} disabled={busy}><RefreshCw size={16}/>{busy?"Atualizando":"Atualizar"}</button><button className="admin-btn" onClick={()=>void logout()}><LogOut size={16}/>Sair</button></div></div>
+    <div className="admin-head"><div><h1>Painel Administrativo</h1><div style={{opacity:.65,marginTop:5}}>Gerenciamento dos alunos cadastrados no MCR</div></div><div className="admin-actions">
+      <button className="admin-btn" onClick={()=>void loadUsers()} disabled={busy}><RefreshCw size={16}/>{busy?"Atualizando":"Atualizar"}</button>
+      <button className="admin-btn secondary" onClick={exportCsv} disabled={!filtered.length}><Download size={16}/>Exportar CSV</button>
+      <button className="admin-btn" onClick={()=>void logout()}><LogOut size={16}/>Sair</button>
+    </div></div>
     {error && <div className="admin-error">{error}</div>}
-    <div className="admin-stats"><div className="admin-card admin-stat"><span>Total de alunos</span><strong>{users.length}</strong><Users size={18}/></div><div className="admin-card admin-stat"><span>Com e-mail confirmado</span><strong>{users.filter(u=>!!u.email_confirmed_at).length}</strong></div><div className="admin-card admin-stat"><span>Resultado da busca</span><strong>{filtered.length}</strong></div></div>
-    <div className="admin-card"><div className="admin-toolbar"><div className="admin-search"><Search size={17}/><input placeholder="Buscar por e-mail..." value={query} onChange={e=>setQuery(e.target.value)}/></div></div>
-      <table className="admin-table"><thead><tr><th>E-mail</th><th>Cadastro</th><th>Último acesso</th><th>Status</th></tr></thead><tbody>
-      {filtered.map(u=><tr key={u.id}><td>{u.email || "—"}</td><td>{formatDate(u.created_at)}</td><td>{formatDate(u.last_sign_in_at)}</td><td><span className="admin-badge">{u.email_confirmed_at?"Confirmado":"Pendente"}</span></td></tr>)}
-      {!filtered.length && <tr><td colSpan={4} style={{textAlign:"center",padding:30,opacity:.6}}>Nenhum aluno encontrado.</td></tr>}
+    <div className="admin-stats">
+      <div className="admin-card admin-stat"><span>Total de alunos</span><strong>{users.length}</strong><Users size={18}/></div>
+      <div className="admin-card admin-stat"><span>Confirmados</span><strong>{users.filter(u=>!!u.email_confirmed_at).length}</strong><CheckCircle2 size={18}/></div>
+      <div className="admin-card admin-stat"><span>Pendentes</span><strong>{users.filter(u=>!u.email_confirmed_at).length}</strong><Clock3 size={18}/></div>
+      <div className="admin-card admin-stat"><span>Ativos nos últimos 7 dias</span><strong>{active7}</strong></div>
+    </div>
+    <div className="admin-card">
+      <div className="admin-toolbar">
+        <div className="admin-search"><Search size={17}/><input placeholder="Buscar por nome ou e-mail..." value={query} onChange={e=>setQuery(e.target.value)}/></div>
+        <div className="admin-filters">
+          {([["all","Todos"],["confirmed","Confirmados"],["pending","Pendentes"]] as const).map(([key,label])=><button key={key} className={"admin-chip "+(filter===key?"active":"")} onClick={()=>setFilter(key)}>{label}</button>)}
+          <select className="admin-select" style={{width:"auto"}} value={sort} onChange={e=>setSort(e.target.value as any)}><option value="created">Mais recentes</option><option value="name">Nome A–Z</option><option value="last">Último acesso</option></select>
+        </div>
+      </div>
+      <div style={{opacity:.6,fontSize:12,marginBottom:8}}>{filtered.length} aluno(s) exibido(s)</div>
+      <table className="admin-table"><thead><tr><th>Nome</th><th>E-mail</th><th>Cadastro</th><th>Último acesso</th><th>Status</th></tr></thead><tbody>
+        {filtered.map(u=><tr key={u.id} onClick={()=>setSelected(u)}>
+          <td><strong>{getName(u)}</strong></td><td><div className="admin-email"><span>{u.email || "—"}</span>{u.email && <button className="admin-copy" title="Copiar e-mail" onClick={e=>{e.stopPropagation();void copyEmail(u.email)}}><Copy size={14}/></button>}</div></td><td>{formatDate(u.created_at)}</td><td>{formatDate(u.last_sign_in_at)}</td><td><span className={"admin-badge "+(!u.email_confirmed_at?"pending":"")}>{u.email_confirmed_at?"Confirmado":"Pendente"}</span></td>
+        </tr>)}
+        {!filtered.length && <tr><td colSpan={5} className="admin-empty">{busy?"Carregando alunos...":"Nenhum aluno encontrado."}</td></tr>}
       </tbody></table>
     </div>
-  </div></div>;
+  </div>
+  {selected && <div className="admin-overlay" onClick={()=>setSelected(null)}><div className="admin-detail" onClick={e=>e.stopPropagation()}>
+    <div className="admin-detail-head"><div><h2 style={{margin:0}}>{getName(selected)}</h2><div style={{opacity:.6,marginTop:4}}>Detalhes do aluno</div></div><button className="admin-copy" onClick={()=>setSelected(null)}><X size={20}/></button></div>
+    {[["ID",selected.id],["Nome",getName(selected)],["E-mail",selected.email||"—"],["Cadastro",formatDate(selected.created_at)],["Último acesso",formatDate(selected.last_sign_in_at)],["Status",selected.email_confirmed_at?"Confirmado":"Pendente"]].map(([label,value])=><div className="admin-detail-row" key={label}><div className="admin-detail-label">{label}</div><div className="admin-detail-value">{value}</div></div>)}
+    {selected.email && <button className="admin-btn" style={{marginTop:16}} onClick={()=>void copyEmail(selected.email)}><Copy size={16}/>{copied===selected.email?"Copiado!":"Copiar e-mail"}</button>}
+  </div></div>}
+  </div>;
 }
