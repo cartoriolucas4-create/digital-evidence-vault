@@ -491,3 +491,30 @@ html[data-theme="dark"] .status.warn{
 .topbar .brand{justify-content:flex-start;margin-left:0!important;position:static;transform:none!important}
 .topbar .mcr-logo-header{display:block}
 @media(max-width:760px){.topbar .brand{margin-left:0!important;position:static;transform:none!important}.topbar .mcr-logo-header{object-position:left center}}
+
+/* MCR: centralizar a logo sobre a largura da barra lateral, e não no centro da tela */
+.topbar .brand{
+  width:230px!important;
+  flex:none!important;
+  justify-content:center!important;
+  margin-left:-24px!important;
+  position:static!important;
+  transform:none!important;
+}
+.topbar .mcr-logo-header{
+  width:220px!important;
+  max-height:58px!important;
+  object-position:center center!important;
+}
+@media(max-width:760px){
+  .topbar .brand{
+    width:145px!important;
+    margin-left:-10px!important;
+    justify-content:center!important;
+  }
+  .topbar .mcr-logo-header{
+    width:138px!important;
+    max-height:42px!important;
+    object-position:center center!important;
+  }
+}
