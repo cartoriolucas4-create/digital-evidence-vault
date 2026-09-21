@@ -70,10 +70,25 @@ export default function AdminPage() {
       p_password: password,
     });
     setBusy(false);
-    if (rpcError || !data?.token) {
-      setError("Usuário ou senha administrativa inválidos. A sessão segura não foi criada.");
+
+    // Não mascarar erros de API/RPC como "senha inválida".
+    // O banco já valida a credencial; se a chamada via navegador falhar,
+    // mostramos a causa real para facilitar o diagnóstico.
+    if (rpcError) {
+      console.error("MCR admin_login RPC error:", rpcError);
+      const details = [rpcError.message, rpcError.code, rpcError.details, rpcError.hint]
+        .filter(Boolean)
+        .join(" — ");
+      setError(`Erro na comunicação com o Supabase: ${details || "erro desconhecido"}`);
       return;
     }
+
+    if (!data?.token) {
+      console.error("MCR admin_login returned an unexpected response:", data);
+      setError("O Supabase respondeu sem criar a sessão administrativa. Verifique a exposição da função admin_login no PostgREST.");
+      return;
+    }
+
     sessionStorage.setItem(TOKEN_KEY, data.token);
     setToken(data.token);
     setPassword("");
