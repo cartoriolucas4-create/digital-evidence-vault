@@ -193,6 +193,7 @@ function App() {
   const [mobileMenuOpen,setMobileMenuOpen]=useState(false);
   const [cloudStateReady,setCloudStateReady]=useState(false);
   const [settingsReady,setSettingsReady]=useState(false);
+  const cloudPreferencesRemoteJson=useRef<string | null>(null);
   
 
   useEffect(()=>{
@@ -237,10 +238,12 @@ function App() {
         .eq("user_id", session.user.id)
         .maybeSingle();
       if (error) {
-        setCloudStateReady(true);
+        notify("Não foi possível carregar as preferências da nuvem. Tente novamente em alguns segundos.");
+        setCloudStateReady(false);
         return;
       }
       const prefs = (data?.preferences ?? {}) as UserCloudPreferences;
+      cloudPreferencesRemoteJson.current=JSON.stringify(prefs);
       if (prefs.theme) setTheme(prefs.theme); else setTheme(localTheme);
       if (prefs.buttonColor) setButtonColor(prefs.buttonColor); else setButtonColor(localButton);
       if (prefs.plannerDefaultColor) setPlannerDefaultColor(prefs.plannerDefaultColor);
@@ -253,6 +256,35 @@ function App() {
     };
     void loadCloudState();
   }, [session?.user?.id]);
+
+  useEffect(() => {
+    if(!session?.user?.id) return;
+    const userId=session.user.id;
+    const channel=supabase
+      .channel(`user-state-prefs-${userId}`)
+      .on("postgres_changes",{
+        event:"*",
+        schema:"public",
+        table:"study_user_state",
+        filter:`user_id=eq.${userId}`
+      },(payload:any)=>{
+        if(payload.eventType==="DELETE"){
+          cloudPreferencesRemoteJson.current=null;
+          return;
+        }
+        const prefs=(payload.new?.preferences ?? {}) as UserCloudPreferences;
+        const json=JSON.stringify(prefs);
+        if(json===cloudPreferencesRemoteJson.current) return;
+        cloudPreferencesRemoteJson.current=json;
+        if(prefs.theme) setTheme(prefs.theme);
+        if(prefs.buttonColor) setButtonColor(prefs.buttonColor);
+        if(prefs.plannerDefaultColor) setPlannerDefaultColor(prefs.plannerDefaultColor);
+        if(prefs.plannerCompletedColor) setPlannerCompletedColor(prefs.plannerCompletedColor);
+        if(typeof prefs.plannerSidebarCollapsed==="boolean") setPlannerSidebarCollapsed(prefs.plannerSidebarCollapsed);
+      })
+      .subscribe();
+    return()=>{ void supabase.removeChannel(channel); };
+  },[session?.user?.id]);
 
   useEffect(() => {
     document.documentElement.style.setProperty("--accent-2", buttonColor);
@@ -272,10 +304,13 @@ function App() {
           plannerCompletedColor,
           plannerSidebarCollapsed,
         };
-        await (supabase as any).from("study_user_state").upsert(
+        const preferencesJson=JSON.stringify(preferences);
+        if(preferencesJson===cloudPreferencesRemoteJson.current) return;
+        const { error } = await (supabase as any).from("study_user_state").upsert(
           { user_id: session.user.id, preferences },
           { onConflict: "user_id" }
         );
+        if(!error) cloudPreferencesRemoteJson.current=preferencesJson;
       };
       void persistPreferences();
     }
@@ -287,7 +322,7 @@ function App() {
       writeStore(`mcr_planner_colors_${session.user.id}`, {defaultColor: plannerDefaultColor, completedColor: plannerCompletedColor});
       writeStore(`mcr_planner_sidebar_collapsed_${session.user.id}`, plannerSidebarCollapsed);
     }
-  }, [buttonColor, plannerDefaultColor, plannerCompletedColor, session?.user?.id, cloudStateReady]);
+  }, [buttonColor, plannerDefaultColor, plannerCompletedColor, plannerSidebarCollapsed, session?.user?.id, cloudStateReady]);
 
   useEffect(() => {
     let mounted = true;
@@ -829,6 +864,23 @@ function App() {
     );
     setEntries(filtered);
   };
+
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    const userId=session.user.id;
+    const channel=supabase.channel(`account-sync-${userId}`);
+    const refreshCatalog=()=>{ void loadCatalog().catch((error)=>setToast(error instanceof Error ? error.message : "Não foi possível sincronizar o cadastro.")); };
+    const refreshEntries=()=>{ void loadEntries().catch((error)=>setToast(error instanceof Error ? error.message : "Não foi possível sincronizar os lançamentos.")); };
+    channel
+      .on("postgres_changes",{event:"*",schema:"public",table:"study_disciplines",filter:`user_id=eq.${userId}`},refreshCatalog)
+      .on("postgres_changes",{event:"*",schema:"public",table:"study_subjects",filter:`user_id=eq.${userId}`},refreshCatalog)
+      .on("postgres_changes",{event:"*",schema:"public",table:"study_sources",filter:`user_id=eq.${userId}`},refreshCatalog)
+      .on("postgres_changes",{event:"*",schema:"public",table:"study_question_types",filter:`user_id=eq.${userId}`},refreshCatalog)
+      .on("postgres_changes",{event:"*",schema:"public",table:"study_settings",filter:`user_id=eq.${userId}`},refreshCatalog)
+      .on("postgres_changes",{event:"*",schema:"public",table:"study_entries",filter:`user_id=eq.${userId}`},refreshEntries)
+      .subscribe();
+    return()=>{ void supabase.removeChannel(channel); };
+  },[session?.user?.id]);
 
   useEffect(() => {
     if (!session) return;
@@ -1929,6 +1981,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
   const [data,setData]=useState<PlannerData>(()=>normalizePlanner(readStore<PlannerData>(key,makeInitial())));
   const plannerRemoteReady=useRef(false);
   const plannerRemoteTimer=useRef<ReturnType<typeof setTimeout> | null>(null);
+  const plannerLastRemoteJson=useRef<string | null>(null);
   const [selected,setSelected]=useState<string[]>([]);
   const [selectedParts,setSelectedParts]=useState<string[]>([]);
   const [activePart,setActivePart]=useState<"subject"|"text">("subject");
@@ -1970,6 +2023,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
       }
 
       const remoteData=remote?.planner_data ? normalizePlanner(remote.planner_data) : null;
+      plannerLastRemoteJson.current=remoteData ? JSON.stringify(remoteData) : null;
       const localHasContent=plannerHasContent(localData);
       const remoteHasContent=remoteData ? plannerHasContent(remoteData) : false;
 
@@ -1990,6 +2044,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
           notify("Não foi possível salvar o planejamento na nuvem. Seus dados locais foram preservados.");
         }else if(saved?.planner_data){
           const confirmed=normalizePlanner(saved.planner_data);
+          plannerLastRemoteJson.current=JSON.stringify(confirmed);
           setData(confirmed);
           writeStore(key,confirmed);
         }
@@ -2009,11 +2064,43 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
   },[userId]);
 
   useEffect(()=>{
+    if(!userId) return;
+    const channel=supabase
+      .channel(`planner-sync-${userId}`)
+      .on("postgres_changes",{
+        event:"*",
+        schema:"public",
+        table:"study_user_state",
+        filter:`user_id=eq.${userId}`
+      },(payload:any)=>{
+        if(payload.eventType==="DELETE"){
+          const fresh=normalizePlanner(makeInitial());
+          plannerLastRemoteJson.current=JSON.stringify(fresh);
+          setData(fresh);
+          writeStore(key,fresh);
+          return;
+        }
+        const incoming=payload.new?.planner_data;
+        if(!incoming) return;
+        const next=normalizePlanner(incoming);
+        const json=JSON.stringify(next);
+        if(json===plannerLastRemoteJson.current) return;
+        plannerLastRemoteJson.current=json;
+        setData(next);
+        writeStore(key,next);
+      })
+      .subscribe();
+    return()=>{ void supabase.removeChannel(channel); };
+  },[userId,key]);
+
+  useEffect(()=>{
     writeStore(key,data);
     if(!plannerRemoteReady.current)return;
     if(plannerRemoteTimer.current) clearTimeout(plannerRemoteTimer.current);
 
     const snapshot=normalizePlanner(data);
+    const snapshotJson=JSON.stringify(snapshot);
+    if(snapshotJson===plannerLastRemoteJson.current)return;
     plannerRemoteTimer.current=setTimeout(async()=>{
       const client=supabase as any;
       const {data:saved,error}=await client
@@ -2031,7 +2118,9 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
       }
 
       if(saved?.planner_data){
-        writeStore(key,normalizePlanner(saved.planner_data));
+        const confirmed=normalizePlanner(saved.planner_data);
+        plannerLastRemoteJson.current=JSON.stringify(confirmed);
+        writeStore(key,confirmed);
       }
     },350);
 
