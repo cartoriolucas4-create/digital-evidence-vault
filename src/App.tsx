@@ -1063,15 +1063,20 @@ function App() {
 
     if (!existing) {
       const notification = { ...WELCOME_NOTIFICATION, id: uid(), created_at: new Date().toISOString() };
-      await saveContextualNotificationState({
+      const nextState = {
         notifications: [notification, ...state.notifications].slice(0, 50),
         rotation: state.rotation,
         sentPeriod: { ...state.sentPeriod, welcome: "welcome" },
-      });
+      };
+      // Exibe imediatamente no centro de notificações, mesmo se a gravação na
+      // nuvem demorar ou falhar. A tentativa de persistência continua em seguida.
+      contextualNotificationStateRef.current = nextState;
+      setContextualNotifications(nextState.notifications.slice(0, 5));
       notify(notification.message);
       if ("Notification" in window && Notification.permission === "granted") {
         try { new Notification(notification.title, { body: notification.message }); } catch {}
       }
+      await saveContextualNotificationState(nextState);
     }
 
     // Retira a marca para impedir nova entrega depois do primeiro acesso.
@@ -1321,8 +1326,10 @@ function App() {
   // Fallback de sincronização para dados de conta que não dependem do Realtime.
   // O Supabase continua sendo a fonte de verdade; o localStorage é apenas cache.
   useEffect(() => {
-    if (!session?.user?.id || !cloudStateReady) return;
+    if (!session?.user?.id) return;
     void createWelcomeNotificationIfPending();
+    const timer = window.setTimeout(() => void createWelcomeNotificationIfPending(), 2500);
+    return () => window.clearTimeout(timer);
   }, [session?.user?.id, cloudStateReady]);
 
   useEffect(() => {
