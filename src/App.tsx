@@ -1872,6 +1872,8 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
     return {version:3,weekOffset:Number(raw?.weekOffset)||0,cols,rows,headers,colWidths,rowHeights,cells};
   };
   const [data,setData]=useState<PlannerData>(()=>normalizePlanner(readStore<PlannerData>(key,makeInitial())));
+  const plannerRemoteReady=useRef(false);
+  const plannerRemoteTimer=useRef<ReturnType<typeof setTimeout> | null>(null);
   const [selected,setSelected]=useState<string[]>([]);
   const [selectedParts,setSelectedParts]=useState<string[]>([]);
   const [activePart,setActivePart]=useState<"subject"|"text">("subject");
@@ -1893,9 +1895,53 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
 
   useEffect(()=>{
     setData(prev=>normalizePlanner(prev));
-  },[]);
+    plannerRemoteReady.current=false;
+    const loadRemotePlanner=async()=>{
+      const client=supabase as any;
+      const {data:remote,error}=await client
+        .from("study_user_state")
+        .select("planner_data")
+        .eq("user_id",userId)
+        .maybeSingle();
+      if(error){
+        plannerRemoteReady.current=true;
+        notify("Planejamento local mantido. Não foi possível sincronizar com a nuvem.");
+        return;
+      }
+      const localData=normalizePlanner(readStore<PlannerData>(key,makeInitial()));
+      const remoteData=remote?.planner_data ? normalizePlanner(remote.planner_data) : null;
+      if(remoteData){
+        setData(remoteData);
+      }else{
+        const {error:saveError}=await client.from("study_user_state").upsert(
+          {user_id:userId,planner_data:localData},
+          {onConflict:"user_id"}
+        );
+        if(saveError) notify("Não foi possível salvar o planejamento na nuvem.");
+      }
+      plannerRemoteReady.current=true;
+    };
+    void loadRemotePlanner();
+    return ()=>{
+      if(plannerRemoteTimer.current) clearTimeout(plannerRemoteTimer.current);
+      plannerRemoteTimer.current=null;
+      plannerRemoteReady.current=false;
+    };
+  },[userId]);
 
-  useEffect(()=>{writeStore(key,data)},[key,data]);
+  useEffect(()=>{
+    writeStore(key,data);
+    if(!plannerRemoteReady.current)return;
+    if(plannerRemoteTimer.current) clearTimeout(plannerRemoteTimer.current);
+    plannerRemoteTimer.current=setTimeout(async()=>{
+      const client=supabase as any;
+      const {error}=await client.from("study_user_state").upsert(
+        {user_id:userId,planner_data:data},
+        {onConflict:"user_id"}
+      );
+      if(error) notify("Alteração feita, mas não foi possível sincronizar o planejamento.");
+    },350);
+  },[key,data,userId]);
   const commitPlannerChange=(updater:(prev:PlannerData)=>PlannerData)=>{
     plannerHistory.current.past=[...plannerHistory.current.past.slice(-99),data];
     plannerHistory.current.future=[];
