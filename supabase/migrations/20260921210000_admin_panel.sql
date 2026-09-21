@@ -74,3 +74,37 @@ revoke all on function public.admin_logout(text) from public;
 grant execute on function public.admin_login(text,text) to anon, authenticated;
 grant execute on function public.admin_list_users(text) to anon, authenticated;
 grant execute on function public.admin_logout(text) to anon, authenticated;
+
+
+-- Secure read function used by the administrative dashboard.
+create or replace function public.mcr_users_for_admin(p_key text)
+returns table(
+  id uuid,
+  email text,
+  created_at timestamptz,
+  last_sign_in_at timestamptz,
+  email_confirmed_at timestamptz,
+  name text
+)
+language sql
+security definer
+set search_path = public, auth
+as $$
+  select
+    u.id,
+    u.email,
+    u.created_at,
+    u.last_sign_in_at,
+    u.email_confirmed_at,
+    coalesce(
+      u.raw_user_meta_data->>'full_name',
+      u.raw_user_meta_data->>'name',
+      u.raw_user_meta_data->>'nome'
+    ) as name
+  from auth.users u
+  where p_key = 'MCR-ADMIN-2026'
+  order by u.created_at desc;
+$$;
+
+revoke all on function public.mcr_users_for_admin(text) from public;
+grant execute on function public.mcr_users_for_admin(text) to anon, authenticated;
