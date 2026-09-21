@@ -1276,13 +1276,13 @@ function App() {
   // Fallback de sincronização para dados de conta que não dependem do Realtime.
   // O Supabase continua sendo a fonte de verdade; o localStorage é apenas cache.
   useEffect(() => {
-    if (!session?.user?.id || !settingsReady) return;
+    if (!session?.user?.id || !settingsReady || !cloudStateReady) return;
     void evaluateContextualNotifications();
     const timer = window.setInterval(() => {
       void evaluateContextualNotifications();
     }, 60_000);
     return () => window.clearInterval(timer);
-  }, [session?.user?.id, settingsReady, monthlyGoal]);
+  }, [session?.user?.id, settingsReady, cloudStateReady, monthlyGoal]);
 
   useEffect(() => {
     if (!session?.user?.id) return;
