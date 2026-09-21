@@ -279,59 +279,29 @@ function App() {
     return()=>{ preferencesSyncChannel.current=null; void supabase.removeChannel(channel); };
   },[session?.user?.id]);
 
-  // Confirma a preferência diretamente na nuvem a cada 2s. O Broadcast entrega a mudança imediatamente;
-  // esta leitura evita que um navegador fique preso em uma versão antiga caso o Realtime esteja indisponível.
-  useEffect(() => {
-    if(!session?.user?.id) return;
-    const userId=session.user.id;
-    const syncPreferencesFromCloud=async()=>{
-      const {data,error}=await (supabase as any).from("study_user_state").select("preferences").eq("user_id",userId).maybeSingle();
-      if(error || !data) return;
-      const prefs=(data.preferences ?? {}) as UserCloudPreferences;
-      const json=JSON.stringify(prefs);
-      if(json===cloudPreferencesRemoteJson.current) return;
-      cloudPreferencesRemoteJson.current=json;
-      if(prefs.theme) setTheme(prefs.theme);
-      if(prefs.buttonColor) setButtonColor(prefs.buttonColor);
-      if(prefs.plannerDefaultColor) setPlannerDefaultColor(prefs.plannerDefaultColor);
-      if(prefs.plannerCompletedColor) setPlannerCompletedColor(prefs.plannerCompletedColor);
-      if(typeof prefs.plannerSidebarCollapsed==="boolean") setPlannerSidebarCollapsed(prefs.plannerSidebarCollapsed);
-    };
-    const timer=window.setInterval(()=>{void syncPreferencesFromCloud();},2000);
-    return()=>window.clearInterval(timer);
-  },[session?.user?.id]);
-
   useEffect(() => {
     document.documentElement.style.setProperty("--accent-2", buttonColor);
-    document.documentElement.style.setProperty("--accent", buttonColor);
-    if (session?.user?.id && cloudStateReady) {
-      const persistPreferences = async () => {
-        const { data: current } = await (supabase as any)
-          .from("study_user_state")
-          .select("preferences")
-          .eq("user_id", session.user.id)
-          .maybeSingle();
-        const preferences = {
-          ...((current?.preferences ?? {}) as UserCloudPreferences),
-          theme,
-          buttonColor,
-          plannerDefaultColor,
-          plannerCompletedColor,
-          plannerSidebarCollapsed,
-        };
-        const preferencesJson=JSON.stringify(preferences);
-        if(preferencesJson===cloudPreferencesRemoteJson.current) return;
-        const { error } = await (supabase as any).from("study_user_state").upsert(
-          { user_id: session.user.id, preferences },
-          { onConflict: "user_id" }
-        );
-        if(!error) {
-          cloudPreferencesRemoteJson.current=preferencesJson;
-          void preferencesSyncChannel.current?.send({type:"broadcast",event:"preferences_updated",payload:{preferences}});
-        }
-      };
-      void persistPreferences();
-    }
+    if (!session?.user?.id || !cloudStateReady) return;
+    const preferences: UserCloudPreferences = {
+      theme,
+      buttonColor,
+      plannerDefaultColor,
+      plannerCompletedColor,
+      plannerSidebarCollapsed,
+    };
+    const preferencesJson=JSON.stringify(preferences);
+    if(preferencesJson===cloudPreferencesRemoteJson.current) return;
+    const timer=window.setTimeout(async()=>{
+      const { error } = await (supabase as any).from("study_user_state").upsert(
+        { user_id: session.user.id, preferences },
+        { onConflict: "user_id" }
+      );
+      if(!error){
+        cloudPreferencesRemoteJson.current=preferencesJson;
+        void preferencesSyncChannel.current?.send({type:"broadcast",event:"preferences_updated",payload:{preferences}});
+      }
+    },150);
+    return()=>window.clearTimeout(timer);
   }, [theme, buttonColor, plannerDefaultColor, plannerCompletedColor, plannerSidebarCollapsed, session?.user?.id, cloudStateReady]);
 
   useEffect(() => {
@@ -2012,6 +1982,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
   const plannerRemoteTimer=useRef<ReturnType<typeof setTimeout> | null>(null);
   const plannerLastRemoteJson=useRef<string | null>(null);
   const plannerSyncChannel=useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const plannerLocalEditAt=useRef(0);
   const [selected,setSelected]=useState<string[]>([]);
   const [selectedParts,setSelectedParts]=useState<string[]>([]);
   const [activePart,setActivePart]=useState<"subject"|"text">("subject");
@@ -2110,24 +2081,6 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
       })
       .subscribe();
     return()=>{ plannerSyncChannel.current=null; void supabase.removeChannel(channel); };
-  },[userId,key]);
-
-  // Confirma periodicamente o Planejamento oficial da nuvem. Assim, mesmo sem Realtime,
-  // qualquer dispositivo converge para a última versão salva na conta.
-  useEffect(()=>{
-    if(!userId) return;
-    const syncPlannerFromCloud=async()=>{
-      const {data:remote,error}=await (supabase as any).from("study_user_state").select("planner_data").eq("user_id",userId).maybeSingle();
-      if(error || !remote?.planner_data) return;
-      const next=normalizePlanner(remote.planner_data);
-      const json=JSON.stringify(next);
-      if(json===plannerLastRemoteJson.current) return;
-      plannerLastRemoteJson.current=json;
-      setData(next);
-      writeStore(key,next);
-    };
-    const timer=window.setInterval(()=>{void syncPlannerFromCloud();},2000);
-    return()=>window.clearInterval(timer);
   },[userId,key]);
 
   useEffect(()=>{
