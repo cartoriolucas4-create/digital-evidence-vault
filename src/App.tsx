@@ -915,7 +915,9 @@ function App() {
               }
             });
         }
-        return incoming.filter((item) => !item.read_at);
+        // Keep both unread and read messages. read_at only changes their visual
+        // state and the badge count; it must never delete them from history.
+        return incoming;
       });
     } catch {
       // Notificações administrativas não podem bloquear o restante do aplicativo.
@@ -1060,7 +1062,9 @@ function App() {
         (payload: any) => {
           const notification = payload.new as { id:string; title:string; message:string; created_at:string; read_at:null };
           setAdminStudentNotifications((current) =>
-            current.some((item) => item.id === notification.id) ? current : [notification, ...current].slice(0, 50)
+            current.some((item) => item.id === notification.id)
+              ? current.map((item) => item.id === notification.id ? { ...item, ...notification } : item)
+              : [notification, ...current].slice(0, 50)
           );
           notify(notification.message);
           if ("Notification" in window && Notification.permission === "granted") {
@@ -1247,7 +1251,7 @@ function App() {
     : 0;
   const inactiveFor24Hours = Boolean(latestQuestionTimestamp && Date.now() - latestQuestionTimestamp >= 24 * 60 * 60 * 1000);
   const unreadPerformanceCount = performanceNotifications.filter((item) => !item.read_at).length;
-  const notificationCount = unreadPerformanceCount + (inactiveFor24Hours && !inactivityNotificationRead ? 1 : 0) + (isLastDayOfMonth() ? 2 : 0) + (lucasDailyNotification ? 1 : 0) + adminStudentNotifications.length;
+  const notificationCount = unreadPerformanceCount + (inactiveFor24Hours && !inactivityNotificationRead ? 1 : 0) + (isLastDayOfMonth() ? 2 : 0) + (lucasDailyNotification ? 1 : 0) + adminStudentNotifications.filter((item) => !item.read_at).length;
 
   useEffect(() => {
     const timer = window.setInterval(() => setNotificationClock(Date.now()), 60_000);
@@ -1429,9 +1433,9 @@ function App() {
                   <button onClick={() => setNotificationOpen(false)} aria-label="Fechar"><X size={14}/></button>
                 </div>
               </div>
-              {adminStudentNotifications.map((n) => <button key={n.id} className={"monthly-notification performance-notification " + (n.read_at ? "read" : "unread")} onClick={() => markAdminStudentNotificationRead(n.id)}>
+              {adminStudentNotifications.map((n) => <button key={n.id} className={"monthly-notification performance-notification " + (n.read_at ? "read" : "unread")} onClick={() => { if (!n.read_at) void markAdminStudentNotificationRead(n.id); }}>
                 <span className="notification-icon performance-exceptional"><Bell size={15}/></span>
-                <span><strong>{n.title}</strong><small>{n.message}</small><small className="notification-date">{new Date(n.created_at).toLocaleString("pt-BR")}</small></span>
+                <span><strong>{n.title}</strong><small>{n.message}</small><small className="notification-date">{new Date(n.created_at).toLocaleString("pt-BR")} • {n.read_at ? "Lida" : "Não lida"}</small></span>
               </button>)}
               {lucasDailyNotification && <button className="monthly-notification performance-notification unread" onClick={() => setLucasDailyNotification(null)}>
                 <span className="notification-icon performance-exceptional"><Sparkles size={15}/></span>
