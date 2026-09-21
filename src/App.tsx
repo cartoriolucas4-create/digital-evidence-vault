@@ -1049,10 +1049,18 @@ function App() {
 
   const createWelcomeNotificationIfPending = async () => {
     if (!session?.user?.id || !cloudStateReady || welcomeNotificationHandledRef.current) return;
-    if (session.user.user_metadata?.mcr_welcome_pending !== true) return;
+
+    // Cadastro recente: aceita tanto a marca do cadastro quanto a data real
+    // de criação da conta, permitindo recuperar cadastros feitos na última hora.
+    const createdAt = session.user.created_at ? new Date(session.user.created_at).getTime() : 0;
+    const isCreatedWithinLastHour = createdAt > 0 && (Date.now() - createdAt) >= 0 && (Date.now() - createdAt) <= 60 * 60 * 1000;
+    const isPending = session.user.user_metadata?.mcr_welcome_pending === true;
+    if (!isPending && !isCreatedWithinLastHour) return;
+
     welcomeNotificationHandledRef.current = true;
     const state = contextualNotificationStateRef.current;
     const existing = state.notifications.some((item) => item.category === "welcome" || item.id === WELCOME_NOTIFICATION.id);
+
     if (!existing) {
       const notification = { ...WELCOME_NOTIFICATION, id: uid(), created_at: new Date().toISOString() };
       await saveContextualNotificationState({
@@ -1065,7 +1073,11 @@ function App() {
         try { new Notification(notification.title, { body: notification.message }); } catch {}
       }
     }
-    await supabase.auth.updateUser({ data: { ...(session.user.user_metadata ?? {}), mcr_welcome_pending: false } });
+
+    // Retira a marca para impedir nova entrega depois do primeiro acesso.
+    if (isPending) {
+      await supabase.auth.updateUser({ data: { ...(session.user.user_metadata ?? {}), mcr_welcome_pending: false } });
+    }
   };
 
   const maybeCreateContextualNotification = async (
