@@ -65,84 +65,67 @@ export default function AdminPage() {
     event.preventDefault();
     setBusy(true);
     setError("");
-    const { data, error: rpcError } = await (supabase as any).rpc("admin_login", {
-      p_username: username.trim(),
-      p_password: password,
-    });
-    setBusy(false);
 
-    // Não mascarar erros de API/RPC como "senha inválida".
-    // O banco já valida a credencial; se a chamada via navegador falhar,
-    // mostramos a causa real para facilitar o diagnóstico.
-    if (rpcError) {
-      console.error("MCR admin_login RPC error:", rpcError);
-      const details = [rpcError.message, rpcError.code, rpcError.details, rpcError.hint]
-        .filter(Boolean)
-        .join(" — ");
-      setError(`Erro na comunicação com o Supabase: ${details || "erro desconhecido"}`);
-      return;
-    }
+    // O login administrativo usa diretamente o endpoint REST do PostgREST.
+    // Assim evitamos qualquer diferença de tipagem/cache do supabase-js.
+    try {
+      const url = import.meta.env["VITE_SUPABASE_URL"];
+      const key = import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"];
 
-    // Normaliza a resposta do SDK.
-    let loginResult: any = data;
-    if (Array.isArray(loginResult)) loginResult = loginResult[0];
-    if (typeof loginResult === "string") {
-      try { loginResult = JSON.parse(loginResult); } catch { /* mantém */ }
-    }
-
-    // Se o SDK não expôs o token, consulta o endpoint REST diretamente.
-    // Isso elimina qualquer diferença de tipagem/cache do supabase-js.
-    if (!loginResult?.token) {
-      try {
-        const url = import.meta.env["VITE_SUPABASE_URL"];
-        const key = import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"];
-        const response = await fetch(`${url}/rest/v1/rpc/admin_login`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "apikey": key,
-            "Accept": "application/json",
-          },
-          body: JSON.stringify({
-            p_username: username.trim(),
-            p_password: password,
-          }),
-        });
-        const raw = await response.text();
-        let directResult: any = null;
-        try { directResult = JSON.parse(raw); } catch { /* resposta não JSON */ }
-        if (Array.isArray(directResult)) directResult = directResult[0];
-        if (typeof directResult === "string") {
-          try { directResult = JSON.parse(directResult); } catch { /* mantém */ }
-        }
-
-        console.log("MCR admin_login direct REST:", {
-          status: response.status,
-          ok: response.ok,
-          body: directResult ?? raw,
-        });
-
-        if (!response.ok) {
-          setError(`Erro no Supabase (HTTP ${response.status}): ${directResult?.message || directResult?.error || raw || "resposta vazia"}`);
-          return;
-        }
-        loginResult = directResult;
-      } catch (directError: any) {
-        console.error("MCR direct admin_login error:", directError);
-        setError(`Não foi possível acessar o endpoint de login do Supabase: ${directError?.message || "erro de rede"}`);
+      if (!url || !key) {
+        setError("Configuração do Supabase ausente nesta publicação.");
         return;
       }
-    }
 
-    if (!loginResult?.token) {
-      setError("A função admin_login respondeu, mas não devolveu o token de sessão. Vou verificar o retorno bruto do endpoint.");
-      console.error("MCR admin_login final response:", loginResult);
-      return;
-    }
+      const response = await fetch(`${url}/rest/v1/rpc/admin_login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": key,
+          "Accept": "application/json",
+        },
+        body: JSON.stringify({
+          p_username: username.trim(),
+          p_password: password,
+        }),
+        cache: "no-store",
+      });
 
-    sessionStorage.setItem(TOKEN_KEY, loginResult.token);
-    setToken(loginResult.token);
-    setPassword("");
+      const raw = await response.text();
+      let result: any = null;
+      try { result = JSON.parse(raw); } catch { result = raw; }
+      if (Array.isArray(result)) result = result[0];
+      if (typeof result === "string") {
+        try { result = JSON.parse(result); } catch { /* mantém */ }
+      }
+
+      console.log("MCR admin_login REST:", {
+        status: response.status,
+        ok: response.ok,
+        resultKeys: result && typeof result === "object" ? Object.keys(result) : [],
+      });
+
+      if (!response.ok) {
+        const message = result?.message || result?.error || result?.hint || raw || "resposta vazia";
+        setError(`Login administrativo — HTTP ${response.status}: ${message}`);
+        return;
+      }
+
+      if (!result?.token) {
+        const keys = result && typeof result === "object" ? Object.keys(result).join(", ") : typeof result;
+        setError(`Login administrativo — HTTP ${response.status}, mas sem token. Campos recebidos: ${keys || "nenhum"}.`);
+        return;
+      }
+
+      sessionStorage.setItem(TOKEN_KEY, result.token);
+      setToken(result.token);
+      setPassword("");
+    } catch (err: any) {
+      console.error("MCR admin_login REST error:", err);
+      setError(`Falha de rede no login administrativo: ${err?.message || "erro desconhecido"}`);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const logout = async () => {
