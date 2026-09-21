@@ -111,9 +111,15 @@ export default function AdminPage() {
         return;
       }
 
+      if (result?.ok === false) {
+        setError("Credenciais administrativas recusadas pelo Supabase. O endpoint está funcionando, mas usuário/senha não foram validados.");
+        return;
+      }
+
       if (!result?.token) {
         const keys = result && typeof result === "object" ? Object.keys(result).join(", ") : typeof result;
-        setError(`Login administrativo — HTTP ${response.status}, mas sem token. Campos recebidos: ${keys || "nenhum"}.`);
+        const okValue = result && typeof result === "object" && "ok" in result ? String(result.ok) : "não informado";
+        setError(`Login administrativo — HTTP ${response.status}, sem token. ok=${okValue}. Campos recebidos: ${keys || "nenhum"}.`);
         return;
       }
 
