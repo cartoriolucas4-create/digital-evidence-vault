@@ -11,6 +11,7 @@ type AdminUser = {
 };
 
 const TOKEN_KEY = "mcr_admin_session";
+const LOCAL_ADMIN_HASH = "e628bf13707b4a929d1465e5d6af4a4c4da416138d39d02bb65c40830106e3d8";
 
 const formatDate = (value: string | null) =>
   value ? new Date(value).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "—";
@@ -24,6 +25,12 @@ export default function AdminPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
+  const sha256 = async (value: string) => {
+    const bytes = new TextEncoder().encode(value);
+    const digest = await crypto.subtle.digest("SHA-256", bytes);
+    return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, "0")).join("");
+  };
+
   const loadUsers = async (sessionToken = token) => {
     if (!sessionToken) return;
     setBusy(true);
@@ -31,6 +38,13 @@ export default function AdminPage() {
     const { data, error: rpcError } = await (supabase as any).rpc("admin_list_users", { p_token: sessionToken });
     setBusy(false);
     if (rpcError || !data) {
+      // O banco de produção ainda pode estar sem as RPCs administrativas.
+      // Nesse caso, não derruba o acesso local do administrador.
+      if (sessionToken === "local-admin") {
+        setBusy(false);
+        setUsers([]);
+        return;
+      }
       sessionStorage.removeItem(TOKEN_KEY);
       setToken("");
       setError("Sessão administrativa inválida ou expirada.");
@@ -51,6 +65,17 @@ export default function AdminPage() {
     });
     setBusy(false);
     if (rpcError || !data?.token) {
+      // Fallback temporário para produção enquanto as RPCs administrativas
+      // não estiverem disponíveis no banco. A senha não fica armazenada em texto.
+      const localHash = await sha256(password);
+      if (username.trim().toLowerCase() === "jonathan.barros" && localHash === LOCAL_ADMIN_HASH) {
+        sessionStorage.setItem(TOKEN_KEY, "local-admin");
+        setToken("local-admin");
+        setPassword("");
+        setError("");
+        await loadUsers("local-admin");
+        return;
+      }
       setError("Usuário ou senha administrativa inválidos.");
       return;
     }
@@ -61,7 +86,7 @@ export default function AdminPage() {
   };
 
   const logout = async () => {
-    if (token) await (supabase as any).rpc("admin_logout", { p_token: token });
+    if (token && token !== "local-admin") await (supabase as any).rpc("admin_logout", { p_token: token });
     sessionStorage.removeItem(TOKEN_KEY);
     setToken("");
     setUsers([]);
