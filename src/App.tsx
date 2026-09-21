@@ -280,7 +280,7 @@ function App() {
   },[session?.user?.id]);
 
   useEffect(() => {
-    document.documentElement.style.setProperty("--accent-2", buttonColor);
+    document.documentElement.style.setProperty("--button-color", buttonColor);\n    document.documentElement.style.setProperty("--button-color-soft", `${buttonColor}18`);
     if (!session?.user?.id || !cloudStateReady) return;
     const preferences: UserCloudPreferences = {
       theme,
