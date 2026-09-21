@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Copy, Download, LogIn, LogOut, Search, ShieldCheck, Users, RefreshCw, X, CheckCircle2, Clock3 } from "lucide-react";
+import { Copy, Download, LogIn, LogOut, Search, ShieldCheck, Users, RefreshCw, X, CheckCircle2, Clock3, Ban, KeyRound, Bell, Unlock } from "lucide-react";
 import { supabase } from "./integrations/supabase/client";
 
 type AdminUser = {
@@ -9,6 +9,7 @@ type AdminUser = {
   created_at: string;
   last_sign_in_at: string | null;
   email_confirmed_at: string | null;
+  banned_until?: string | null;
 };
 
 const TOKEN_KEY = "mcr_admin_session";
@@ -32,6 +33,11 @@ export default function AdminPage() {
   const [error, setError] = useState("");
   const [selected, setSelected] = useState<AdminUser | null>(null);
   const [copied, setCopied] = useState("");
+  const [actionBusy, setActionBusy] = useState(false);
+  const [actionMessage, setActionMessage] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [notificationTitle, setNotificationTitle] = useState("");
+  const [notificationMessage, setNotificationMessage] = useState("");
 
   const sha256 = async (value: string) => {
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
@@ -105,6 +111,35 @@ export default function AdminPage() {
     const limit = Date.now() - 7 * 24 * 60 * 60 * 1000;
     return users.filter(u => u.last_sign_in_at && new Date(u.last_sign_in_at).getTime() >= limit).length;
   }, [users]);
+
+  const adminAction = async (action: "block"|"unblock"|"password") => {
+    if (!selected || token === "local-admin") {
+      setActionMessage("Entre pela sessão administrativa do banco para usar este controle.");
+      return;
+    }
+    setActionBusy(true); setActionMessage("");
+    const { data, error } = await (supabase as any).rpc("admin_manage_student", {
+      p_token: token, p_user_id: selected.id, p_action: action, p_password: action === "password" ? newPassword : null
+    });
+    setActionBusy(false);
+    if (error || !data?.ok) { setActionMessage(data?.error || "Não foi possível executar a ação."); return; }
+    setActionMessage(action === "block" ? "Aluno bloqueado." : action === "unblock" ? "Aluno desbloqueado." : "Senha alterada.");
+    setNewPassword("");
+    await loadUsers();
+  };
+
+  const sendStudentNotification = async () => {
+    if (!selected || token === "local-admin") { setActionMessage("Entre pela sessão administrativa do banco para enviar notificações."); return; }
+    if (!notificationMessage.trim()) { setActionMessage("Digite a mensagem."); return; }
+    setActionBusy(true); setActionMessage("");
+    const { data, error } = await (supabase as any).rpc("admin_send_student_notification", {
+      p_token: token, p_user_id: selected.id, p_title: notificationTitle, p_message: notificationMessage
+    });
+    setActionBusy(false);
+    if (error || !data?.ok) { setActionMessage(data?.error || "Não foi possível enviar a notificação."); return; }
+    setActionMessage("Notificação enviada.");
+    setNotificationTitle(""); setNotificationMessage("");
+  };
 
   const exportCsv = () => {
     const header = ["Nome","E-mail","Cadastro","Último acesso","Status"];
@@ -181,7 +216,26 @@ export default function AdminPage() {
   {selected && <div className="admin-overlay" onClick={()=>setSelected(null)}><div className="admin-detail" onClick={e=>e.stopPropagation()}>
     <div className="admin-detail-head"><div><h2 style={{margin:0}}>{getName(selected)}</h2><div style={{opacity:.6,marginTop:4}}>Detalhes do aluno</div></div><button className="admin-copy" onClick={()=>setSelected(null)}><X size={20}/></button></div>
     {[["ID",selected.id],["Nome",getName(selected)],["E-mail",selected.email||"—"],["Cadastro",formatDate(selected.created_at)],["Último acesso",formatDate(selected.last_sign_in_at)],["Status",selected.email_confirmed_at?"Confirmado":"Pendente"]].map(([label,value])=><div className="admin-detail-row" key={label}><div className="admin-detail-label">{label}</div><div className="admin-detail-value">{value}</div></div>)}
-    {selected.email && <button className="admin-btn" style={{marginTop:16}} onClick={()=>void copyEmail(selected.email)}><Copy size={16}/>{copied===selected.email?"Copiado!":"Copiar e-mail"}</button>}
+    {selected.email && <button className="admin-btn" style={{marginTop:16}} onClick={()=>void copyEmail(selected.email)}><Copy size={16}/>{copied===selected.email?"Copiado!":"Copiar e-mail"}</button>}    <div style={{marginTop:20,paddingTop:18,borderTop:"1px solid var(--border,#edf0f2)"}}>
+      <strong>Controles do aluno</strong>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:12}}>
+        <button className="admin-btn" disabled={actionBusy} onClick={()=>void adminAction("block")}><Ban size={16}/>Bloquear</button>
+        <button className="admin-btn secondary" disabled={actionBusy} onClick={()=>void adminAction("unblock")}><Unlock size={16}/>Desbloquear</button>
+      </div>
+      <div style={{display:"grid",gap:8,marginTop:14}}>
+        <label style={{fontSize:12,fontWeight:700}}>Nova senha</label>
+        <input className="admin-select" type="password" minLength={6} placeholder="Mínimo de 6 caracteres" value={newPassword} onChange={e=>setNewPassword(e.target.value)}/>
+        <button className="admin-btn" disabled={actionBusy || newPassword.length<6} onClick={()=>void adminAction("password")}><KeyRound size={16}/>Alterar senha</button>
+      </div>
+      <div style={{display:"grid",gap:8,marginTop:18}}>
+        <label style={{fontSize:12,fontWeight:700}}>Notificação para este aluno</label>
+        <input className="admin-select" placeholder="Título (opcional)" value={notificationTitle} onChange={e=>setNotificationTitle(e.target.value)}/>
+        <textarea className="admin-select" rows={4} placeholder="Escreva a mensagem..." value={notificationMessage} onChange={e=>setNotificationMessage(e.target.value)}/>
+        <button className="admin-btn" disabled={actionBusy || !notificationMessage.trim()} onClick={()=>void sendStudentNotification()}><Bell size={16}/>Enviar notificação</button>
+      </div>
+      {actionMessage && <div style={{marginTop:10,fontSize:13,fontWeight:700}}>{actionMessage}</div>}
+    </div>
+
   </div></div>}
   </div>;
 }
