@@ -283,7 +283,7 @@ function App() {
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [performanceNotifications, setPerformanceNotifications] = useState<PerformanceNotification[]>([]);
   const [lucasDailyNotification, setLucasDailyNotification] = useState<{message:string;sequence:number;sentDate:string}|null>(null);
-  const [adminStudentNotifications, setAdminStudentNotifications] = useState<Array<{id:string;title:string;message:string;created_at:string}>>([]);
+  const [adminStudentNotifications, setAdminStudentNotifications] = useState<Array<{id:string;title:string;message:string;created_at:string;read_at:string|null}>>([]);
 
   const [inactivityNotificationRead, setInactivityNotificationRead] = useState(false);
   const [, setNotificationClock] = useState(Date.now());
@@ -915,9 +915,9 @@ function App() {
               }
             });
         }
-        // Keep both unread and read messages. read_at only changes their visual
-        // state and the badge count; it must never delete them from history.
-        return incoming;
+        // Keep only the 5 newest messages in the compact notification center.
+        // Older messages remain stored in the database, but leave the visible rotation.
+        return incoming.slice(0, 5);
       });
     } catch {
       // Notificações administrativas não podem bloquear o restante do aplicativo.
@@ -1064,7 +1064,7 @@ function App() {
           setAdminStudentNotifications((current) =>
             current.some((item) => item.id === notification.id)
               ? current.map((item) => item.id === notification.id ? { ...item, ...notification } : item)
-              : [notification, ...current].slice(0, 50)
+              : [notification, ...current].slice(0, 5)
           );
           notify(notification.message);
           if ("Notification" in window && Notification.permission === "granted") {
@@ -1433,7 +1433,7 @@ function App() {
                   <button onClick={() => setNotificationOpen(false)} aria-label="Fechar"><X size={14}/></button>
                 </div>
               </div>
-              {adminStudentNotifications.map((n) => <button key={n.id} className={"monthly-notification performance-notification " + (n.read_at ? "read" : "unread")} onClick={() => { if (!n.read_at) void markAdminStudentNotificationRead(n.id); }}>
+              {adminStudentNotifications.slice(0, 5).map((n) => <button key={n.id} className={"monthly-notification performance-notification " + (n.read_at ? "read" : "unread")} onClick={() => { if (!n.read_at) void markAdminStudentNotificationRead(n.id); }}>
                 <span className="notification-icon performance-exceptional"><Bell size={15}/></span>
                 <span><strong>{n.title}</strong><small>{n.message}</small><small className="notification-date">{new Date(n.created_at).toLocaleString("pt-BR")} • {n.read_at ? "Lida" : "Não lida"}</small></span>
               </button>)}
