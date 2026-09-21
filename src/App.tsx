@@ -1062,7 +1062,7 @@ function App() {
         .neq("id", entry.id)
         .order("study_date", { ascending: false })
         .order("created_at", { ascending: false })
-        .limit(10);
+         .limit(50);
       if (error) return;
 
       const previous = (history ?? []) as Entry[];
@@ -1141,6 +1141,7 @@ function App() {
         .select("id")
         .eq("subject_id", entry.subject_id)
         .eq("notification_type", notificationType)
+        .eq("title", title)
         .gte("created_at", sevenDaysAgo)
         .limit(1);
       if ((recentSameType ?? []).length) return;
