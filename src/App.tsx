@@ -25,6 +25,71 @@ const localDate = () => {
   return `${y}-${m}-${day}`;
 };
 
+const LUCAS_DAILY_USER_ID = "bc0e495f-78e2-4f5e-87ae-17c537d3c0b5";
+const LUCAS_DAILY_MESSAGES = [
+  "De Lucas: Bom estudo, Rafinha! ❤️",
+  "💌 Do Lucas: Bons estudos, meu amor! 🥰",
+  "Lucas mandou dizer: Vai com tudo, gatinha! ❤️",
+  "De Lucas: Foco hoje, minha maravilhosa! ✨",
+  "❤️ Do Lucas: Bora estudar, chaveirinho!",
+  "De Lucas: Você consegue, meu amor! ❤️",
+  "Lucas: Bora estudar, Rafinha! 🥰",
+  "💌 Do Lucas: Foco aí, minha gatinha! ❤️",
+  "De Lucas: Mais um dia rumo à aprovação! 💪",
+  "Lucas mandou dizer: Eu acredito em você! ❤️",
+  "De Lucas: Bons estudos, minha linda! 🥰",
+  "💗 Do Lucas: Vai dar tudo certo, Rafinha!",
+  "De Lucas: Foco na missão, chaveirinho! ❤️",
+  "Lucas: Estuda firme, meu amor! 💕",
+  "💌 Do Lucas: Vai lá, minha maravilhosa! ❤️",
+  "De Lucas: Orgulho de você, gatinha!",
+  "Lucas mandou dizer: Não desiste, meu amor! ❤️",
+  "De Lucas: Hoje também é dia de vencer! 💪",
+  "💗 Do Lucas: Foco, Rafinha! Você consegue!",
+  "De Lucas: Cada estudo te deixa mais perto! ❤️",
+  "Lucas: Bom estudo, minha maravilhosa!",
+  "💌 Do Lucas: Vai firme, minha gatinha! ❤️",
+  "De Lucas: Dá seu melhor hoje, amor!",
+  "Lucas mandou dizer: Confio em você! ❤️",
+  "De Lucas: Bora conquistar esse sonho, Rafinha!",
+  "💗 Do Lucas: Estuda firme, meu amor! ❤️",
+  "De Lucas: Você está cada vez melhor!",
+  "Lucas: Foco nos estudos, chaveirinho! 💪",
+  "💌 Do Lucas: Vai firme hoje, minha linda!",
+  "De Lucas: Mais um passo, Rafinha! ❤️",
+  "Lucas mandou dizer: Seu esforço vai valer a pena!",
+  "De Lucas: Bons estudos, minha gatinha! ❤️",
+  "💗 Do Lucas: Foco e determinação, amor!",
+  "De Lucas: Eu sei que você consegue! ❤️",
+  "Lucas: Vai conquistar seus sonhos, maravilhosa!",
+  "💌 Do Lucas: Estuda bastante, meu amor!",
+  "De Lucas: Força nos estudos, Rafinha! 💪",
+  "Lucas mandou dizer: Hoje é dia de evolução!",
+  "De Lucas: Foco, minha linda! ❤️",
+  "💗 Do Lucas: Vai com fé, chaveirinho!",
+  "De Lucas: Você é incrível, meu amor! ❤️",
+  "Lucas: Bora vencer mais um dia, Rafinha!",
+  "💌 Do Lucas: Bons estudos, minha maravilhosa!",
+  "De Lucas: Seu esforço de hoje vale muito! 💪",
+  "Lucas mandou dizer: Eu acredito em você! ❤️",
+  "De Lucas: Vai firme, gatinha!",
+  "💗 Do Lucas: Mais um dia, mais uma conquista!",
+  "De Lucas: Estuda firme e depois descansa!",
+  "Lucas: Foco, Rafinha! Tô torcendo por você! ❤️",
+  "💌 Do Lucas: Você vai longe, minha linda!",
+  "De Lucas: Bom estudo, meu chaveirinho! ❤️",
+  "Lucas mandou dizer: Vai conquistar o que deseja!",
+  "💗 Do Lucas: Foco agora, resultado depois!",
+  "De Lucas: Minha maravilhosa, dá seu melhor!",
+  "Lucas: Estuda firme, gatinha! ❤️",
+  "💌 Do Lucas: Mais um dia vencido, meu amor!",
+  "De Lucas: Rafinha, seu esforço vai valer!",
+  "Lucas mandou dizer: Vai lá, minha campeã! 💪",
+  "❤️ Do Lucas: Orgulho de você, minha linda!",
+  "De Lucas: Bons estudos, meu amor. Te amo! ❤️"
+];
+
+
 const dateMinus = (days: number) => {
   const d = new Date();
   d.setHours(12, 0, 0, 0);
@@ -217,6 +282,7 @@ function App() {
   const [toast, setToast] = useState("");
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [performanceNotifications, setPerformanceNotifications] = useState<PerformanceNotification[]>([]);
+  const [lucasDailyNotification, setLucasDailyNotification] = useState<{message:string;sequence:number;sentDate:string}|null>(null);
   const [inactivityNotificationRead, setInactivityNotificationRead] = useState(false);
   const [, setNotificationClock] = useState(Date.now());
   const [catalogDeleteOpen, setCatalogDeleteOpen] = useState(false);
@@ -822,6 +888,25 @@ function App() {
     setSettingsReady(true);
   };
 
+  const loadLucasDailyNotification = async () => {
+    if (session?.user?.id !== LUCAS_DAILY_USER_ID) return;
+    try {
+      const { data, error } = await (supabase as any).rpc("claim_lucas_daily_message", {
+        p_user_id: session.user.id,
+      });
+      if (error || !data?.length) return;
+      const row = data[0] as { message: string; sequence_no: number; sent_date: string };
+      setLucasDailyNotification({
+        message: row.message,
+        sequence: Number(row.sequence_no),
+        sentDate: row.sent_date,
+      });
+      notify(row.message);
+    } catch {
+      // A mensagem especial nunca deve bloquear o carregamento normal do MCR.
+    }
+  };
+
   const loadPerformanceNotifications = async () => {
     if (!session?.user.id) return;
     const { data, error } = await (supabase as any)
@@ -875,7 +960,7 @@ function App() {
 
   useEffect(() => {
     if (!session) return;
-    Promise.all([loadCatalog(), loadEntries(), loadPerformanceNotifications()]).catch((error) => {
+    Promise.all([loadCatalog(), loadEntries(), loadPerformanceNotifications(), loadLucasDailyNotification()]).catch((error) => {
       setToast(error instanceof Error ? error.message : "Não foi possível carregar os dados da conta.");
     });
   }, [session?.user.id]);
@@ -1040,7 +1125,7 @@ function App() {
     : 0;
   const inactiveFor24Hours = Boolean(latestQuestionTimestamp && Date.now() - latestQuestionTimestamp >= 24 * 60 * 60 * 1000);
   const unreadPerformanceCount = performanceNotifications.filter((item) => !item.read_at).length;
-  const notificationCount = unreadPerformanceCount + (inactiveFor24Hours && !inactivityNotificationRead ? 1 : 0) + (isLastDayOfMonth() ? 2 : 0);
+  const notificationCount = unreadPerformanceCount + (inactiveFor24Hours && !inactivityNotificationRead ? 1 : 0) + (isLastDayOfMonth() ? 2 : 0) + (lucasDailyNotification ? 1 : 0);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNotificationClock(Date.now()), 60_000);
@@ -1222,6 +1307,10 @@ function App() {
                   <button onClick={() => setNotificationOpen(false)} aria-label="Fechar"><X size={14}/></button>
                 </div>
               </div>
+              {lucasDailyNotification && <button className="monthly-notification performance-notification unread" onClick={() => setLucasDailyNotification(null)}>
+                <span className="notification-icon performance-exceptional"><Sparkles size={15}/></span>
+                <span><strong>💌 Mensagem do Lucas</strong><small>{lucasDailyNotification.message}</small><small className="notification-date">Hoje • dia {lucasDailyNotification.sequence + 1} de 60</small></span>
+              </button>}
               {inactiveFor24Hours && <button className={"monthly-notification performance-notification " + (inactivityNotificationRead ? "read" : "unread")} onClick={() => setInactivityNotificationRead(true)}>
                 <span className="notification-icon performance-attention"><AlertTriangle size={15}/></span>
                 <span><strong>{studentName ? studentName + ", já faz 24 horas sem lançar questões." : "Já faz 24 horas sem lançar questões."}</strong><small>Registre suas questões para manter seu acompanhamento de desempenho atualizado.</small><small className="notification-date">Agora</small></span>
@@ -1234,7 +1323,7 @@ function App() {
               </button>)}
               {isLastDayOfMonth() && <button className="monthly-notification" onClick={() => exportMonthlyPdf()}><span className="notification-icon"><FileDown size={15}/></span><span><strong>{studentName ? studentName + ", seu rendimento mensal está pronto." : "Seu rendimento mensal está pronto"}</strong><small>{studentName ? "Exporte seu resumo mensal em PDF." : "Exporte o resumo mensal em PDF."}</small></span></button>}
               {isLastDayOfMonth() && <button className="monthly-notification" onClick={() => exportMonthlyBackup()}><span className="notification-icon"><Upload size={15}/></span><span><strong>{studentName ? studentName + ", seu backup mensal está disponível." : "Backup mensal disponível"}</strong><small>{studentName ? "Faça o backup dos seus dados dos últimos 30 dias." : "Faça o backup dos dados dos últimos 30 dias."}</small></span></button>}
-              {!performanceNotifications.length && !inactiveFor24Hours && !isLastDayOfMonth() && <div className="notification-empty">{studentName ? studentName + ", nenhuma observação importante por enquanto. O MCR só aparece quando identifica algo relevante." : "Nenhuma observação importante por enquanto. O MCR só aparece quando identifica algo relevante."}</div>}
+              {!performanceNotifications.length && !lucasDailyNotification && !inactiveFor24Hours && !isLastDayOfMonth() && <div className="notification-empty">{studentName ? studentName + ", nenhuma observação importante por enquanto. O MCR só aparece quando identifica algo relevante." : "Nenhuma observação importante por enquanto. O MCR só aparece quando identifica algo relevante."}</div>}
             </div>}
           </div>
           <span className="user">{session.user.email}</span>
