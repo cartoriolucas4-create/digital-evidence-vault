@@ -225,9 +225,9 @@ export default function AdminPage() {
   if (!token) return <div className="admin-page"><style>{css}</style><div className="admin-login">
     <div className="admin-brand"><div className="admin-brand-icon"><ShieldCheck size={24}/></div><div><strong>MCR</strong><div style={{fontSize:12,opacity:.6}}>Área administrativa</div></div></div>
     <h1>Acesso administrativo</h1><p className="admin-sub">Entre com suas credenciais de administrador.</p>
-    <form onSubmit={login}>
+    <form onSubmit={login} autoComplete="off">
       <div className="admin-field"><label>Usuário</label><input value={username} onChange={e=>setUsername(e.target.value)} autoComplete="username" required /></div>
-      <div className="admin-field"><label>Senha</label><input type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password" required /></div>
+      <div className="admin-field"><label>Senha</label><input type="password" value={password} onChange={e=>setPassword(e.target.value)} onInput={e=>setPassword((e.target as HTMLInputElement).value)} autoComplete="new-password" name="mcr-admin-password" data-lpignore="true" data-1p-ignore="true" spellCheck={false} required /></div>
       {error && <div className="admin-error">{error}</div>}<button className="admin-btn" style={{width:"100%",justifyContent:"center"}} disabled={busy}><LogIn size={17}/>{busy?"Entrando...":"Entrar"}</button>
     </form>
   </div></div>;
