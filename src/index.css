@@ -449,11 +449,40 @@ html[data-theme="dark"] .status.good{background:#39e75f!important;color:#07120a!
 html[data-theme="dark"] .status.warn{background:#ffd1e3!important;color:#7d1748!important;border:1px solid #ff9fc4!important;box-shadow:0 0 8px rgba(255,161,197,.22)!important}
 html[data-theme="dark"] .status.bad{background:#ffb8cf!important;color:#7a123f!important;border:1px solid #ff86b0!important;box-shadow:0 0 8px rgba(255,134,176,.22)!important}
 
-/* CONTRASTE FORTE — status no tema escuro */
-html[data-theme="dark"] .table .status.good,
-html[data-theme="dark"] span.status.good{background:#32e657!important;color:#06130a!important;border:1px solid #72ff8b!important;font-weight:900!important;opacity:1!important;}
-html[data-theme="dark"] .table .status.bad,
-html[data-theme="dark"] span.status.bad{background:#ffd0e1!important;color:#8a164d!important;border:1px solid #ff9cbe!important;font-weight:900!important;opacity:1!important;}
-html[data-theme="dark"] .table .status.warn,
-html[data-theme="dark"] span.status.warn{background:#ffe0ec!important;color:#8a164d!important;border:1px solid #ffafd0!important;font-weight:900!important;opacity:1!important;}
-html[data-theme="dark"] .status{font-size:10px!important;min-width:42px!important;text-align:center!important;padding:4px 8px!important;}
+/* STATUS — contraste máximo no modo noturno */
+html[data-theme="dark"] .status.good{
+  background:#00e676!important;
+  color:#062b16!important;
+  border:1px solid #66ffad!important;
+  box-shadow:0 0 10px rgba(0,230,118,.45)!important;
+  font-size:11px!important;
+  font-weight:900!important;
+  min-width:52px!important;
+  padding:5px 10px!important;
+  text-align:center!important;
+  opacity:1!important;
+}
+html[data-theme="dark"] .status.bad{
+  background:#ffd6e7!important;
+  color:#8a164d!important;
+  border:1px solid #ff9fc4!important;
+  box-shadow:0 0 10px rgba(255,159,196,.35)!important;
+  font-size:11px!important;
+  font-weight:900!important;
+  min-width:52px!important;
+  padding:5px 10px!important;
+  text-align:center!important;
+  opacity:1!important;
+}
+html[data-theme="dark"] .status.warn{
+  background:#ffe1ed!important;
+  color:#8a164d!important;
+  border:1px solid #ffb2cf!important;
+  box-shadow:0 0 10px rgba(255,178,207,.3)!important;
+  font-size:11px!important;
+  font-weight:900!important;
+  min-width:52px!important;
+  padding:5px 10px!important;
+  text-align:center!important;
+  opacity:1!important;
+}
