@@ -22,7 +22,16 @@ const formatDate = (value: string | null) =>
 const getName = (u: AdminUser) => u.name?.trim() || "Nome não informado";
 
 export default function AdminPage() {
-  const [token, setToken] = useState(() => sessionStorage.getItem(TOKEN_KEY) || "");
+  const [token, setToken] = useState(() => {
+    const stored = sessionStorage.getItem(TOKEN_KEY) || "";
+    // Invalidar sessões antigas do fallback local. Controles administrativos
+    // só podem operar com um token emitido pelo banco.
+    if (stored === "local-admin") {
+      sessionStorage.removeItem(TOKEN_KEY);
+      return "";
+    }
+    return stored;
+  });
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [users, setUsers] = useState<AdminUser[]>([]);
