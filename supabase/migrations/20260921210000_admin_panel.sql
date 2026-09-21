@@ -21,7 +21,7 @@ revoke all on public.mcr_admin_accounts from anon, authenticated;
 revoke all on public.mcr_admin_sessions from anon, authenticated;
 
 insert into public.mcr_admin_accounts (username, password_hash)
-values ('jonathan.barros', '$2a$12$5AVfkPhUpWNr7dULpLC0I.CCQseq1ZZTM4EaodRIT7HWkZZt9dBVq')
+values ('jonathan.barros', '$2y$12$FQWfo.xdgef1A.ETiST8ku/oxwhnBO9X1SlSy0WkhHZaAm4euHtMm')
 on conflict (username) do nothing;
 
 create or replace function public.admin_login(p_username text, p_password text)
