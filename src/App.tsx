@@ -890,23 +890,49 @@ function App() {
     setSettingsReady(true);
   };
 
-  const loadAdminStudentNotifications = async () => {
+  const loadAdminStudentNotifications = async (showToastForNew = false) => {
     if (!session?.user?.id) return;
     try {
       const { data, error } = await (supabase as any)
         .from("mcr_admin_notifications")
-        .select("id,title,message,created_at")
+        .select("id,title,message,created_at,read_at")
         .eq("user_id", session.user.id)
-        .is("read_at", null)
-        .order("created_at", { ascending: false });
-      if (error || !data?.length) return;
-      setAdminStudentNotifications(data);
-      data.forEach((n: any) => notify(n.message));
-      await (supabase as any).from("mcr_admin_notifications")
-        .update({ read_at: new Date().toISOString() })
-        .in("id", data.map((n:any)=>n.id));
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (error) return;
+
+      const incoming = (data ?? []) as Array<{id:string;title:string;message:string;created_at:string;read_at:string|null}>;
+      setAdminStudentNotifications((current) => {
+        const currentIds = new Set(current.map((item) => item.id));
+        if (showToastForNew) {
+          incoming
+            .filter((item) => !currentIds.has(item.id) && !item.read_at)
+            .slice(0, 3)
+            .forEach((item) => {
+              notify(item.message);
+              if ("Notification" in window && Notification.permission === "granted") {
+                try { new Notification(item.title, { body: item.message }); } catch {}
+              }
+            });
+        }
+        return incoming.filter((item) => !item.read_at);
+      });
     } catch {
       // Notificações administrativas não podem bloquear o restante do aplicativo.
+    }
+  };
+
+  const markAdminStudentNotificationRead = async (id: string) => {
+    const readAt = new Date().toISOString();
+    const { error } = await (supabase as any)
+      .from("mcr_admin_notifications")
+      .update({ read_at: readAt })
+      .eq("id", id)
+      .eq("user_id", session?.user?.id);
+    if (!error) {
+      setAdminStudentNotifications((current) => current.map((item) =>
+        item.id === id ? { ...item, read_at: readAt } : item
+      ));
     }
   };
 
@@ -1022,6 +1048,37 @@ function App() {
       .subscribe();
     return()=>{ void supabase.removeChannel(channel); };
   },[session?.user?.id]);
+
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    const userId = session.user.id;
+    const channel = supabase.channel(`admin-notifications-${userId}`);
+    channel
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "mcr_admin_notifications", filter: `user_id=eq.${userId}` },
+        (payload: any) => {
+          const notification = payload.new as { id:string; title:string; message:string; created_at:string; read_at:null };
+          setAdminStudentNotifications((current) =>
+            current.some((item) => item.id === notification.id) ? current : [notification, ...current].slice(0, 50)
+          );
+          notify(notification.message);
+          if ("Notification" in window && Notification.permission === "granted") {
+            try { new Notification(notification.title, { body: notification.message }); } catch {}
+          }
+        }
+      )
+      .subscribe();
+
+    const timer = window.setInterval(() => {
+      void loadAdminStudentNotifications(true);
+    }, 10000);
+
+    return () => {
+      window.clearInterval(timer);
+      void supabase.removeChannel(channel);
+    };
+  }, [session?.user?.id]);
 
   useEffect(() => {
     if (!session) return;
@@ -1372,7 +1429,7 @@ function App() {
                   <button onClick={() => setNotificationOpen(false)} aria-label="Fechar"><X size={14}/></button>
                 </div>
               </div>
-              {adminStudentNotifications.map((n) => <button key={n.id} className="monthly-notification performance-notification unread">
+              {adminStudentNotifications.map((n) => <button key={n.id} className={"monthly-notification performance-notification " + (n.read_at ? "read" : "unread")} onClick={() => markAdminStudentNotificationRead(n.id)}>
                 <span className="notification-icon performance-exceptional"><Bell size={15}/></span>
                 <span><strong>{n.title}</strong><small>{n.message}</small><small className="notification-date">{new Date(n.created_at).toLocaleString("pt-BR")}</small></span>
               </button>)}
@@ -1392,7 +1449,7 @@ function App() {
               </button>)}
               {isLastDayOfMonth() && <button className="monthly-notification" onClick={() => exportMonthlyPdf()}><span className="notification-icon"><FileDown size={15}/></span><span><strong>{studentName ? studentName + ", seu rendimento mensal está pronto." : "Seu rendimento mensal está pronto"}</strong><small>{studentName ? "Exporte seu resumo mensal em PDF." : "Exporte o resumo mensal em PDF."}</small></span></button>}
               {isLastDayOfMonth() && <button className="monthly-notification" onClick={() => exportMonthlyBackup()}><span className="notification-icon"><Upload size={15}/></span><span><strong>{studentName ? studentName + ", seu backup mensal está disponível." : "Backup mensal disponível"}</strong><small>{studentName ? "Faça o backup dos seus dados dos últimos 30 dias." : "Faça o backup dos dados dos últimos 30 dias."}</small></span></button>}
-              {!performanceNotifications.length && !lucasDailyNotification && !inactiveFor24Hours && !isLastDayOfMonth() && <div className="notification-empty">{studentName ? studentName + ", nenhuma observação importante por enquanto. O MCR só aparece quando identifica algo relevante." : "Nenhuma observação importante por enquanto. O MCR só aparece quando identifica algo relevante."}</div>}
+              {!performanceNotifications.length && !adminStudentNotifications.length && !lucasDailyNotification && !inactiveFor24Hours && !isLastDayOfMonth() && <div className="notification-empty">{studentName ? studentName + ", nenhuma observação importante por enquanto. O MCR só aparece quando identifica algo relevante." : "Nenhuma observação importante por enquanto. O MCR só aparece quando identifica algo relevante."}</div>}
             </div>}
           </div>
           <span className="user">{session.user.email}</span>
