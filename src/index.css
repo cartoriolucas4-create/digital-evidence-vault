@@ -486,3 +486,7 @@ html[data-theme="dark"] .status.warn{
   text-align:center!important;
   opacity:1!important;
 }
+
+/* Posicionamento da logo MCR no cabeçalho */
+.topbar .brand{justify-content:flex-start;transform:translateX(-12px)}
+@media(max-width:760px){.topbar .brand{transform:translateX(-24px)}.topbar .mcr-logo-header{object-position:left center}}
