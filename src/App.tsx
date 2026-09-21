@@ -2849,6 +2849,6 @@ function SettingsPage({
 }
 
 export default function RootApp() {
-  if (typeof window !== "undefined" && window.location.pathname === "/administrativo") return <AdminPage />;
+  if (typeof window !== "undefined" && (window.location.pathname === "/administrativo" || new URLSearchParams(window.location.search).get("admin") === "1")) return <AdminPage />;
   return <AppErrorBoundary><App/></AppErrorBoundary>;
 }
