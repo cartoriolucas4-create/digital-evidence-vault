@@ -123,7 +123,7 @@ function readStore<T>(key: string, fallback: T): T {
 
 type ContextualNotification = {
   id: string;
-  category: "first_three_days" | "mid_month" | "last_three_days" | "monthly_goal_near";
+  category: "welcome" | "first_three_days" | "mid_month" | "last_three_days" | "monthly_goal_near";
   title: string;
   message: string;
   created_at: string;
@@ -146,6 +146,7 @@ type UserCloudPreferences = {
   contextualNotifications?: ContextualNotification[];
   contextualNotificationRotation?: Record<string, number>;
   contextualNotificationSentPeriod?: Record<string, string>;
+  mcrWelcomeNotification?: ContextualNotification;
 };
 
 function writeStore(key: string, value: unknown) {
@@ -217,7 +218,7 @@ function AuthScreen() {
       const client = supabase;
       const result = mode === "login"
         ? await client.auth.signInWithPassword({ email: email.trim(), password })
-        : await client.auth.signUp({ email: email.trim(), password });
+        : await client.auth.signUp({ email: email.trim(), password, options: { data: { mcr_welcome_pending: true } } });
 
       if (result.error) throw result.error;
       if (mode === "signup" && !result.data.session) {
@@ -305,6 +306,7 @@ function App() {
   const [adminStudentNotifications, setAdminStudentNotifications] = useState<Array<{id:string;title:string;message:string;created_at:string;read_at:string|null}>>([]);
   const [contextualNotifications, setContextualNotifications] = useState<ContextualNotification[]>([]);
   const contextualNotificationStateRef = useRef<ContextualNotificationState>({ notifications: [], rotation: {}, sentPeriod: {} });
+  const welcomeNotificationHandledRef = useRef(false);
 
   const [inactivityNotificationRead, setInactivityNotificationRead] = useState(false);
   const [, setNotificationClock] = useState(Date.now());
@@ -963,6 +965,16 @@ function App() {
     }
   };
 
+  const WELCOME_NOTIFICATION: ContextualNotification = {
+    id: "mcr-welcome",
+    category: "welcome",
+    title: "🎉 Bem-vindo ao MCR",
+    message: "🚀 Bem-vindo ao MCR — seu espaço para organizar, registrar e acompanhar sua preparação. 🎯 Defina suas metas, acompanhe seu rendimento e veja sua evolução ao longo dos estudos.",
+    created_at: "",
+    read_at: null,
+    period_key: "welcome",
+  };
+
   const CONTEXTUAL_NOTIFICATION_MESSAGES: Record<ContextualNotification["category"], { title: string; messages: string[] }> = {
     first_three_days: {
       title: "🚀 Começo de mês",
@@ -1033,6 +1045,27 @@ function App() {
         payload: { preferences },
       });
     }
+  };
+
+  const createWelcomeNotificationIfPending = async () => {
+    if (!session?.user?.id || !cloudStateReady || welcomeNotificationHandledRef.current) return;
+    if (session.user.user_metadata?.mcr_welcome_pending !== true) return;
+    welcomeNotificationHandledRef.current = true;
+    const state = contextualNotificationStateRef.current;
+    const existing = state.notifications.some((item) => item.category === "welcome" || item.id === WELCOME_NOTIFICATION.id);
+    if (!existing) {
+      const notification = { ...WELCOME_NOTIFICATION, id: uid(), created_at: new Date().toISOString() };
+      await saveContextualNotificationState({
+        notifications: [notification, ...state.notifications].slice(0, 50),
+        rotation: state.rotation,
+        sentPeriod: { ...state.sentPeriod, welcome: "welcome" },
+      });
+      notify(notification.message);
+      if ("Notification" in window && Notification.permission === "granted") {
+        try { new Notification(notification.title, { body: notification.message }); } catch {}
+      }
+    }
+    await supabase.auth.updateUser({ data: { ...(session.user.user_metadata ?? {}), mcr_welcome_pending: false } });
   };
 
   const maybeCreateContextualNotification = async (
@@ -1275,6 +1308,11 @@ function App() {
 
   // Fallback de sincronização para dados de conta que não dependem do Realtime.
   // O Supabase continua sendo a fonte de verdade; o localStorage é apenas cache.
+  useEffect(() => {
+    if (!session?.user?.id || !cloudStateReady) return;
+    void createWelcomeNotificationIfPending();
+  }, [session?.user?.id, cloudStateReady]);
+
   useEffect(() => {
     if (!session?.user?.id || !settingsReady || !cloudStateReady) return;
     void evaluateContextualNotifications();
