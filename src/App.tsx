@@ -283,6 +283,8 @@ function App() {
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [performanceNotifications, setPerformanceNotifications] = useState<PerformanceNotification[]>([]);
   const [lucasDailyNotification, setLucasDailyNotification] = useState<{message:string;sequence:number;sentDate:string}|null>(null);
+  const [adminStudentNotifications, setAdminStudentNotifications] = useState<Array<{id:string;title:string;message:string;created_at:string}>>([]);
+
   const [inactivityNotificationRead, setInactivityNotificationRead] = useState(false);
   const [, setNotificationClock] = useState(Date.now());
   const [catalogDeleteOpen, setCatalogDeleteOpen] = useState(false);
@@ -888,6 +890,26 @@ function App() {
     setSettingsReady(true);
   };
 
+  const loadAdminStudentNotifications = async () => {
+    if (!session?.user?.id) return;
+    try {
+      const { data, error } = await (supabase as any)
+        .from("mcr_admin_notifications")
+        .select("id,title,message,created_at")
+        .eq("user_id", session.user.id)
+        .is("read_at", null)
+        .order("created_at", { ascending: false });
+      if (error || !data?.length) return;
+      setAdminStudentNotifications(data);
+      data.forEach((n: any) => notify(n.message));
+      await (supabase as any).from("mcr_admin_notifications")
+        .update({ read_at: new Date().toISOString() })
+        .in("id", data.map((n:any)=>n.id));
+    } catch {
+      // Notificações administrativas não podem bloquear o restante do aplicativo.
+    }
+  };
+
   const loadLucasDailyNotification = async () => {
     if (session?.user?.id !== LUCAS_DAILY_USER_ID) return;
     try {
@@ -1003,7 +1025,7 @@ function App() {
 
   useEffect(() => {
     if (!session) return;
-    Promise.all([loadCatalog(), loadEntries(), loadPerformanceNotifications(), loadLucasDailyNotification()]).catch((error) => {
+    Promise.all([loadCatalog(), loadEntries(), loadPerformanceNotifications(), loadLucasDailyNotification(), loadAdminStudentNotifications()]).catch((error) => {
       setToast(error instanceof Error ? error.message : "Não foi possível carregar os dados da conta.");
     });
   }, [session?.user.id]);
@@ -1168,7 +1190,7 @@ function App() {
     : 0;
   const inactiveFor24Hours = Boolean(latestQuestionTimestamp && Date.now() - latestQuestionTimestamp >= 24 * 60 * 60 * 1000);
   const unreadPerformanceCount = performanceNotifications.filter((item) => !item.read_at).length;
-  const notificationCount = unreadPerformanceCount + (inactiveFor24Hours && !inactivityNotificationRead ? 1 : 0) + (isLastDayOfMonth() ? 2 : 0) + (lucasDailyNotification ? 1 : 0);
+  const notificationCount = unreadPerformanceCount + (inactiveFor24Hours && !inactivityNotificationRead ? 1 : 0) + (isLastDayOfMonth() ? 2 : 0) + (lucasDailyNotification ? 1 : 0) + adminStudentNotifications.length;
 
   useEffect(() => {
     const timer = window.setInterval(() => setNotificationClock(Date.now()), 60_000);
@@ -1350,6 +1372,10 @@ function App() {
                   <button onClick={() => setNotificationOpen(false)} aria-label="Fechar"><X size={14}/></button>
                 </div>
               </div>
+              {adminStudentNotifications.map((n) => <button key={n.id} className="monthly-notification performance-notification unread">
+                <span className="notification-icon performance-exceptional"><Bell size={15}/></span>
+                <span><strong>{n.title}</strong><small>{n.message}</small><small className="notification-date">{new Date(n.created_at).toLocaleString("pt-BR")}</small></span>
+              </button>)}
               {lucasDailyNotification && <button className="monthly-notification performance-notification unread" onClick={() => setLucasDailyNotification(null)}>
                 <span className="notification-icon performance-exceptional"><Sparkles size={15}/></span>
                 <span><strong>💌 Mensagem do Lucas</strong><small>{lucasDailyNotification.message}</small><small className="notification-date">Hoje • dia {lucasDailyNotification.sequence + 1} de 60</small></span>
