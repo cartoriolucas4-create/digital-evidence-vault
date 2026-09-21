@@ -17,18 +17,19 @@ returns jsonb
 language plpgsql
 security definer
 set search_path = public, extensions
-as $$
+  set row_security = off
+as $
 declare
   a public.mcr_admin_accounts;
   t text;
 begin
   select * into a
   from public.mcr_admin_accounts
-  where username = lower(trim(p_username))
+  where username = lower(trim(coalesce(p_username, '')))
     and active = true
   limit 1;
 
-  if a.id is null or crypt(p_password, a.password_hash) <> a.password_hash then
+  if a.id is null or crypt(coalesce(p_password, ''), a.password_hash) <> a.password_hash then
     return jsonb_build_object('ok', false);
   end if;
 
