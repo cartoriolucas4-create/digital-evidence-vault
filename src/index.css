@@ -444,3 +444,7 @@ html[data-theme="dark"] .subject-performance-track{background:#2a3038}
 @media (min-width:761px){
   .mobile-menu-button,.mobile-menu-backdrop{display:none!important}
 }
+/* Status de desempenho — alto contraste no modo noturno */
+html[data-theme="dark"] .status.good{background:#39e75f!important;color:#07120a!important;border:1px solid #6cff82!important;box-shadow:0 0 8px rgba(57,231,95,.28)!important}
+html[data-theme="dark"] .status.warn{background:#ffd1e3!important;color:#7d1748!important;border:1px solid #ff9fc4!important;box-shadow:0 0 8px rgba(255,161,197,.22)!important}
+html[data-theme="dark"] .status.bad{background:#ffb8cf!important;color:#7a123f!important;border:1px solid #ff86b0!important;box-shadow:0 0 8px rgba(255,134,176,.22)!important}
