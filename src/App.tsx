@@ -891,17 +891,60 @@ function App() {
   const loadLucasDailyNotification = async () => {
     if (session?.user?.id !== LUCAS_DAILY_USER_ID) return;
     try {
+      // Primeiro tenta a função transacional: ela garante uma única entrega por dia
+      // mesmo quando a mesma conta estiver aberta em vários dispositivos.
       const { data, error } = await (supabase as any).rpc("claim_lucas_daily_message", {
         p_user_id: session.user.id,
       });
-      if (error || !data?.length) return;
-      const row = data[0] as { message: string; sequence_no: number; sent_date: string };
+      if (!error) {
+        if (!data?.length) return;
+        const row = data[0] as { message: string; sequence_no: number; sent_date: string };
+        setLucasDailyNotification({
+          message: row.message,
+          sequence: Number(row.sequence_no),
+          sentDate: row.sent_date,
+        });
+        notify(row.message);
+        return;
+      }
+
+      // Compatibilidade temporária caso a função ainda não tenha chegado ao banco.
+      // O estado continua sendo salvo na nuvem, nunca somente no navegador.
+      const saoPauloDate = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/Sao_Paulo",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(new Date());
+      const client = supabase as any;
+      const { data: state, error: stateError } = await client
+        .from("study_user_state")
+        .select("preferences")
+        .eq("user_id", session.user.id)
+        .maybeSingle();
+      if (stateError) return;
+      const prefs = (state?.preferences ?? {}) as Record<string, unknown>;
+      if (prefs.lucas_daily_last_date === saoPauloDate) return;
+      const currentSequence = Number.isInteger(Number(prefs.lucas_daily_sequence))
+        ? Number(prefs.lucas_daily_sequence)
+        : -1;
+      const nextSequence = (currentSequence + 1) % LUCAS_DAILY_MESSAGES.length;
+      const nextPrefs = {
+        ...prefs,
+        lucas_daily_last_date: saoPauloDate,
+        lucas_daily_sequence: nextSequence,
+      };
+      const { error: saveError } = await client
+        .from("study_user_state")
+        .upsert({ user_id: session.user.id, preferences: nextPrefs }, { onConflict: "user_id" });
+      if (saveError) return;
+      const message = LUCAS_DAILY_MESSAGES[nextSequence];
       setLucasDailyNotification({
-        message: row.message,
-        sequence: Number(row.sequence_no),
-        sentDate: row.sent_date,
+        message,
+        sequence: nextSequence,
+        sentDate: saoPauloDate,
       });
-      notify(row.message);
+      notify(message);
     } catch {
       // A mensagem especial nunca deve bloquear o carregamento normal do MCR.
     }
