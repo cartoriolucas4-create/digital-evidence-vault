@@ -229,7 +229,6 @@ function App() {
         .maybeSingle();
       if (error) {
         setCloudStateReady(true);
-        setCloudStateLoaded(false);
         return;
       }
       const prefs = (data?.preferences ?? {}) as UserCloudPreferences;
@@ -239,7 +238,6 @@ function App() {
       else if (localPlanner.defaultColor) setPlannerDefaultColor(localPlanner.defaultColor);
       if (prefs.plannerCompletedColor) setPlannerCompletedColor(prefs.plannerCompletedColor);
       else if (localPlanner.completedColor) setPlannerCompletedColor(localPlanner.completedColor);
-      setCloudStateLoaded(Boolean(data));
       setCloudStateReady(true);
     };
     void loadCloudState();
