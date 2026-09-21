@@ -877,25 +877,37 @@ function App() {
 
   const attention = bySubject.filter((item) => item.accuracy < targetAccuracy).slice(0, 10);
 
-  const saveSettings = () => {
+  const saveSettings = async (showToast = true) => {
+    if (!session?.user?.id) return false;
     const nextStudentName = String(studentName || "").trim().slice(0, 80);
     const nextDailyGoal = Math.max(1, Number(dailyGoal) || 1);
     const nextWeeklyGoal = Math.max(1, Number(weeklyGoal) || 1);
     const nextMonthlyGoal = Math.max(1, Number(monthlyGoal) || 1);
     const nextTargetAccuracy = Math.min(100, Math.max(0, Number(targetAccuracy) || 0));
-    (async () => {
-      const client = supabase as any;
-      const { error } = await client.from("study_settings").upsert({
-        user_id: session?.user?.id,
-        student_name: nextStudentName,
-        daily_goal: nextDailyGoal,
-        weekly_goal: nextWeeklyGoal,
-        monthly_goal: nextMonthlyGoal,
-        target_accuracy: nextTargetAccuracy,
-      }, { onConflict: "user_id" });
-      notify(error ? error.message : "Configurações salvas.");
-    })();
+    const client = supabase as any;
+    const { error } = await client.from("study_settings").upsert({
+      user_id: session.user.id,
+      student_name: nextStudentName,
+      daily_goal: nextDailyGoal,
+      weekly_goal: nextWeeklyGoal,
+      monthly_goal: nextMonthlyGoal,
+      target_accuracy: nextTargetAccuracy,
+    }, { onConflict: "user_id" });
+    if (error) {
+      if (showToast) notify(error.message);
+      return false;
+    }
+    if (showToast) notify("Configurações salvas automaticamente.");
+    return true;
   };
+
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    const timer = window.setTimeout(() => {
+      void saveSettings(false);
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [session?.user?.id, studentName, dailyGoal, weeklyGoal, monthlyGoal, targetAccuracy]);
 
   const changePassword = async () => {
     if (!session?.user.email || !currentPassword || !newPassword || !confirmPassword) return;
@@ -1687,7 +1699,7 @@ function Catalog({disciplines,subjects,sources,types,refresh,notify,catalogDelet
   useEffect(()=>{
     const loadOrder=async()=>{
       const client=supabase as any;
-      const {data,error}=await client.from("study_user_state").select("discipline_order").maybeSingle();
+      const {data,error}=await client.from("study_user_state").select("discipline_order").eq("user_id",(await client.auth.getUser()).data.user?.id).maybeSingle();
       if(!error && Array.isArray(data?.discipline_order)){
         setDisciplineOrder(data.discipline_order as string[]);
       }
@@ -1918,33 +1930,55 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
   useEffect(()=>{
     setData(prev=>normalizePlanner(prev));
     plannerRemoteReady.current=false;
+    let cancelled=false;
     const loadRemotePlanner=async()=>{
       const client=supabase as any;
+      const localData=normalizePlanner(readStore<PlannerData>(key,makeInitial()));
       const {data:remote,error}=await client
         .from("study_user_state")
-        .select("planner_data")
+        .select("planner_data,updated_at")
         .eq("user_id",userId)
         .maybeSingle();
+
+      if(cancelled) return;
+
       if(error){
         plannerRemoteReady.current=true;
-        notify("Planejamento local mantido. Não foi possível sincronizar com a nuvem.");
+        notify("Não foi possível sincronizar o planejamento com a nuvem. Seus dados locais foram preservados.");
         return;
       }
-      const localData=normalizePlanner(readStore<PlannerData>(key,makeInitial()));
+
       const remoteData=remote?.planner_data ? normalizePlanner(remote.planner_data) : null;
+
       if(remoteData){
         setData(remoteData);
+        writeStore(key,remoteData);
       }else{
-        const {error:saveError}=await client.from("study_user_state").upsert(
-          {user_id:userId,planner_data:localData},
-          {onConflict:"user_id"}
-        );
-        if(saveError) notify("Não foi possível salvar o planejamento na nuvem.");
+        const {data:saved,error:saveError}=await client
+          .from("study_user_state")
+          .upsert(
+            {user_id:userId,planner_data:localData},
+            {onConflict:"user_id"}
+          )
+          .select("planner_data,updated_at")
+          .single();
+
+        if(saveError){
+          notify("Não foi possível salvar o planejamento na nuvem. Seus dados locais foram preservados.");
+        }else if(saved?.planner_data){
+          const confirmed=normalizePlanner(saved.planner_data);
+          setData(confirmed);
+          writeStore(key,confirmed);
+        }
       }
+
       plannerRemoteReady.current=true;
     };
+
     void loadRemotePlanner();
+
     return ()=>{
+      cancelled=true;
       if(plannerRemoteTimer.current) clearTimeout(plannerRemoteTimer.current);
       plannerRemoteTimer.current=null;
       plannerRemoteReady.current=false;
@@ -1955,14 +1989,32 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
     writeStore(key,data);
     if(!plannerRemoteReady.current)return;
     if(plannerRemoteTimer.current) clearTimeout(plannerRemoteTimer.current);
+
+    const snapshot=normalizePlanner(data);
     plannerRemoteTimer.current=setTimeout(async()=>{
       const client=supabase as any;
-      const {error}=await client.from("study_user_state").upsert(
-        {user_id:userId,planner_data:data},
-        {onConflict:"user_id"}
-      );
-      if(error) notify("Alteração feita, mas não foi possível sincronizar o planejamento.");
+      const {data:saved,error}=await client
+        .from("study_user_state")
+        .upsert(
+          {user_id:userId,planner_data:snapshot},
+          {onConflict:"user_id"}
+        )
+        .select("planner_data,updated_at")
+        .single();
+
+      if(error){
+        notify("Alteração feita localmente, mas não foi possível sincronizar o planejamento com a nuvem.");
+        return;
+      }
+
+      if(saved?.planner_data){
+        writeStore(key,normalizePlanner(saved.planner_data));
+      }
     },350);
+
+    return ()=>{
+      if(plannerRemoteTimer.current) clearTimeout(plannerRemoteTimer.current);
+    };
   },[key,data,userId]);
   const commitPlannerChange=(updater:(prev:PlannerData)=>PlannerData)=>{
     plannerHistory.current.past=[...plannerHistory.current.past.slice(-99),data];
@@ -2558,7 +2610,7 @@ function SettingsPage({
           <Field label="Meta mensal de questões"><input type="number" min="1" value={monthlyGoal} onChange={(e)=>setMonthlyGoal(Number(e.target.value))}/></Field>
           <Field label="Meta de aproveitamento (%)"><input type="number" min="0" max="100" value={targetAccuracy} onChange={(e)=>setTargetAccuracy(Number(e.target.value))}/></Field>
         </div>
-        <button className="btn primary settings-save" onClick={save}><Target size={15}/> Salvar metas</button>
+        <div className="notice settings-auto-save"><Target size={15}/> Metas e identificação são salvas automaticamente na sua conta e ficam disponíveis em qualquer dispositivo após o login.</div>
       </div>
     </section>
     <section className="section">
