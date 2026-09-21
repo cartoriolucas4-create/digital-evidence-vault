@@ -36,6 +36,9 @@ jobs:
       - name: Build static application for GitHub Pages
         run: bunx vite build --config vite.pages.config.ts
 
+      - name: Stamp build version
+        run: echo "BUILD_VERSION=$(date -u +%Y%m%d%H%M%S)-${GITHUB_SHA}" > dist-pages/build-version.txt
+
       - name: Create dedicated administrative entry point
         run: |
           mkdir -p dist-pages/administrativo
