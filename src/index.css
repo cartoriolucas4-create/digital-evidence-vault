@@ -487,7 +487,7 @@ html[data-theme="dark"] .status.warn{
   opacity:1!important;
 }
 
-/* Centralização da logo MCR no cabeçalho */
-.topbar .brand{justify-content:center;margin-left:0!important;transform:none!important;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)!important}
+/* Logo MCR no canto esquerdo; ações permanecem no lado direito */
+.topbar .brand{justify-content:flex-start;margin-left:0!important;position:static;transform:none!important}
 .topbar .mcr-logo-header{display:block}
-@media(max-width:760px){.topbar .brand{left:50%;margin-left:0!important;transform:translate(-50%,-50%)!important}.topbar .mcr-logo-header{object-position:center center}}
+@media(max-width:760px){.topbar .brand{margin-left:0!important;position:static;transform:none!important}.topbar .mcr-logo-header{object-position:left center}}
