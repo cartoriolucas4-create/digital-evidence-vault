@@ -6,6 +6,7 @@ import type { Discipline, Entry, Filters, PerformanceNotification, QuestionType,
 import { supabase } from "./integrations/supabase/client";
 import type { Session } from "@supabase/supabase-js";
 import { MCR_LOGO } from "./mcrLogo";
+import AdminPage from "./Admin";
 
 const STORE = {
   disciplines: "dev_disciplines",
@@ -2848,5 +2849,6 @@ function SettingsPage({
 }
 
 export default function RootApp() {
+  if (typeof window !== "undefined" && window.location.pathname === "/administrativo") return <AdminPage />;
   return <AppErrorBoundary><App/></AppErrorBoundary>;
 }
