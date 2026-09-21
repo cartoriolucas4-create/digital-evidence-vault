@@ -65,25 +65,36 @@ export default function AdminPage() {
     setBusy(true);
     setError("");
     const localHash = await sha256(password);
-    if (username.trim().toLowerCase() === "jonathan.barros" && localHash === LOCAL_ADMIN_HASH) {
+    const isLocalCredential = username.trim().toLowerCase() === "jonathan.barros" && localHash === LOCAL_ADMIN_HASH;
+
+    // Primeiro tenta criar uma sessão administrativa real no banco.
+    // Isso é necessário para que bloquear, alterar senha e enviar notificações
+    // sejam autorizados pelo backend.
+    const { data, error: rpcError } = await (supabase as any).rpc("admin_login", {
+      p_username: username.trim(),
+      p_password: password,
+    });
+
+    if (!rpcError && data?.token) {
+      sessionStorage.setItem(TOKEN_KEY, data.token);
+      setToken(data.token);
+      setPassword("");
+      setBusy(false);
+      return;
+    }
+
+    // Fallback somente para permitir acesso ao painel quando o RPC de login
+    // ainda não estiver disponível. Os controles de aluno permanecem protegidos.
+    if (isLocalCredential) {
       sessionStorage.setItem(TOKEN_KEY, "local-admin");
       setToken("local-admin");
       setPassword("");
       setBusy(false);
       return;
     }
-    const { data, error: rpcError } = await (supabase as any).rpc("admin_login", {
-      p_username: username.trim(),
-      p_password: password,
-    });
+
     setBusy(false);
-    if (rpcError || !data?.token) {
-      setError("Usuário ou senha administrativa inválidos.");
-      return;
-    }
-    sessionStorage.setItem(TOKEN_KEY, data.token);
-    setToken(data.token);
-    setPassword("");
+    setError("Usuário ou senha administrativa inválidos.");
   };
 
   const logout = async () => {
@@ -113,8 +124,9 @@ export default function AdminPage() {
   }, [users]);
 
   const adminAction = async (action: "block"|"unblock"|"password") => {
-    if (!selected || token === "local-admin") {
-      setActionMessage("Entre pela sessão administrativa do banco para usar este controle.");
+    if (!selected) return;
+    if (token === "local-admin") {
+      setActionMessage("Sua sessão atual é local. Saia e entre novamente para criar a sessão administrativa segura e liberar este controle.");
       return;
     }
     setActionBusy(true); setActionMessage("");
@@ -129,7 +141,11 @@ export default function AdminPage() {
   };
 
   const sendStudentNotification = async () => {
-    if (!selected || token === "local-admin") { setActionMessage("Entre pela sessão administrativa do banco para enviar notificações."); return; }
+    if (!selected) return;
+    if (token === "local-admin") {
+      setActionMessage("Sua sessão atual é local. Saia e entre novamente para criar a sessão administrativa segura e liberar este controle.");
+      return;
+    }
     if (!notificationMessage.trim()) { setActionMessage("Digite a mensagem."); return; }
     setActionBusy(true); setActionMessage("");
     const { data, error } = await (supabase as any).rpc("admin_send_student_notification", {
