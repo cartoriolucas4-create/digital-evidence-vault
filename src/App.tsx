@@ -1439,7 +1439,7 @@ function App() {
               </button>)}
               {lucasDailyNotification && <button className="monthly-notification performance-notification unread" onClick={() => setLucasDailyNotification(null)}>
                 <span className="notification-icon performance-exceptional"><Sparkles size={15}/></span>
-                <span><strong>💌 Mensagem do Lucas</strong><small>{lucasDailyNotification.message}</small><small className="notification-date">Hoje • dia {lucasDailyNotification.sequence + 1} de 60</small></span>
+                <span><strong>💌 Mensagem do Lucas</strong><small>{lucasDailyNotification.message}</small><small className="notification-date">Hoje</small></span>
               </button>}
               {inactiveFor24Hours && <button className={"monthly-notification performance-notification " + (inactivityNotificationRead ? "read" : "unread")} onClick={() => setInactivityNotificationRead(true)}>
                 <span className="notification-icon performance-attention"><AlertTriangle size={15}/></span>
