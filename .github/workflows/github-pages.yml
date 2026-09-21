@@ -34,16 +34,18 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Build static application for GitHub Pages
-        # Force fresh publication of the current main build
         run: bunx vite build --config vite.pages.config.ts
 
-      # Keep the Pages build tied to the current main branch revision.
-      # Administrative panel is included in the same SPA build.
+      - name: Create dedicated administrative entry point
+        run: |
+          mkdir -p dist-pages/administrativo
+          cp dist-pages/index.html dist-pages/administrativo/index.html
 
       - name: Verify Pages artifact
         run: |
           test -f dist-pages/index.html
-          find dist-pages -maxdepth 2 -type f | sort | head -80
+          test -f dist-pages/administrativo/index.html
+          find dist-pages -maxdepth 2 -type f | sort | head -100
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
