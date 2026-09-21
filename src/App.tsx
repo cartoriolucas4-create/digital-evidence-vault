@@ -217,6 +217,7 @@ function App() {
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [performanceNotifications, setPerformanceNotifications] = useState<PerformanceNotification[]>([]);
   const [inactivityNotificationRead, setInactivityNotificationRead] = useState(false);
+  const [, setNotificationClock] = useState(Date.now());
   const [catalogDeleteOpen, setCatalogDeleteOpen] = useState(false);
   const [catalogDeletePassword, setCatalogDeletePassword] = useState("");
   const [catalogDeleteBusy, setCatalogDeleteBusy] = useState(false);
@@ -1038,7 +1039,12 @@ function App() {
     : 0;
   const inactiveFor24Hours = Boolean(latestQuestionTimestamp && Date.now() - latestQuestionTimestamp >= 24 * 60 * 60 * 1000);
   const unreadPerformanceCount = performanceNotifications.filter((item) => !item.read_at).length;
-  const notificationCount = unreadPerformanceCount + (inactiveFor24Hours && !inactivityNotificationRead ? 1 : 0) + (isLastDayOfMonth() ? 1 : 0);
+  const notificationCount = unreadPerformanceCount + (inactiveFor24Hours && !inactivityNotificationRead ? 1 : 0) + (isLastDayOfMonth() ? 2 : 0);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNotificationClock(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     setInactivityNotificationRead(false);
@@ -1094,7 +1100,7 @@ function App() {
       let message = "";
 
       if (stagnatedForFourWeeks) {
-         notificationType = "stagnation";
+         notificationType = "attention";
          title = "⏸️ Desempenho estagnado em " + subjectName;
          message = "Seu aproveitamento está praticamente no mesmo nível há mais de 4 semanas (" + Math.min(...stagnationAccuracies).toFixed(0) + "%–" + Math.max(...stagnationAccuracies).toFixed(0) + "%). Vale revisar a estratégia de estudo desse assunto.";
        } else if (currentAccuracy <= baseline - 25) {
@@ -1220,7 +1226,7 @@ function App() {
               </button>}
               {performanceNotifications.map((item) => <button key={item.id} className={"monthly-notification performance-notification " + (item.read_at ? "read" : "unread")} onClick={() => markPerformanceNotificationRead(item.id)}>
                 <span className={"notification-icon performance-" + item.notification_type}>
-                  {item.notification_type === "drop" || item.notification_type === "drop_severe" || item.notification_type === "attention" ? <AlertTriangle size={15}/> : item.notification_type === "record" ? <Trophy size={15}/> : item.notification_type === "evolution" ? <TrendingUp size={15}/> : item.notification_type === "stagnation" ? <PauseCircle size={15}/> : item.notification_type === "recovery" ? <Sparkles size={15}/> : <Target size={15}/>}
+                  {item.notification_type === "drop" || item.notification_type === "drop_severe" || item.notification_type === "attention" ? <AlertTriangle size={15}/> : item.notification_type === "record" ? <Trophy size={15}/> : item.title.startsWith("⏸️") ? <PauseCircle size={15}/> : item.notification_type === "evolution" ? <TrendingUp size={15}/> : item.notification_type === "recovery" ? <Sparkles size={15}/> : <Target size={15}/>}
                 </span>
                 <span><strong>{personalizeNotificationTitle(item.title, studentName)}</strong><small>{personalizeNotificationText(item.message, studentName)}</small><small className="notification-date">{new Date(item.created_at).toLocaleDateString("pt-BR")}</small></span>
               </button>)}
