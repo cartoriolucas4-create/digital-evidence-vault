@@ -1669,6 +1669,7 @@ function Catalog({disciplines,subjects,sources,types,refresh,notify,catalogDelet
   const [search,setSearch]=useState("");
   const [bulkOpen,setBulkOpen]=useState(false);
   const [disciplineOrder,setDisciplineOrder]=useState<string[]>(() => readStore<string[]>("mcr_discipline_order", []));
+  const [disciplineOrderReady,setDisciplineOrderReady]=useState(false);
   const [draggingId,setDraggingId]=useState<string | null>(null);
   const [editingId,setEditingId]=useState<string | null>(null);
   const [editingName,setEditingName]=useState("");
@@ -1685,13 +1686,36 @@ function Catalog({disciplines,subjects,sources,types,refresh,notify,catalogDelet
     .filter((item:any)=>!search||item.name.toLowerCase().includes(search.toLowerCase()))
     .filter((item:any)=>kind!=="subject"||!disciplineId||item.discipline_id===disciplineId);
 
+  useEffect(()=>{
+    const loadOrder=async()=>{
+      const client=supabase as any;
+      const {data,error}=await client.from("study_user_state").select("discipline_order").maybeSingle();
+      if(!error && Array.isArray(data?.discipline_order)){
+        setDisciplineOrder(data.discipline_order as string[]);
+      }
+      setDisciplineOrderReady(true);
+    };
+    void loadOrder();
+  },[]);
+  
   const moveDiscipline = (sourceId:string,targetId:string) => {
     if(sourceId===targetId) return;
     const current=orderedDisciplines.map((item:any)=>item.id);
     const from=current.indexOf(sourceId), to=current.indexOf(targetId);
     if(from<0||to<0)return;
     const next=[...current]; next.splice(from,1); next.splice(to,0,sourceId);
-    setDisciplineOrder(next); writeStore("mcr_discipline_order",next);
+    setDisciplineOrder(next);
+    writeStore("mcr_discipline_order",next);
+    if(disciplineOrderReady){
+      void (async()=>{
+        const client=supabase as any;
+        const {error}=await client.from("study_user_state").upsert(
+          {user_id:(await client.auth.getUser()).data.user?.id,discipline_order:next},
+          {onConflict:"user_id"}
+        );
+        if(error) notify("Sequência alterada, mas não foi possível sincronizar na nuvem.");
+      })();
+    }
     notify("Sequência das disciplinas salva.");
   };
 
