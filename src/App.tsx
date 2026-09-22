@@ -109,7 +109,7 @@ const monthBounds = (date = new Date()) => {
 const isLastDayOfMonth = (date = new Date()) => date.getDate() === new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
 const monthLabel = (date = new Date()) => date.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
 const uid = () => globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-const MCR_PUSH_VAPID_PUBLIC_KEY = "BCJ8ylajc7Jsi-DYnjnA8tC1o686--OosU-YqODYwphRVu03e2rbDSwMwEmWmXEcCrhUYYEja-YIMyBLj5CQE5E";
+const MCR_PUSH_FUNCTION_URL = "https://krulxfcxalaxosebmiyh.supabase.co/functions/v1/mcr-push-reminders";
 const urlBase64ToUint8Array = (base64String: string) => {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
@@ -939,10 +939,14 @@ function App() {
         notify("As notificações não foram autorizadas.");
         return;
       }
+      const keyResponse = await fetch(MCR_PUSH_FUNCTION_URL, { cache: "no-store" });
+      if (!keyResponse.ok) throw new Error("Servidor de notificações indisponível.");
+      const keyData = await keyResponse.json();
+      if (!keyData.publicKey) throw new Error("Chave de notificações não disponível.");
       const registration = await navigator.serviceWorker.ready;
       let subscription = await registration.pushManager.getSubscription();
       if (!subscription) {
-        subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(MCR_PUSH_VAPID_PUBLIC_KEY) });
+        subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(keyData.publicKey) });
       }
       const json = subscription.toJSON();
       if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) throw new Error("Assinatura inválida.");
