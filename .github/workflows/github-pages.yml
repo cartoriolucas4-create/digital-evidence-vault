@@ -22,19 +22,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          bun-version: latest
+          node-version: 22
+          cache: npm
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: npm ci
 
       - name: Build static application for GitHub Pages
-        run: bunx vite build --config vite.pages.config.ts
+        run: npx vite build --config vite.pages.config.ts
 
       - name: Stamp build version
         run: echo "BUILD_VERSION=$(date -u +%Y%m%d%H%M%S)-${GITHUB_SHA}" > dist-pages/build-version.txt
