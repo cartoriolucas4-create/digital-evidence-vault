@@ -1,5 +1,5 @@
 import { Component, type ErrorInfo, type FormEvent, type ReactNode, type PointerEvent, useEffect, useMemo, useRef, useState } from "react";
-import { AlignCenter, AlignJustify, AlignLeft, AlignRight, AlertTriangle, BarChart3, Bell, Bold, BookOpen, CheckCircle2, ChevronDown, Clipboard, Copy, FileDown, GripVertical, Italic, LogOut, Maximize2, Minimize2, MoreHorizontal, Menu, PaintBucket, PanelLeftClose, PanelLeftOpen, Plus, PauseCircle, Redo2, RotateCcw, Settings, Sparkles, Strikethrough, Target, Trash2, Trophy, TrendingUp, Underline, Undo2, Upload, WrapText, X } from "lucide-react";
+import { AlignCenter, AlignJustify, AlignLeft, AlignRight, AlertTriangle, BarChart3, Bell, Bold, BookOpen, CheckCircle2, ChevronDown, Clipboard, Copy, FileDown, Flame, GripVertical, Italic, LogOut, Maximize2, Minimize2, MoreHorizontal, Menu, PaintBucket, PanelLeftClose, PanelLeftOpen, Plus, PauseCircle, Redo2, RotateCcw, Settings, Sparkles, Strikethrough, Target, Trash2, Trophy, TrendingUp, Underline, Undo2, Upload, WrapText, X } from "lucide-react";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { Discipline, Entry, Filters, PerformanceNotification, QuestionType, Source, Subject } from "./types";
@@ -149,6 +149,7 @@ type UserCloudPreferences = {
   mcrWelcomeNotification?: ContextualNotification;
   defaultSourceId?: string;
   defaultQuestionTypeId?: string;
+  studyStreak?: { count: number; lastQualifiedAt: string };
 };
 
 function writeStore(key: string, value: unknown) {
@@ -265,6 +266,8 @@ function App() {
   const [types, setTypes] = useState<QuestionType[]>([]);
   const [defaultSourceId, setDefaultSourceId] = useState("");
   const [defaultQuestionTypeId, setDefaultQuestionTypeId] = useState("");
+  const [studyStreak, setStudyStreak] = useState<{ count: number; lastQualifiedAt: string }>({ count: 0, lastQualifiedAt: "" });
+  const studyStreakRef = useRef<{ count: number; lastQualifiedAt: string }>({ count: 0, lastQualifiedAt: "" });
   const [entries, setEntries] = useState<Entry[]>([]);
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [applied, setApplied] = useState<Filters>(emptyFilters);
@@ -352,6 +355,9 @@ function App() {
       else setPlannerSidebarCollapsed(localSidebarCollapsed);
       setDefaultSourceId(prefs.defaultSourceId ?? "");
       setDefaultQuestionTypeId(prefs.defaultQuestionTypeId ?? "");
+      const loadedStudyStreak = prefs.studyStreak ?? { count: 0, lastQualifiedAt: "" };
+      studyStreakRef.current = loadedStudyStreak;
+      setStudyStreak(loadedStudyStreak);
 
       const contextualState: ContextualNotificationState = {
         notifications: Array.isArray(prefs.contextualNotifications) ? prefs.contextualNotifications : [],
@@ -383,6 +389,9 @@ function App() {
         if(typeof prefs.plannerSidebarCollapsed==="boolean") setPlannerSidebarCollapsed(prefs.plannerSidebarCollapsed);
         setDefaultSourceId(prefs.defaultSourceId ?? "");
         setDefaultQuestionTypeId(prefs.defaultQuestionTypeId ?? "");
+        const syncedStudyStreak = prefs.studyStreak ?? { count: 0, lastQualifiedAt: "" };
+        studyStreakRef.current = syncedStudyStreak;
+        setStudyStreak(syncedStudyStreak);
         const contextualState: ContextualNotificationState = {
           notifications: Array.isArray(prefs.contextualNotifications) ? prefs.contextualNotifications : [],
           rotation: prefs.contextualNotificationRotation ?? {},
@@ -410,6 +419,7 @@ function App() {
       contextualNotificationSentPeriod: contextualNotificationStateRef.current.sentPeriod,
       defaultSourceId,
       defaultQuestionTypeId,
+      studyStreak,
     };
     const preferencesJson=JSON.stringify(preferences);
     if(preferencesJson===cloudPreferencesRemoteJson.current) return;
@@ -424,7 +434,7 @@ function App() {
       }
     },150);
     return()=>window.clearTimeout(timer);
-  }, [theme, buttonColor, plannerDefaultColor, plannerCompletedColor, plannerSidebarCollapsed, defaultSourceId, defaultQuestionTypeId, session?.user?.id, cloudStateReady]);
+  }, [theme, buttonColor, plannerDefaultColor, plannerCompletedColor, plannerSidebarCollapsed, defaultSourceId, defaultQuestionTypeId, studyStreak, session?.user?.id, cloudStateReady]);
 
   useEffect(() => {
     if (session?.user?.id && cloudStateReady) {
@@ -1476,6 +1486,57 @@ function App() {
     window.setTimeout(() => setToast(""), 2200);
   };
 
+  const updateStudyStreakFromQuestionLaunch = async () => {
+    if (!session?.user?.id || !cloudStateReady) return;
+
+    const now = Date.now();
+    const previous = studyStreakRef.current;
+    const lastQualifiedAt = previous.lastQualifiedAt ? Date.parse(previous.lastQualifiedAt) : 0;
+    const elapsed = lastQualifiedAt > 0 ? now - lastQualifiedAt : Number.POSITIVE_INFINITY;
+    const within24Hours = elapsed <= 24 * 60 * 60 * 1000;
+    const previousLocalDay = lastQualifiedAt > 0 ? new Date(lastQualifiedAt).toDateString() : "";
+    const currentLocalDay = new Date(now).toDateString();
+
+    let nextCount = 1;
+    if (previous.count > 0 && within24Hours) {
+      nextCount = previousLocalDay !== currentLocalDay ? previous.count + 1 : previous.count;
+    }
+
+    const next = {
+      count: nextCount,
+      lastQualifiedAt: new Date(now).toISOString(),
+    };
+
+    studyStreakRef.current = next;
+    setStudyStreak(next);
+
+    const { data: current, error: readError } = await (supabase as any)
+      .from("study_user_state")
+      .select("preferences")
+      .eq("user_id", session.user.id)
+      .maybeSingle();
+
+    if (readError) return;
+
+    const preferences = {
+      ...((current?.preferences ?? {}) as Record<string, unknown>),
+      studyStreak: next,
+    };
+
+    const { error } = await (supabase as any)
+      .from("study_user_state")
+      .upsert({ user_id: session.user.id, preferences }, { onConflict: "user_id" });
+
+    if (!error) {
+      cloudPreferencesRemoteJson.current = JSON.stringify(preferences);
+      void preferencesSyncChannel.current?.send({
+        type: "broadcast",
+        event: "preferences_updated",
+        payload: { preferences },
+      });
+    }
+  };
+
   const latestQuestionEntry = entries
     .filter((entry) => Number(entry.questions || 0) > 0)
     .slice()
@@ -1490,6 +1551,7 @@ function App() {
   const inactiveFor24Hours = Boolean(latestQuestionTimestamp && Date.now() - latestQuestionTimestamp >= 24 * 60 * 60 * 1000);
   const unreadPerformanceCount = performanceNotifications.filter((item) => !item.read_at).length;
   const notificationCount = unreadPerformanceCount + (inactiveFor24Hours && !inactivityNotificationRead ? 1 : 0) + (isLastDayOfMonth() ? 2 : 0) + (lucasDailyNotification ? 1 : 0) + adminStudentNotifications.filter((item) => !item.read_at).length + contextualNotifications.filter((item) => !item.read_at).length;
+  const displayedStudyStreak = studyStreak.lastQualifiedAt && Date.now() - Date.parse(studyStreak.lastQualifiedAt) > 24 * 60 * 60 * 1000 ? 0 : studyStreak.count;
 
   useEffect(() => {
     const timer = window.setInterval(() => setNotificationClock(Date.now()), 60_000);
@@ -1686,6 +1748,10 @@ function App() {
       <header className={"topbar " + (tab === "planner" ? "planner-topbar-hidden" : "")}>
         <div className="brand"><img className="mcr-logo mcr-logo-header" src={MCR_LOGO} alt="MCR — Meu Controle de Rendimento" /></div>
         <div className="top-actions">
+          <div className="study-streak" title="Sequência de dias com lançamento de questões">
+            <Flame size={17} aria-hidden="true" />
+            <span>{displayedStudyStreak} dias</span>
+          </div>
           <div className="notification-wrap">
             <button className="notification-btn" aria-label="Notificações" onClick={() => setNotificationOpen((value) => !value)}>
               <Bell size={17}/>
@@ -1772,7 +1838,7 @@ function App() {
             />
           )}
           {tab === "planner" && <Planner userId={session.user.id} notify={notify} defaultSmallColor={plannerDefaultColor} completedSmallColor={plannerCompletedColor} />}
-          {tab === "entries" && <Entries disciplines={disciplines} subjects={subjects} sources={sources} types={types} defaultSourceId={defaultSourceId} defaultQuestionTypeId={defaultQuestionTypeId} entries={entries} refresh={() => loadEntries().catch((error) => notify(error instanceof Error ? error.message : "Não foi possível carregar os lançamentos."))} notify={notify} onPerformanceEntry={evaluatePerformanceEntry}/>} 
+          {tab === "entries" && <Entries disciplines={disciplines} subjects={subjects} sources={sources} types={types} defaultSourceId={defaultSourceId} defaultQuestionTypeId={defaultQuestionTypeId} entries={entries} refresh={() => loadEntries().catch((error) => notify(error instanceof Error ? error.message : "Não foi possível carregar os lançamentos."))} notify={notify} onPerformanceEntry={evaluatePerformanceEntry} onStudyActivity={updateStudyStreakFromQuestionLaunch}/>} 
           {tab === "catalog" && <Catalog disciplines={disciplines} subjects={subjects} sources={sources} types={types} defaultSourceId={defaultSourceId} setDefaultSourceId={setDefaultSourceId} defaultQuestionTypeId={defaultQuestionTypeId} setDefaultQuestionTypeId={setDefaultQuestionTypeId} refresh={() => loadCatalog().catch((error) => notify(error instanceof Error ? error.message : "Não foi possível carregar o cadastro."))} notify={notify} catalogDeleteOpen={catalogDeleteOpen} setCatalogDeleteOpen={setCatalogDeleteOpen} catalogDeletePassword={catalogDeletePassword} setCatalogDeletePassword={setCatalogDeletePassword} catalogDeleteBusy={catalogDeleteBusy} deleteAllCatalogData={deleteAllCatalogData}/>}
           {tab === "settings" && (
             <SettingsPage
@@ -2069,7 +2135,7 @@ function Field({label,children}:{label:string,children:ReactNode}) {
   return <div className="field"><label>{label}</label>{children}</div>;
 }
 
-function Entries({disciplines,subjects=[],sources,types,defaultSourceId="",defaultQuestionTypeId="",entries,refresh,notify,onPerformanceEntry}:any) {
+function Entries({disciplines,subjects=[],sources,types,defaultSourceId="",defaultQuestionTypeId="",entries,refresh,notify,onPerformanceEntry,onStudyActivity}:any) {
   const [editing,setEditing] = useState<Entry | null>(null);
   const [open,setOpen] = useState(false);
 
@@ -2098,6 +2164,7 @@ function Entries({disciplines,subjects=[],sources,types,defaultSourceId="",defau
     notify(editing ? "Lançamento atualizado." : "Lançamento criado.");
     setOpen(false); setEditing(null); refresh();
     if (createdEntry && onPerformanceEntry) void onPerformanceEntry(createdEntry);
+    if (!editing && createdEntry && onStudyActivity) void onStudyActivity();
   };
 
   const remove = async (id: string) => {
