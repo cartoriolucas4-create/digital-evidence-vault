@@ -109,6 +109,13 @@ const monthBounds = (date = new Date()) => {
 const isLastDayOfMonth = (date = new Date()) => date.getDate() === new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
 const monthLabel = (date = new Date()) => date.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
 const uid = () => globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+const MCR_PUSH_VAPID_PUBLIC_KEY = "Bf2xMdBpXw_VUt7z8NH6hrLEbOvmy8kJ15YBP53xIETltJl4RcJzoduYD3rzANPco3KfMzqL-5oDh1RtSSXDjXk";
+const urlBase64ToUint8Array = (base64String: string) => {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
+};
 
 function readStore<T>(key: string, fallback: T): T {
   try {
@@ -268,6 +275,8 @@ function App() {
   const [defaultQuestionTypeId, setDefaultQuestionTypeId] = useState("");
   const [studyStreak, setStudyStreak] = useState<{ count: number; lastQualifiedAt: string }>({ count: 0, lastQualifiedAt: "" });
   const studyStreakRef = useRef<{ count: number; lastQualifiedAt: string }>({ count: 0, lastQualifiedAt: "" });
+  const [pushPermission, setPushPermission] = useState<NotificationPermission | "unsupported">(typeof window !== "undefined" && "Notification" in window ? Notification.permission : "unsupported");
+  const [pushEnabled, setPushEnabled] = useState(false);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [applied, setApplied] = useState<Filters>(emptyFilters);
@@ -917,6 +926,59 @@ function App() {
     const { error } = await supabase.auth.signOut();
     if (error) setToast("Não foi possível sair. Tente novamente.");
   };
+
+  const enablePushNotifications = async () => {
+    if (!session?.user?.id || typeof window === "undefined" || !("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) {
+      notify("Seu navegador não oferece Web Push neste dispositivo.");
+      return;
+    }
+    try {
+      const permission = await Notification.requestPermission();
+      setPushPermission(permission);
+      if (permission !== "granted") {
+        notify("As notificações não foram autorizadas.");
+        return;
+      }
+      const registration = await navigator.serviceWorker.ready;
+      let subscription = await registration.pushManager.getSubscription();
+      if (!subscription) {
+        subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(MCR_PUSH_VAPID_PUBLIC_KEY) });
+      }
+      const json = subscription.toJSON();
+      if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) throw new Error("Assinatura inválida.");
+      const { error } = await (supabase as any).from("mcr_push_subscriptions").upsert({ user_id: session.user.id, endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth, user_agent: navigator.userAgent }, { onConflict: "endpoint" });
+      if (error) throw error;
+      setPushEnabled(true);
+      notify("🔔 Notificações de lembrete ativadas neste dispositivo.");
+    } catch (error) {
+      console.error("Web Push", error);
+      notify("Não foi possível ativar as notificações. Se necessário, permita notificações nas configurações do navegador.");
+    }
+  };
+
+  const disablePushNotifications = async () => {
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+      if (subscription) {
+        await (supabase as any).from("mcr_push_subscriptions").delete().eq("endpoint", subscription.endpoint);
+        await subscription.unsubscribe();
+      }
+      setPushEnabled(false);
+      notify("🔕 Notificações de lembrete desativadas neste dispositivo.");
+    } catch {
+      notify("Não foi possível desativar as notificações.");
+    }
+  };
+
+  useEffect(() => {
+    if (!session?.user?.id || typeof window === "undefined" || !("serviceWorker" in navigator) || !("PushManager" in window)) return;
+    void navigator.serviceWorker.ready.then(async (registration) => {
+      const subscription = await registration.pushManager.getSubscription();
+      setPushEnabled(!!subscription);
+      if ("Notification" in window) setPushPermission(Notification.permission);
+    }).catch(() => {});
+  }, [session?.user?.id]);
 
   const loadCatalog = async () => {
     if (!session?.user.id) return;
@@ -1874,6 +1936,10 @@ function App() {
               changePassword={changePassword}
               signOutOtherSessions={signOutOtherSessions}
               logout={logout}
+              pushPermission={pushPermission}
+              pushEnabled={pushEnabled}
+              enablePushNotifications={enablePushNotifications}
+              disablePushNotifications={disablePushNotifications}
             />
           )}
         </main>
@@ -3288,7 +3354,8 @@ function SettingsPage({
   setDailyGoal,setWeeklyGoal,setMonthlyGoal,setTargetAccuracy,save,
   session,passwordModalOpen,setPasswordModalOpen,currentPassword,setCurrentPassword,
   newPassword,setNewPassword,confirmPassword,setConfirmPassword,passwordBusy,
-  changePassword,signOutOtherSessions,logout
+  changePassword,signOutOtherSessions,logout,
+  pushPermission,pushEnabled,enablePushNotifications,disablePushNotifications
 }:any) {
   const [plannerSettingsPalette,setPlannerSettingsPalette] = useState<"default"|"completed"|null>(null);
   return <>
@@ -3387,6 +3454,19 @@ function SettingsPage({
           <span>O padrão original do MCR é rosa.</span>
         </div>
         <div className="notice">A cor é individual por aluno. Quem já usa o sistema continua com o rosa padrão até escolher outra cor. Restaurar padrão volta para o rosa.</div>
+      </div>
+    </section>
+    <section className="section">
+      <div className="section-head">🔔 LEMBRETES NO DISPOSITIVO</div>
+      <div className="section-body">
+        <div className="push-setting">
+          <div><strong>Notificações de lembrete do MCR</strong><small>São diferentes das notificações internas: servem para lembrar você de entrar no MCR e registrar suas questões. Com Web Push, podem chegar mesmo com o site fechado.</small></div>
+          <div className="push-setting-actions">
+            <span className={"push-status " + (pushEnabled ? "active" : "")}>{pushEnabled ? "Ativadas neste dispositivo" : pushPermission === "denied" ? "Bloqueadas pelo navegador" : "Desativadas"}</span>
+            {pushEnabled ? <button type="button" className="btn" onClick={disablePushNotifications}>Desativar</button> : <button type="button" className="btn primary" onClick={enablePushNotifications} disabled={pushPermission === "denied"}>Ativar notificações</button>}
+          </div>
+        </div>
+        <div className="notice">Esses lembretes não entram no histórico da campainha do MCR. No iPhone/iPad, primeiro adicione o MCR à Tela de Início e depois autorize as notificações.</div>
       </div>
     </section>
     <section className="section">
