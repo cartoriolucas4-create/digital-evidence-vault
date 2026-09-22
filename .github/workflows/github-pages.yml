@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
   pages: write
   id-token: write
 
@@ -34,7 +35,18 @@ jobs:
         run: npm install --no-audit --no-fund
 
       - name: Build static application for GitHub Pages
-        run: npx vite build --config vite.pages.config.ts
+        id: build
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npx vite build --config vite.pages.config.ts 2>&1 | tee build-error.log
+      - name: Report build error
+        if: steps.build.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create --title "GitHub Pages build failure ${{ github.sha }}" --body-file build-error.log || true
+          exit 1
 
       - name: Stamp build version
         run: echo "BUILD_VERSION=$(date -u +%Y%m%d%H%M%S)-${GITHUB_SHA}" > dist-pages/build-version.txt
