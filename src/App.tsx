@@ -1050,38 +1050,41 @@ function App() {
   const createWelcomeNotificationIfPending = async () => {
     if (!session?.user?.id || !cloudStateReady || welcomeNotificationHandledRef.current) return;
 
-    // Cadastro recente: aceita tanto a marca do cadastro quanto a data real
-    // de criação da conta, permitindo recuperar cadastros feitos na última hora.
-    const createdAt = session.user.created_at ? new Date(session.user.created_at).getTime() : 0;
-    const isCreatedWithinLastHour = createdAt > 0 && (Date.now() - createdAt) >= 0 && (Date.now() - createdAt) <= 60 * 60 * 1000;
-    const isPending = session.user.user_metadata?.mcr_welcome_pending === true;
-    if (!isPending && !isCreatedWithinLastHour) return;
+    // Boas-vindas: a regra é simples e definitiva:
+    // se esta conta ainda não possui a mensagem de boas-vindas, cria agora.
+    // Não depende de data/hora do cadastro nem de user_metadata.
+    const state = contextualNotificationStateRef.current;
+    const existing = state.notifications.some(
+      (item) => item.category === "welcome" || item.id === WELCOME_NOTIFICATION.id
+    );
 
     welcomeNotificationHandledRef.current = true;
-    const state = contextualNotificationStateRef.current;
-    const existing = state.notifications.some((item) => item.category === "welcome" || item.id === WELCOME_NOTIFICATION.id);
 
     if (!existing) {
-      const notification = { ...WELCOME_NOTIFICATION, id: uid(), created_at: new Date().toISOString() };
+      const notification = {
+        ...WELCOME_NOTIFICATION,
+        id: uid(),
+        created_at: new Date().toISOString(),
+      };
       const nextState = {
         notifications: [notification, ...state.notifications].slice(0, 50),
         rotation: state.rotation,
         sentPeriod: { ...state.sentPeriod, welcome: "welcome" },
       };
-      // Exibe imediatamente no centro de notificações, mesmo se a gravação na
-      // nuvem demorar ou falhar. A tentativa de persistência continua em seguida.
+
+      // Atualiza a interface imediatamente.
       contextualNotificationStateRef.current = nextState;
       setContextualNotifications(nextState.notifications.slice(0, 5));
       notify(notification.message);
-      if ("Notification" in window && Notification.permission === "granted") {
-        try { new Notification(notification.title, { body: notification.message }); } catch {}
-      }
-      await saveContextualNotificationState(nextState);
-    }
 
-    // Retira a marca para impedir nova entrega depois do primeiro acesso.
-    if (isPending) {
-      await supabase.auth.updateUser({ data: { ...(session.user.user_metadata ?? {}), mcr_welcome_pending: false } });
+      if ("Notification" in window && Notification.permission === "granted") {
+        try {
+          new Notification(notification.title, { body: notification.message });
+        } catch {}
+      }
+
+      // Persiste no Supabase para não enviar novamente.
+      await saveContextualNotificationState(nextState);
     }
   };
 
@@ -1326,10 +1329,8 @@ function App() {
   // Fallback de sincronização para dados de conta que não dependem do Realtime.
   // O Supabase continua sendo a fonte de verdade; o localStorage é apenas cache.
   useEffect(() => {
-    if (!session?.user?.id) return;
+    if (!session?.user?.id || !cloudStateReady) return;
     void createWelcomeNotificationIfPending();
-    const timer = window.setTimeout(() => void createWelcomeNotificationIfPending(), 2500);
-    return () => window.clearTimeout(timer);
   }, [session?.user?.id, cloudStateReady]);
 
   useEffect(() => {
