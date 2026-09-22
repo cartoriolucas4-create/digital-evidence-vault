@@ -1,0 +1,4 @@
+-- MCR device reminders use the existing study_user_state.preferences JSON.
+-- No new table is required. The Web Push subscription is stored per user under:
+-- preferences.pushSubscription = { endpoint, keys: { p256dh, auth }, userAgent }
+-- The server-side reminder worker also stores pushReminderLastDate there.
