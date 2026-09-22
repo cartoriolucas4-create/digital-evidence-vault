@@ -1629,6 +1629,34 @@ function App() {
     }
   };
 
+  const markContextualNotificationRead = async (id: string) => {
+    const readAt = new Date().toISOString();
+    const state = contextualNotificationStateRef.current;
+    const nextState = {
+      ...state,
+      notifications: state.notifications.map((item) =>
+        item.id === id ? { ...item, read_at: readAt } : item
+      ),
+    };
+    contextualNotificationStateRef.current = nextState;
+    setContextualNotifications(nextState.notifications.slice(0, 5));
+    await saveContextualNotificationState(nextState);
+  };
+
+  const markAdminStudentNotificationRead = async (id: string) => {
+    const readAt = new Date().toISOString();
+    const { error } = await (supabase as any)
+      .from("mcr_admin_notifications")
+      .update({ read_at: readAt })
+      .eq("id", id)
+      .eq("user_id", session?.user?.id);
+    if (!error) {
+      setAdminStudentNotifications((current) =>
+        current.map((item) => item.id === id ? { ...item, read_at: readAt } : item)
+      );
+    }
+  };
+
   const markPerformanceNotificationRead = async (id: string) => {
     const readAt = new Date().toISOString();
     const { error } = await (supabase as any)
@@ -1675,11 +1703,11 @@ function App() {
                   <button onClick={() => setNotificationOpen(false)} aria-label="Fechar"><X size={14}/></button>
                 </div>
               </div>
-              {contextualNotifications.slice(0, 5).map((n) => <button key={n.id} className={"monthly-notification performance-notification " + (n.read_at ? "read" : "unread")} onClick={(event) => { event.preventDefault(); event.stopPropagation(); }}>
+              {contextualNotifications.slice(0, 5).map((n) => <button key={n.id} className={"monthly-notification performance-notification " + (n.read_at ? "read" : "unread")} onClick={(event) => { event.preventDefault(); event.stopPropagation(); if (!n.read_at) void markContextualNotificationRead(n.id); }}>
                 <span className="notification-icon performance-exceptional"><Bell size={15}/></span>
                 <span><strong>{n.title}</strong><small>{n.message}</small><small className="notification-date">{new Date(n.created_at).toLocaleString("pt-BR")} • {n.read_at ? "Lida" : "Não lida"}</small></span>
               </button>)}
-              {adminStudentNotifications.slice(0, 5).map((n) => <button key={n.id} className={"monthly-notification performance-notification " + (n.read_at ? "read" : "unread")} onClick={(event) => { event.preventDefault(); event.stopPropagation(); }}>
+              {adminStudentNotifications.slice(0, 5).map((n) => <button key={n.id} className={"monthly-notification performance-notification " + (n.read_at ? "read" : "unread")} onClick={(event) => { event.preventDefault(); event.stopPropagation(); if (!n.read_at) void markAdminStudentNotificationRead(n.id); }}>
                 <span className="notification-icon performance-exceptional"><Bell size={15}/></span>
                 <span><strong>{n.title}</strong><small>{n.message}</small><small className="notification-date">{new Date(n.created_at).toLocaleString("pt-BR")} • {n.read_at ? "Lida" : "Não lida"}</small></span>
               </button>)}
