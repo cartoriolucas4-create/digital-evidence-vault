@@ -49,6 +49,12 @@ async function ensureVapidKeys() {
   return { ...config, public_key: publicKey, private_key: privateKey };
 }
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-mcr-cron-secret",
+  "Access-Control-Allow-Methods": "GET,POST,OPTIONS"
+};
+
 const messages = [
   ["📚 Hora do MCR", "Você ainda não registrou questões hoje. Entre no MCR e mantenha seu ritmo!"],
   ["🔥 Não deixe a sequência parar", "Que tal entrar no MCR e lançar algumas questões hoje?"],
@@ -59,12 +65,13 @@ const messages = [
 ];
 
 Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS_HEADERS });
   try {
     const config = await ensureVapidKeys();
 
     if (req.method === "GET") {
       return new Response(JSON.stringify({ publicKey: config.public_key }), {
-        headers: { "Content-Type": "application/json" }
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
       });
     }
 
@@ -129,7 +136,7 @@ Deno.serve(async (req) => {
     }
 
     return new Response(JSON.stringify({ ok: true, sent, skipped, removed }), {
-      headers: { "Content-Type": "application/json" }
+      headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
     });
   } catch (error) {
     return new Response(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : String(error) }), {
