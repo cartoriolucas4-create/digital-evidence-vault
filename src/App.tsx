@@ -109,7 +109,7 @@ const monthBounds = (date = new Date()) => {
 const isLastDayOfMonth = (date = new Date()) => date.getDate() === new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
 const monthLabel = (date = new Date()) => date.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
 const uid = () => globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-const MCR_PUSH_VAPID_PUBLIC_KEY = "Bf2xMdBpXw_VUt7z8NH6hrLEbOvmy8kJ15YBP53xIETltJl4RcJzoduYD3rzANPco3KfMzqL-5oDh1RtSSXDjXk";
+const MCR_PUSH_VAPID_PUBLIC_KEY = "BCJ8ylajc7Jsi-DYnjnA8tC1o686--OosU-YqODYwphRVu03e2rbDSwMwEmWmXEcCrhUYYEja-YIMyBLj5CQE5E";
 const urlBase64ToUint8Array = (base64String: string) => {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
@@ -947,18 +947,14 @@ function App() {
       const json = subscription.toJSON();
       if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) throw new Error("Assinatura inválida.");
       const client = supabase as any;
-      const { data: current, error: readError } = await client.from("study_user_state").select("preferences").eq("user_id", session.user.id).maybeSingle();
-      if (readError) throw readError;
-      const preferences = {
-        ...((current?.preferences ?? {}) as Record<string, unknown>),
-        pushSubscription: {
-          endpoint: json.endpoint,
-          keys: { p256dh: json.keys.p256dh, auth: json.keys.auth },
-          userAgent: navigator.userAgent,
-        },
-        pushReminderLastDate: null,
-      };
-      const { error } = await client.from("study_user_state").upsert({ user_id: session.user.id, preferences }, { onConflict: "user_id" });
+      const { error } = await client.from("mcr_push_subscriptions").upsert({
+        user_id: session.user.id,
+        endpoint: json.endpoint,
+        p256dh: json.keys.p256dh,
+        auth: json.keys.auth,
+        user_agent: navigator.userAgent,
+        enabled: true,
+      }, { onConflict: "endpoint" });
       if (error) throw error;
       setPushEnabled(true);
       notify("🔔 Notificações de lembrete ativadas neste dispositivo.");
@@ -974,11 +970,7 @@ function App() {
       const subscription = await registration.pushManager.getSubscription();
       if (subscription) {
         const client = supabase as any;
-        const { data: current } = await client.from("study_user_state").select("preferences").eq("user_id", session.user.id).maybeSingle();
-        const preferences = { ...((current?.preferences ?? {}) as Record<string, unknown>) };
-        delete preferences.pushSubscription;
-        delete preferences.pushReminderLastDate;
-        await client.from("study_user_state").upsert({ user_id: session.user.id, preferences }, { onConflict: "user_id" });
+        await client.from("mcr_push_subscriptions").delete().eq("user_id", session.user.id).eq("endpoint", subscription.endpoint);
         await subscription.unsubscribe();
       }
       setPushEnabled(false);
