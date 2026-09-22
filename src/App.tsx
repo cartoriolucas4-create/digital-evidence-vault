@@ -147,6 +147,8 @@ type UserCloudPreferences = {
   contextualNotificationRotation?: Record<string, number>;
   contextualNotificationSentPeriod?: Record<string, string>;
   mcrWelcomeNotification?: ContextualNotification;
+  defaultSourceId?: string;
+  defaultQuestionTypeId?: string;
 };
 
 function writeStore(key: string, value: unknown) {
@@ -261,6 +263,8 @@ function App() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [sources, setSources] = useState<Source[]>([]);
   const [types, setTypes] = useState<QuestionType[]>([]);
+  const [defaultSourceId, setDefaultSourceId] = useState("");
+  const [defaultQuestionTypeId, setDefaultQuestionTypeId] = useState("");
   const [entries, setEntries] = useState<Entry[]>([]);
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [applied, setApplied] = useState<Filters>(emptyFilters);
@@ -345,6 +349,8 @@ function App() {
       if (prefs.plannerCompletedColor) setPlannerCompletedColor(prefs.plannerCompletedColor);
       else if (localPlanner.completedColor) setPlannerCompletedColor(localPlanner.completedColor);
       if (typeof prefs.plannerSidebarCollapsed === "boolean") setPlannerSidebarCollapsed(prefs.plannerSidebarCollapsed);
+      setDefaultSourceId(prefs.defaultSourceId ?? "");
+      setDefaultQuestionTypeId(prefs.defaultQuestionTypeId ?? "");
       else setPlannerSidebarCollapsed(localSidebarCollapsed);
 
       const contextualState: ContextualNotificationState = {
@@ -375,6 +381,8 @@ function App() {
         if(prefs.plannerDefaultColor) setPlannerDefaultColor(prefs.plannerDefaultColor);
         if(prefs.plannerCompletedColor) setPlannerCompletedColor(prefs.plannerCompletedColor);
         if(typeof prefs.plannerSidebarCollapsed==="boolean") setPlannerSidebarCollapsed(prefs.plannerSidebarCollapsed);
+        setDefaultSourceId(prefs.defaultSourceId ?? "");
+        setDefaultQuestionTypeId(prefs.defaultQuestionTypeId ?? "");
         const contextualState: ContextualNotificationState = {
           notifications: Array.isArray(prefs.contextualNotifications) ? prefs.contextualNotifications : [],
           rotation: prefs.contextualNotificationRotation ?? {},
@@ -400,6 +408,8 @@ function App() {
       contextualNotifications: contextualNotificationStateRef.current.notifications,
       contextualNotificationRotation: contextualNotificationStateRef.current.rotation,
       contextualNotificationSentPeriod: contextualNotificationStateRef.current.sentPeriod,
+      defaultSourceId,
+      defaultQuestionTypeId,
     };
     const preferencesJson=JSON.stringify(preferences);
     if(preferencesJson===cloudPreferencesRemoteJson.current) return;
@@ -414,7 +424,7 @@ function App() {
       }
     },150);
     return()=>window.clearTimeout(timer);
-  }, [theme, buttonColor, plannerDefaultColor, plannerCompletedColor, plannerSidebarCollapsed, session?.user?.id, cloudStateReady]);
+  }, [theme, buttonColor, plannerDefaultColor, plannerCompletedColor, plannerSidebarCollapsed, defaultSourceId, defaultQuestionTypeId, session?.user?.id, cloudStateReady]);
 
   useEffect(() => {
     if (session?.user?.id && cloudStateReady) {
@@ -1774,8 +1784,8 @@ function App() {
             />
           )}
           {tab === "planner" && <Planner userId={session.user.id} notify={notify} defaultSmallColor={plannerDefaultColor} completedSmallColor={plannerCompletedColor} />}
-          {tab === "entries" && <Entries disciplines={disciplines} subjects={subjects} sources={sources} types={types} entries={entries} refresh={() => loadEntries().catch((error) => notify(error instanceof Error ? error.message : "Não foi possível carregar os lançamentos."))} notify={notify} onPerformanceEntry={evaluatePerformanceEntry}/>} 
-          {tab === "catalog" && <Catalog disciplines={disciplines} subjects={subjects} sources={sources} types={types} refresh={() => loadCatalog().catch((error) => notify(error instanceof Error ? error.message : "Não foi possível carregar o cadastro."))} notify={notify} catalogDeleteOpen={catalogDeleteOpen} setCatalogDeleteOpen={setCatalogDeleteOpen} catalogDeletePassword={catalogDeletePassword} setCatalogDeletePassword={setCatalogDeletePassword} catalogDeleteBusy={catalogDeleteBusy} deleteAllCatalogData={deleteAllCatalogData}/>}
+          {tab === "entries" && <Entries disciplines={disciplines} subjects={subjects} sources={sources} types={types} defaultSourceId={defaultSourceId} defaultQuestionTypeId={defaultQuestionTypeId} entries={entries} refresh={() => loadEntries().catch((error) => notify(error instanceof Error ? error.message : "Não foi possível carregar os lançamentos."))} notify={notify} onPerformanceEntry={evaluatePerformanceEntry}/>} 
+          {tab === "catalog" && <Catalog disciplines={disciplines} subjects={subjects} sources={sources} types={types} defaultSourceId={defaultSourceId} setDefaultSourceId={setDefaultSourceId} defaultQuestionTypeId={defaultQuestionTypeId} setDefaultQuestionTypeId={setDefaultQuestionTypeId} refresh={() => loadCatalog().catch((error) => notify(error instanceof Error ? error.message : "Não foi possível carregar o cadastro."))} notify={notify} catalogDeleteOpen={catalogDeleteOpen} setCatalogDeleteOpen={setCatalogDeleteOpen} catalogDeletePassword={catalogDeletePassword} setCatalogDeletePassword={setCatalogDeletePassword} catalogDeleteBusy={catalogDeleteBusy} deleteAllCatalogData={deleteAllCatalogData}/>}
           {tab === "settings" && (
             <SettingsPage
               studentName={studentName}
@@ -2071,7 +2081,7 @@ function Field({label,children}:{label:string,children:ReactNode}) {
   return <div className="field"><label>{label}</label>{children}</div>;
 }
 
-function Entries({disciplines,subjects=[],sources,types,entries,refresh,notify,onPerformanceEntry}:any) {
+function Entries({disciplines,subjects=[],sources,types,defaultSourceId="",defaultQuestionTypeId="",entries,refresh,notify,onPerformanceEntry}:any) {
   const [editing,setEditing] = useState<Entry | null>(null);
   const [open,setOpen] = useState(false);
 
@@ -2115,14 +2125,14 @@ function Entries({disciplines,subjects=[],sources,types,entries,refresh,notify,o
     <section className="section"><div className="table-wrap"><table className="table"><thead><tr><th>Data</th><th>Disciplina</th><th>Assunto</th><th>Origem</th><th>Tipo</th><th>Questões</th><th>Acertos</th><th>Erros</th><th>%</th><th>Observações</th><th>Ações</th></tr></thead><tbody>
       {entries.length ? entries.map((entry: Entry) => <tr key={entry.id}><td>{new Date(`${entry.study_date}T12:00:00`).toLocaleDateString("pt-BR")}</td><td>{disciplines.find((x: Discipline)=>x.id===entry.discipline_id)?.name ?? entry.discipline_name_snapshot ?? "—"}</td><td>{subjects.find((x: Subject)=>x.id===entry.subject_id)?.name ?? entry.subject_name_snapshot ?? "—"}</td><td>{sources.find((x: Source)=>x.id===entry.source_id)?.name ?? entry.source_name_snapshot ?? "—"}</td><td>{types.find((x: QuestionType)=>x.id===entry.question_type_id)?.name ?? entry.question_type_name_snapshot ?? "—"}</td><td>{entry.questions}</td><td>{entry.correct}</td><td>{entry.questions-entry.correct}</td><td>{percent(entry.correct,entry.questions).toFixed(1)}%</td><td>{entry.notes ?? "—"}</td><td className="actions"><button className="btn small" onClick={() => {setEditing(entry);setOpen(true)}}>Editar</button><button className="btn small danger" onClick={() => remove(entry.id)}><Trash2 size={13}/></button></td></tr>) : <tr><td colSpan={11}><div className="empty">Nenhum lançamento encontrado.</div></td></tr>}
     </tbody></table></div></section>
-    {open && <LaunchModal initial={editing} disciplines={disciplines} subjects={subjects} sources={sources} types={types} onClose={() => {setOpen(false);setEditing(null)}} onSave={save}/>}
+    {open && <LaunchModal initial={editing} disciplines={disciplines} subjects={subjects} sources={sources} types={types} defaultSourceId={defaultSourceId} defaultQuestionTypeId={defaultQuestionTypeId} onClose={() => {setOpen(false);setEditing(null)}} onSave={save}/>}
   </>;
 }
 
-function LaunchModal({initial,disciplines,subjects=[],sources=[],types=[],onClose,onSave}:any) {
+function LaunchModal({initial,disciplines,subjects=[],sources=[],types=[],defaultSourceId="",defaultQuestionTypeId="",onClose,onSave}:any) {
   const [value,setValue] = useState<any>({
     study_date: initial?.study_date ?? localDate(), discipline_id: initial?.discipline_id ?? "", subject_id: initial?.subject_id ?? "",
-    source_id: initial?.source_id ?? "", question_type_id: initial?.question_type_id ?? "", questions: initial?.questions ?? "", correct: initial?.correct ?? "", notes: initial?.notes ?? "",
+    source_id: initial?.source_id ?? defaultSourceId ?? "", question_type_id: initial?.question_type_id ?? defaultQuestionTypeId ?? "", questions: initial?.questions ?? "", correct: initial?.correct ?? "", notes: initial?.notes ?? "",
   });
   const availableSubjects = subjects.filter((s: Subject) => String(s.discipline_id ?? "") === String(value.discipline_id ?? ""));
   const errors = Math.max(0, Number(value.questions || 0) - Number(value.correct || 0));
@@ -2256,7 +2266,7 @@ EDITAL:
   </div></div>;
 }
 
-function Catalog({disciplines,subjects,sources,types,refresh,notify,catalogDeleteOpen,setCatalogDeleteOpen,catalogDeletePassword,setCatalogDeletePassword,catalogDeleteBusy,deleteAllCatalogData}:any) {
+function Catalog({disciplines,subjects,sources,types,defaultSourceId,setDefaultSourceId,defaultQuestionTypeId,setDefaultQuestionTypeId,refresh,notify,catalogDeleteOpen,setCatalogDeleteOpen,catalogDeletePassword,setCatalogDeletePassword,catalogDeleteBusy,deleteAllCatalogData}:any) {
   const [kind,setKind]=useState<"discipline"|"subject"|"source"|"type">("discipline");
   const [name,setName]=useState("");
   const [disciplineId,setDisciplineId]=useState("");
@@ -2311,6 +2321,12 @@ function Catalog({disciplines,subjects,sources,types,refresh,notify,catalogDelet
       })();
     }
     notify("Sequência das disciplinas salva.");
+  };
+
+  const setDefaultCatalogItem = async (kind:"source"|"type", id:string) => {
+    if (kind === "source") setDefaultSourceId(id === defaultSourceId ? "" : id);
+    else setDefaultQuestionTypeId(id === defaultQuestionTypeId ? "" : id);
+    notify(id === (kind === "source" ? defaultSourceId : defaultQuestionTypeId) ? "Padrão removido." : "Padrão definido para os próximos lançamentos.");
   };
 
   const add=async(event:FormEvent)=>{
@@ -2371,8 +2387,8 @@ function Catalog({disciplines,subjects,sources,types,refresh,notify,catalogDelet
         <button className="btn primary"><Plus size={15}/> Adicionar</button>
       </form>
       <input className="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Pesquisar cadastro..."/>
-      <div className="table-wrap"><table className="table"><thead><tr><th>{kind==="discipline"?"Nome · arraste para ordenar":"Nome"}</th>{kind==="subject"&&<th>Disciplina</th>}<th>Ações</th></tr></thead><tbody>
-        {list.length?list.map((item:any)=><tr key={item.id} draggable={kind==="discipline"} onDragStart={()=>kind==="discipline"&&setDraggingId(item.id)} onDragOver={(e)=>kind==="discipline"&&e.preventDefault()} onDrop={()=>kind==="discipline"&&draggingId&&moveDiscipline(draggingId,item.id)} onDragEnd={()=>setDraggingId(null)} className={draggingId===item.id?"row-dragging":""}><td>{kind==="discipline"&&<span className="drag-handle" title="Arraste para reordenar"><GripVertical size={15}/></span>}{kind==="discipline"&&editingId===item.id?<input className="catalog-inline-edit" value={editingName} onChange={e=>setEditingName(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();void saveEdit(item.id)}if(e.key==="Escape")cancelEdit()}} autoFocus spellCheck={false}/>:item.name}</td>{kind==="subject"&&<td>{disciplines.find((d:Discipline)=>d.id===item.discipline_id)?.name??"—"}</td>}<td><div className="actions">{kind==="discipline"&&(editingId===item.id?<><button type="button" className="btn small primary" onClick={()=>void saveEdit(item.id)}><CheckCircle2 size={13}/> Salvar</button><button type="button" className="btn small" onClick={cancelEdit}><X size={13}/> Cancelar</button></>:<button type="button" className="btn small" onClick={()=>startEdit(item)}>Editar</button>)}<button type="button" className="btn small danger" onClick={()=>remove(item.id)}><Trash2 size={13}/> Excluir</button></div></td></tr>):<tr><td colSpan={kind==="subject"?3:2}><div className="empty">Nenhum cadastro encontrado.</div></td></tr>}
+      <div className="table-wrap"><table className="table"><thead><tr><th>{kind==="discipline"?"Nome · arraste para ordenar":"Nome"}</th>{kind==="subject"&&<th>Disciplina</th>}{(kind==="source"||kind==="type")&&<th>Padrão</th>}<th>Ações</th></tr></thead><tbody>
+        {list.length?list.map((item:any)=><tr key={item.id} draggable={kind==="discipline"} onDragStart={()=>kind==="discipline"&&setDraggingId(item.id)} onDragOver={(e)=>kind==="discipline"&&e.preventDefault()} onDrop={()=>kind==="discipline"&&draggingId&&moveDiscipline(draggingId,item.id)} onDragEnd={()=>setDraggingId(null)} className={draggingId===item.id?"row-dragging":""}><td>{kind==="discipline"&&<span className="drag-handle" title="Arraste para reordenar"><GripVertical size={15}/></span>}{kind==="discipline"&&editingId===item.id?<input className="catalog-inline-edit" value={editingName} onChange={e=>setEditingName(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();void saveEdit(item.id)}if(e.key==="Escape")cancelEdit()}} autoFocus spellCheck={false}/>:item.name}</td>{kind==="subject"&&<td>{disciplines.find((d:Discipline)=>d.id===item.discipline_id)?.name??"—"}</td>}{(kind==="source"||kind==="type")&&<td><button type="button" className={"btn small " + ((kind==="source"?defaultSourceId:defaultQuestionTypeId)===item.id?"primary":"")} onClick={()=>void setDefaultCatalogItem(kind,item.id)}>{((kind==="source"?defaultSourceId:defaultQuestionTypeId)===item.id)?"Padrão ✓":"Definir padrão"}</button></td>}<td><div className="actions">{kind==="discipline"&&(editingId===item.id?<><button type="button" className="btn small primary" onClick={()=>void saveEdit(item.id)}><CheckCircle2 size={13}/> Salvar</button><button type="button" className="btn small" onClick={cancelEdit}><X size={13}/> Cancelar</button></>:<button type="button" className="btn small" onClick={()=>startEdit(item)}>Editar</button>)}<button type="button" className="btn small danger" onClick={()=>remove(item.id)}><Trash2 size={13}/> Excluir</button></div></td></tr>):<tr><td colSpan={kind==="subject"?3:2}><div className="empty">Nenhum cadastro encontrado.</div></td></tr>}
       </tbody></table></div>
     </div></section>
     {bulkOpen&&<BulkImportModal onClose={()=>setBulkOpen(false)} onImported={refresh} notify={notify}/>}
