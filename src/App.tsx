@@ -1162,20 +1162,6 @@ function App() {
     }
   };
 
-  const markAdminStudentNotificationRead = async (id: string) => {
-    const readAt = new Date().toISOString();
-    const { error } = await (supabase as any)
-      .from("mcr_admin_notifications")
-      .update({ read_at: readAt })
-      .eq("id", id)
-      .eq("user_id", session?.user?.id);
-    if (!error) {
-      setAdminStudentNotifications((current) => current.map((item) =>
-        item.id === id ? { ...item, read_at: readAt } : item
-      ));
-    }
-  };
-
   const loadLucasDailyNotification = async () => {
     if (session?.user?.id !== LUCAS_DAILY_USER_ID) return;
     try {
