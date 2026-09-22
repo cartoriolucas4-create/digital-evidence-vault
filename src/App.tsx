@@ -946,7 +946,19 @@ function App() {
       }
       const json = subscription.toJSON();
       if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) throw new Error("Assinatura inválida.");
-      const { error } = await (supabase as any).from("mcr_push_subscriptions").upsert({ user_id: session.user.id, endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth, user_agent: navigator.userAgent }, { onConflict: "endpoint" });
+      const client = supabase as any;
+      const { data: current, error: readError } = await client.from("study_user_state").select("preferences").eq("user_id", session.user.id).maybeSingle();
+      if (readError) throw readError;
+      const preferences = {
+        ...((current?.preferences ?? {}) as Record<string, unknown>),
+        pushSubscription: {
+          endpoint: json.endpoint,
+          keys: { p256dh: json.keys.p256dh, auth: json.keys.auth },
+          userAgent: navigator.userAgent,
+        },
+        pushReminderLastDate: null,
+      };
+      const { error } = await client.from("study_user_state").upsert({ user_id: session.user.id, preferences }, { onConflict: "user_id" });
       if (error) throw error;
       setPushEnabled(true);
       notify("🔔 Notificações de lembrete ativadas neste dispositivo.");
@@ -961,7 +973,12 @@ function App() {
       const registration = await navigator.serviceWorker.ready;
       const subscription = await registration.pushManager.getSubscription();
       if (subscription) {
-        await (supabase as any).from("mcr_push_subscriptions").delete().eq("endpoint", subscription.endpoint);
+        const client = supabase as any;
+        const { data: current } = await client.from("study_user_state").select("preferences").eq("user_id", session.user.id).maybeSingle();
+        const preferences = { ...((current?.preferences ?? {}) as Record<string, unknown>) };
+        delete preferences.pushSubscription;
+        delete preferences.pushReminderLastDate;
+        await client.from("study_user_state").upsert({ user_id: session.user.id, preferences }, { onConflict: "user_id" });
         await subscription.unsubscribe();
       }
       setPushEnabled(false);
