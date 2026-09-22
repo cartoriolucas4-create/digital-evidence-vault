@@ -1,4 +1,4 @@
-const CACHE_NAME = "mcr-shell-v1";
+const CACHE_NAME = "mcr-shell-v2";
 self.addEventListener("install", (event) => {
   self.skipWaiting();
 });
@@ -11,8 +11,8 @@ self.addEventListener("push", (event) => {
   const title = data.title || "MCR — Meu Controle de Rendimento";
   const options = {
     body: data.body || "Lembrete de estudos do MCR.",
-    icon: "/digital-evidence-vault/favicon.ico",
-    badge: "/digital-evidence-vault/favicon.ico",
+    icon: "/digital-evidence-vault/mcr-icon.svg",
+    badge: "/digital-evidence-vault/mcr-icon.svg",
     tag: data.tag || "mcr-reminder",
     renotify: true,
     data: { url: data.url || "/digital-evidence-vault/" },
