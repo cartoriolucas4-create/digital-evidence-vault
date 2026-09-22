@@ -349,9 +349,9 @@ function App() {
       if (prefs.plannerCompletedColor) setPlannerCompletedColor(prefs.plannerCompletedColor);
       else if (localPlanner.completedColor) setPlannerCompletedColor(localPlanner.completedColor);
       if (typeof prefs.plannerSidebarCollapsed === "boolean") setPlannerSidebarCollapsed(prefs.plannerSidebarCollapsed);
+      else setPlannerSidebarCollapsed(localSidebarCollapsed);
       setDefaultSourceId(prefs.defaultSourceId ?? "");
       setDefaultQuestionTypeId(prefs.defaultQuestionTypeId ?? "");
-      else setPlannerSidebarCollapsed(localSidebarCollapsed);
 
       const contextualState: ContextualNotificationState = {
         notifications: Array.isArray(prefs.contextualNotifications) ? prefs.contextualNotifications : [],
