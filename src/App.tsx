@@ -1713,14 +1713,16 @@ function App() {
                   <button onClick={() => setNotificationOpen(false)} aria-label="Fechar"><X size={14}/></button>
                 </div>
               </div>
-              {contextualNotifications.slice(0, 5).map((n) => <button key={n.id} className={"monthly-notification performance-notification " + (n.read_at ? "read" : "unread")} onClick={(event) => { event.preventDefault(); event.stopPropagation(); if (!n.read_at) void markContextualNotificationRead(n.id); }}>
+              {contextualNotifications.slice(0, 5).map((n) => <div key={n.id} className={"monthly-notification performance-notification " + (n.read_at ? "read" : "unread")}>
                 <span className="notification-icon performance-exceptional"><Bell size={15}/></span>
                 <span><strong>{n.title}</strong><small>{n.message}</small><small className="notification-date">{new Date(n.created_at).toLocaleString("pt-BR")} • {n.read_at ? "Lida" : "Não lida"}</small></span>
-              </button>)}
-              {adminStudentNotifications.slice(0, 5).map((n) => <button key={n.id} className={"monthly-notification performance-notification " + (n.read_at ? "read" : "unread")} onClick={(event) => { event.preventDefault(); event.stopPropagation(); if (!n.read_at) void markAdminStudentNotificationRead(n.id); }}>
+                {!n.read_at && <button type="button" className="notification-mark-all" onClick={() => void markContextualNotificationRead(n.id)}>Marcar como lida</button>}
+              </div>)}
+              {adminStudentNotifications.slice(0, 5).map((n) => <div key={n.id} className={"monthly-notification performance-notification " + (n.read_at ? "read" : "unread")}>
                 <span className="notification-icon performance-exceptional"><Bell size={15}/></span>
                 <span><strong>{n.title}</strong><small>{n.message}</small><small className="notification-date">{new Date(n.created_at).toLocaleString("pt-BR")} • {n.read_at ? "Lida" : "Não lida"}</small></span>
-              </button>)}
+                {!n.read_at && <button type="button" className="notification-mark-all" onClick={() => void markAdminStudentNotificationRead(n.id)}>Marcar como lida</button>}
+              </div>)}
               {lucasDailyNotification && <button className="monthly-notification performance-notification unread" onClick={() => setLucasDailyNotification(null)}>
                 <span className="notification-icon performance-exceptional"><Sparkles size={15}/></span>
                 <span><strong>💌 Mensagem do Lucas</strong><small>{lucasDailyNotification.message}</small><small className="notification-date">Hoje</small></span>
