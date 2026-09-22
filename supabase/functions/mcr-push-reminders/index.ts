@@ -92,7 +92,7 @@ Deno.serve(async (req) => {
 
     const now = new Date();
     const today = now.toISOString().slice(0, 10);
-    const message = messages[now.getUTCDate() % messages.length];
+    const message = messages[(Math.floor(now.getTime() / 86400000) + 3) % messages.length];
     let sent = 0, skipped = 0, removed = 0;
 
     for (const sub of subscriptions ?? []) {
