@@ -1,0 +1,11 @@
+{
+  "name": "MCR — Meu Controle de Rendimento",
+  "short_name": "MCR",
+  "start_url": "/digital-evidence-vault/",
+  "scope": "/digital-evidence-vault/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#d63384",
+  "lang": "pt-BR",
+  "description": "Controle de questões, desempenho e metas para concursos públicos."
+}
