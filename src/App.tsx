@@ -214,9 +214,11 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error
 }
 
 function AuthScreen() {
-  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [mode, setMode] = useState<"login" | "signup" | "recovery">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [temporaryCode, setTemporaryCode] = useState("");
+  const [recoverySent, setRecoverySent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -226,11 +228,37 @@ function AuthScreen() {
     setBusy(true);
     try {
       const client = supabase;
+      if (mode === "recovery") {
+        if (!recoverySent) {
+          const { error: otpError } = await client.auth.signInWithOtp({
+            email: email.trim(),
+            options: { shouldCreateUser: false },
+          });
+          if (otpError) throw otpError;
+          setRecoverySent(true);
+          setError("Se este e-mail tiver um cadastro no MCR, enviamos um código temporário de acesso. Verifique sua caixa de entrada e o spam.");
+        } else {
+          const { data, error: verifyError } = await client.auth.verifyOtp({
+            email: email.trim(),
+            token: temporaryCode.trim(),
+            type: "email",
+          });
+          if (verifyError) throw verifyError;
+          if (!data.session) throw new Error("Não foi possível criar a sessão com o código informado.");
+          window.localStorage.setItem("mcr_recovery_login", "true");
+          setError("");
+        }
+        return;
+      }
+
       const result = mode === "login"
         ? await client.auth.signInWithPassword({ email: email.trim(), password })
         : await client.auth.signUp({ email: email.trim(), password, options: { data: { mcr_welcome_pending: true } } });
 
       if (result.error) throw result.error;
+      if (mode === "login") {
+        window.localStorage.removeItem("mcr_recovery_login");
+      }
       if (mode === "signup" && !result.data.session) {
         setMode("login");
         setError("Conta criada. O projeto de autenticação está configurado para confirmação de e-mail; faça a confirmação antes de entrar.");
@@ -245,19 +273,39 @@ function AuthScreen() {
     }
   };
 
+  const openRecovery = () => {
+    setMode("recovery");
+    setEmail("");
+    setPassword("");
+    setTemporaryCode("");
+    setRecoverySent(false);
+    setError("");
+  };
+
+  const backToLogin = () => {
+    setMode("login");
+    setTemporaryCode("");
+    setRecoverySent(false);
+    setError("");
+  };
+
   return <div className="auth-page">
     <div className="auth-card">
       <img className="mcr-logo mcr-logo-auth" src={MCR_LOGO} alt="MCR — Meu Controle de Rendimento" />
-      <p>{mode === "login" ? "Sua preparação para concursos sob controle." : "Crie sua conta com e-mail e senha."}</p>
+      <p>{mode === "login" ? "Sua preparação para concursos sob controle." : mode === "signup" ? "Crie sua conta com e-mail e senha." : "Recupere o acesso sem apagar sua senha atual."}</p>
       <form onSubmit={submit} className="auth-form">
         <Field label="E-mail"><input required type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="voce@email.com" /></Field>
-        <Field label="Senha"><input required minLength={6} type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" /></Field>
-        {error && <div className="auth-error">{error}</div>}
-        <button className="btn primary auth-submit" disabled={busy}>{busy ? "Aguarde..." : mode === "login" ? "Entrar" : "Criar conta"}</button>
+        {mode !== "recovery" && <Field label="Senha"><input required minLength={6} type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" /></Field>}
+        {mode === "recovery" && recoverySent && <Field label="Senha temporária"><input required inputMode="numeric" autoComplete="one-time-code" maxLength={10} value={temporaryCode} onChange={(e) => setTemporaryCode(e.target.value.replace(/\D/g, ""))} placeholder="Digite o código recebido por e-mail" /></Field>}
+        {error && <div className={mode === "recovery" && recoverySent && !temporaryCode ? "auth-notice" : "auth-error"}>{error}</div>}
+        <button className="btn primary auth-submit" disabled={busy}>{busy ? "Aguarde..." : mode === "login" ? "Entrar" : mode === "signup" ? "Criar conta" : recoverySent ? "Entrar com senha temporária" : "Enviar senha temporária"}</button>
       </form>
-      <button className="auth-switch" onClick={() => { setMode(mode === "login" ? "signup" : "login"); setError(""); }}>
+
+      {mode === "login" && <button className="auth-switch auth-recovery-link" onClick={openRecovery}>Esqueci minha senha</button>}
+      {mode === "recovery" && <button className="auth-switch" onClick={backToLogin}>Voltar para entrar com minha senha</button>}
+      {mode !== "recovery" && <button className="auth-switch" onClick={() => { setMode(mode === "login" ? "signup" : "login"); setError(""); }}>
         {mode === "login" ? "Ainda não tenho conta" : "Já tenho uma conta"}
-      </button>
+      </button>}
     </div>
   </div>;
 }
@@ -315,6 +363,12 @@ function App() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordBusy, setPasswordBusy] = useState(false);
+  const [recoveryLogin, setRecoveryLogin] = useState(() => typeof window !== "undefined" && window.localStorage.getItem("mcr_recovery_login") === "true");
+
+  useEffect(() => {
+    const stored = typeof window !== "undefined" && window.localStorage.getItem("mcr_recovery_login") === "true";
+    setRecoveryLogin(stored);
+  }, [session?.user?.id]);
   const [toast, setToast] = useState("");
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [performanceNotifications, setPerformanceNotifications] = useState<PerformanceNotification[]>([]);
@@ -1571,18 +1625,25 @@ function App() {
   }, [session?.user?.id, settingsReady, studentName, dailyGoal, weeklyGoal, monthlyGoal, targetAccuracy]);
 
   const changePassword = async () => {
-    if (!session?.user.email || !currentPassword || !newPassword || !confirmPassword) return;
+    if (!session?.user.email || !newPassword || !confirmPassword) return;
+    if (!recoveryLogin && !currentPassword) return;
     if (newPassword.length < 6) { notify("A nova senha deve ter pelo menos 6 caracteres."); return; }
     if (newPassword !== confirmPassword) { notify("A confirmação da nova senha não confere."); return; }
     setPasswordBusy(true);
     try {
-      const authResult = await supabase.auth.signInWithPassword({ email: session.user.email, password: currentPassword });
-      if (authResult.error) { notify("Senha atual incorreta. A senha não foi alterada."); return; }
+      if (!recoveryLogin) {
+        const authResult = await supabase.auth.signInWithPassword({ email: session.user.email, password: currentPassword });
+        if (authResult.error) { notify("Senha atual incorreta. A senha não foi alterada."); return; }
+      }
       const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) throw error;
       setCurrentPassword(""); setNewPassword(""); setConfirmPassword("");
       setPasswordModalOpen(false);
-      notify("Senha alterada com sucesso.");
+      if (recoveryLogin) {
+        window.localStorage.removeItem("mcr_recovery_login");
+        setRecoveryLogin(false);
+      }
+      notify("Senha alterada com sucesso. Sua senha anterior não foi anulada até você definir esta nova senha.");
     } catch (error) {
       notify(error instanceof Error ? error.message : "Não foi possível alterar a senha.");
     } finally { setPasswordBusy(false); }
@@ -2005,6 +2066,7 @@ function App() {
               setConfirmPassword={setConfirmPassword}
               passwordBusy={passwordBusy}
               changePassword={changePassword}
+              recoveryLogin={recoveryLogin}
               signOutOtherSessions={signOutOtherSessions}
               logout={logout}
               pushPermission={pushPermission}
@@ -3425,7 +3487,7 @@ function SettingsPage({
   setDailyGoal,setWeeklyGoal,setMonthlyGoal,setTargetAccuracy,save,
   session,passwordModalOpen,setPasswordModalOpen,currentPassword,setCurrentPassword,
   newPassword,setNewPassword,confirmPassword,setConfirmPassword,passwordBusy,
-  changePassword,signOutOtherSessions,logout,
+  changePassword,signOutOtherSessions,logout,recoveryLogin,
   pushPermission,pushEnabled,enablePushNotifications,disablePushNotifications
 }:any) {
   const [plannerSettingsPalette,setPlannerSettingsPalette] = useState<"default"|"completed"|null>(null);
@@ -3552,21 +3614,21 @@ function SettingsPage({
           <button className="btn" onClick={signOutOtherSessions}>Encerrar outras sessões</button>
           <button className="btn danger" onClick={logout}><LogOut size={15}/> Sair da conta</button>
         </div>
-        <div className="notice">A alteração de senha exige a confirmação da senha atual. O encerramento de outras sessões não exclui seus dados.</div>
+        <div className="notice">{recoveryLogin ? "Você entrou com a senha temporária enviada por e-mail. Defina uma nova senha agora; a senha anterior continua válida até esta alteração ser concluída." : "A alteração de senha exige a confirmação da senha atual. O encerramento de outras sessões não exclui seus dados."}</div>
       </div>
     </section>
     {passwordModalOpen && <div className="modal-backdrop" role="dialog" aria-modal="true">
       <div className="modal password-modal">
         <h2>Alterar senha</h2>
-        <p className="subtitle">Confirme sua senha atual e defina uma nova senha.</p>
+        <p className="subtitle">{recoveryLogin ? "Você entrou com uma senha temporária. Defina sua nova senha para continuar usando sua conta normalmente." : "Confirme sua senha atual e defina uma nova senha."}</p>
         <div className="form-grid password-grid">
-          <Field label="Senha atual"><input type="password" autoComplete="current-password" value={currentPassword} onChange={(e)=>setCurrentPassword(e.target.value)} /></Field>
+          {!recoveryLogin && <Field label="Senha atual"><input type="password" autoComplete="current-password" value={currentPassword} onChange={(e)=>setCurrentPassword(e.target.value)} /></Field>}
           <Field label="Nova senha"><input type="password" autoComplete="new-password" minLength={6} value={newPassword} onChange={(e)=>setNewPassword(e.target.value)} /></Field>
           <Field label="Confirmar nova senha"><input type="password" autoComplete="new-password" minLength={6} value={confirmPassword} onChange={(e)=>setConfirmPassword(e.target.value)} /></Field>
         </div>
         <div className="modal-actions">
           <button className="btn" disabled={passwordBusy} onClick={()=>setPasswordModalOpen(false)}>Cancelar</button>
-          <button className="btn primary" disabled={passwordBusy || !currentPassword || !newPassword || !confirmPassword} onClick={changePassword}>{passwordBusy ? "Alterando..." : "Alterar senha"}</button>
+          <button className="btn primary" disabled={passwordBusy || (!recoveryLogin && !currentPassword) || !newPassword || !confirmPassword} onClick={changePassword}>{passwordBusy ? "Alterando..." : "Alterar senha"}</button>
         </div>
       </div>
     </div>}
