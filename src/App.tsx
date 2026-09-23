@@ -3520,7 +3520,7 @@ function SettingsPage({
             {pushEnabled ? <button type="button" className="btn" onClick={disablePushNotifications}>Desativar</button> : <button type="button" className="btn primary" onClick={enablePushNotifications} disabled={pushPermission === "denied"}>Ativar notificações</button>}
           </div>
         </div>
-        <div className="notice">Esses lembretes não entram no histórico da campainha do MCR. No iPhone/iPad, primeiro adicione o MCR à Tela de Início e depois autorize as notificações.</div>
+        <div className="notice">Esses lembretes não entram no histórico da campainha do MCR. No iPhone/iPad, o Web Push funciona pelo MCR adicionado à Tela de Início como app: Safari → Compartilhar → Adicionar à Tela de Início → “Abrir como App”. Depois abra o MCR pelo novo ícone e autorize as notificações.</div>
       </div>
     </section>
     <section className="section">
