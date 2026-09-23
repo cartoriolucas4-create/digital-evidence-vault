@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push";
+import { EXTERNAL_STUDY_REMINDER_MESSAGES } from "./messages.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -55,14 +56,16 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Methods": "GET,POST,OPTIONS"
 };
 
-const messages = [
-  ["📚 Hora do MCR", "Você ainda não registrou questões hoje. Entre no MCR e mantenha seu ritmo!"],
-  ["🔥 Não deixe a sequência parar", "Que tal entrar no MCR e lançar algumas questões hoje?"],
-  ["🎯 Seu objetivo continua lá", "Abra o MCR e registre seu estudo de hoje para acompanhar sua evolução."],
-  ["⏰ Lembrete de estudos", "O MCR está te esperando. Faça um lançamento e mantenha seu controle em dia."],
-  ["💪 Mais um dia de preparação", "Reserve alguns minutos para estudar e registrar suas questões no MCR."],
-  ["🚀 Bora estudar?", "Entre no MCR, lance suas questões e continue avançando na preparação."]
-];
+const getReminderSlot = (body: Record<string, unknown>) => {
+  const slot = body.slot;
+  return slot === "midday" || slot === "evening" ? slot : null;
+};
+
+const getReminderMessage = (slot: "midday" | "evening") => {
+  const dayNumber = Math.floor(Date.now() / 86400000);
+  const slotOffset = slot === "midday" ? 0 : 1;
+  return EXTERNAL_STUDY_REMINDER_MESSAGES[(dayNumber * 2 + slotOffset) % EXTERNAL_STUDY_REMINDER_MESSAGES.length];
+};
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS_HEADERS });
@@ -79,6 +82,19 @@ Deno.serve(async (req) => {
       return new Response("Unauthorized", { status: 401 });
     }
 
+    let body: Record<string, unknown> = {};
+    try {
+      body = req.method === "POST" ? await req.json() : {};
+    } catch {}
+
+    const slot = getReminderSlot(body);
+    if (!slot) {
+      return new Response(JSON.stringify({ ok: false, error: "Invalid reminder slot." }), {
+        status: 400,
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+      });
+    }
+
     webpush.setVapidDetails("mailto:admin@mcr.app", config.public_key!, config.private_key!);
 
     const { data: subscriptions, error } = await admin
@@ -91,8 +107,8 @@ Deno.serve(async (req) => {
     }
 
     const now = new Date();
-    const today = now.toISOString().slice(0, 10);
-    const message = messages[(Math.floor(now.getTime() / 86400000) + 3) % messages.length];
+    const today = now.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+    const message = getReminderMessage(slot);
     let sent = 0, skipped = 0, removed = 0;
 
     for (const sub of subscriptions ?? []) {
@@ -120,7 +136,7 @@ Deno.serve(async (req) => {
           JSON.stringify({
             title: message[0],
             body: message[1],
-            tag: "mcr-study-reminder",
+            tag: `mcr-study-reminder-${slot}`,
             url: "/digital-evidence-vault/"
           }),
           { TTL: 3600 }
