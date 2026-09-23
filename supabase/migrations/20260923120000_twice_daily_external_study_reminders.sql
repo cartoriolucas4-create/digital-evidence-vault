@@ -29,7 +29,7 @@ select cron.schedule(
   '0 15 * * *',
   $job$
     select net.http_post(
-      url := 'https://krulxfcxalaxosebmiyh.supabase.co/functions/v1/mcr-push-reminders',
+      url := 'https://gojjlppvdzijujrqsqww.supabase.co/functions/v1/mcr-push-reminders',
       headers := jsonb_build_object(
         'Content-Type', 'application/json',
         'x-mcr-cron-secret', (select cron_secret from public.mcr_push_config where id = true)
@@ -44,7 +44,7 @@ select cron.schedule(
   '0 23 * * *',
   $job$
     select net.http_post(
-      url := 'https://krulxfcxalaxosebmiyh.supabase.co/functions/v1/mcr-push-reminders',
+      url := 'https://gojjlppvdzijujrqsqww.supabase.co/functions/v1/mcr-push-reminders',
       headers := jsonb_build_object(
         'Content-Type', 'application/json',
         'x-mcr-cron-secret', (select cron_secret from public.mcr_push_config where id = true)
