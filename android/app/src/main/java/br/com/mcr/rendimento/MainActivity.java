@@ -20,6 +20,8 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.webkit.CookieManager;
+import android.webkit.JavascriptInterface;
 import android.widget.LinearLayout;
 import android.widget.Toast;
 
@@ -35,6 +37,7 @@ public class MainActivity extends AppCompatActivity {
     private static final int FILE_CHOOSER_REQUEST = 1001;
     private static final int CAMERA_REQUEST = 1002;
     private static final int LOCATION_REQUEST = 1003;
+    private static final String UPDATE_PAGE_URL = "https://github.com/cartoriolucas4-create/digital-evidence-vault/actions/workflows/android-apk.yml";
 
     private WebView webView;
     private LinearLayout loadingView;
@@ -44,6 +47,18 @@ public class MainActivity extends AppCompatActivity {
     private GeolocationPermissions.Callback pendingGeoCallback;
     private String pendingGeoOrigin;
     private long lastBackPressed = 0L;
+
+    public class McrAndroidBridge {
+        @JavascriptInterface public String getVersionName() { return BuildConfig.VERSION_NAME; }
+        @JavascriptInterface public int getVersionCode() { return BuildConfig.VERSION_CODE; }
+        @JavascriptInterface public boolean isNativeApp() { return true; }
+        @JavascriptInterface public void checkForAppUpdate() {
+            runOnUiThread(() -> {
+                try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(UPDATE_PAGE_URL))); }
+                catch (Exception ignored) {}
+            });
+        }
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -82,6 +97,7 @@ public class MainActivity extends AppCompatActivity {
     private void configureWebView() {
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
+        settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
         settings.setAllowFileAccess(false);
@@ -93,6 +109,9 @@ public class MainActivity extends AppCompatActivity {
         settings.setUseWideViewPort(false);
         settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setTextZoom(100);
+        CookieManager.getInstance().setAcceptCookie(true);
+        CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
+        webView.addJavascriptInterface(new McrAndroidBridge(), "MCRAndroid");
         settings.setUserAgentString(settings.getUserAgentString() + " MCRAndroid/1.0");
 
         webView.setWebViewClient(new WebViewClient() {
