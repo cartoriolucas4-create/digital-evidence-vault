@@ -3493,6 +3493,8 @@ function SettingsPage({
   pushPermission,pushEnabled,enablePushNotifications,disablePushNotifications
 }:any) {
   const [plannerSettingsPalette,setPlannerSettingsPalette] = useState<"default"|"completed"|null>(null);
+  const nativeAndroid = typeof window !== "undefined" && Boolean((window as any).MCRAndroid?.isNativeApp?.());
+  const nativeAndroidVersion = nativeAndroid ? String((window as any).MCRAndroid.getVersionName?.() ?? "—") : "";
   return <>
     <h1 className="page-title">Configurações</h1>
     <p className="subtitle">Personalize suas metas, aparência e segurança da conta.</p>
@@ -3604,6 +3606,19 @@ function SettingsPage({
         <div className="notice">Esses lembretes não entram no histórico da campainha do MCR. No iPhone/iPad, o Web Push funciona pelo MCR adicionado à Tela de Início como app: Safari → Compartilhar → Adicionar à Tela de Início → “Abrir como App”. Depois abra o MCR pelo novo ícone e autorize as notificações.</div>
       </div>
     </section>
+    {nativeAndroid && <section className="section">
+      <div className="section-head">📱 APLICATIVO ANDROID</div>
+      <div className="section-body">
+        <div className="account-row">
+          <div><strong>Versão instalada</strong><span>{nativeAndroidVersion}</span></div>
+          <span className="account-status">APK Android</span>
+        </div>
+        <div className="account-actions">
+          <button className="btn primary" type="button" onClick={()=>((window as any).MCRAndroid?.checkForAppUpdate?.())}>Verificar atualização do aplicativo</button>
+        </div>
+        <div className="notice">Esta opção aparece somente no APK Android. Os dados, lançamentos, rendimento, configurações, matérias e preferências continuam vinculados à sua conta na nuvem e são compartilhados com o site após o login.</div>
+      </div>
+    </section>}
     <section className="section">
       <div className="section-head">🔐 CONTA E SEGURANÇA</div>
       <div className="section-body account-settings">
