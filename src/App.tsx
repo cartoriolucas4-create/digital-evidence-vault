@@ -3445,7 +3445,7 @@ function SettingsPage({
     <section className="section">
       <div className="section-head">🎨 COR DOS BOTÕES</div>
       <div className="section-body">
-        <div className="button-color-setting">
+        <div className="button-color-setting" style={{ background: theme === "dark" ? "#11151b" : "#fff", color: theme === "dark" ? "#edf1f5" : "inherit", borderColor: theme === "dark" ? "#343c48" : "var(--border)" }}>
           <div>
             <strong>Cor principal dos botões</strong>
             <small>Escolha a cor dos botões de destaque do sistema.</small>
@@ -3472,7 +3472,7 @@ function SettingsPage({
     <section className="section">
       <div className="section-head">🔔 LEMBRETES NO DISPOSITIVO</div>
       <div className="section-body">
-        <div className="push-setting">
+        <div className="push-setting" style={{ background: theme === "dark" ? "#11151b" : "#fff", color: theme === "dark" ? "#edf1f5" : "inherit", borderColor: theme === "dark" ? "#343c48" : "var(--border)" }}>
           <div><strong>Notificações de lembrete do MCR</strong><small>São diferentes das notificações internas: servem para lembrar você de entrar no MCR e registrar suas questões. Com Web Push, podem chegar mesmo com o site fechado.</small></div>
           <div className="push-setting-actions">
             <span className={"push-status " + (pushEnabled ? "active" : "")}>{pushEnabled ? "Ativadas neste dispositivo" : pushPermission === "denied" ? "Bloqueadas pelo navegador" : "Desativadas"}</span>
