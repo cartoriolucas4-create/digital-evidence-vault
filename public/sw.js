@@ -11,17 +11,17 @@ self.addEventListener("push", (event) => {
   const title = data.title || "MCR — Meu Controle de Rendimento";
   const options = {
     body: data.body || "Lembrete de estudos do MCR.",
-    icon: "/digital-evidence-vault/mcr-icon.svg",
-    badge: "/digital-evidence-vault/mcr-icon.svg",
+    icon: new URL("mcr-icon.svg", self.registration.scope).href,
+    badge: new URL("mcr-icon.svg", self.registration.scope).href,
     tag: data.tag || "mcr-reminder",
     renotify: true,
-    data: { url: data.url || "/digital-evidence-vault/" },
+    data: { url: data.url || self.registration.scope },
   };
   event.waitUntil(self.registration.showNotification(title, options));
 });
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const url = new URL(event.notification.data?.url || "/digital-evidence-vault/", self.location.origin).href;
+  const url = new URL(event.notification.data?.url || self.registration.scope, self.location.origin).href;
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
       for (const client of clients) {
