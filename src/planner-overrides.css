@@ -231,3 +231,6 @@ html[data-theme="dark"] .planner-content-bottom:focus{
   user-select:text !important;
   -webkit-user-select:text !important;
 }
+
+/* Nunca exibir o antigo botão de adicionar célula dentro da grade. A inclusão é feita exclusivamente pelo menu ⋯. */
+.planner-cell-add-button{display:none !important;visibility:hidden !important;pointer-events:none !important;}
