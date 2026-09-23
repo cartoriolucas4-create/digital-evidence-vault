@@ -3380,6 +3380,17 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
     notify("Célula adicionada.");
   };
 
+  const addCellToSelected=()=>{
+    if(selectionMode!=="cells" || selected.length!==1){
+      notify("Selecione uma única célula para adicionar outra.");
+      return;
+    }
+    const [row,col]=selected[0].split("-").map(Number);
+    const count=data.rowCellCounts[row]??data.cols;
+    if(!Number.isInteger(row)||!Number.isInteger(col)||col<0||col>=count) return;
+    addCellToRow(row,col);
+  };
+
   const deleteSelectedRows=()=>{
     if(!selectedRows.length || data.rows<=1) return;
     if(!window.confirm(`Excluir ${selectedRows.length} linha(s) selecionada(s)?`)) return;
@@ -3519,6 +3530,11 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
           <button onClick={addCol}>+ Adicionar coluna</button>
           <button onClick={deleteSelectedRows} disabled={!selectedRows.length || data.rows<=1}>− Excluir linha</button>
           <button onClick={deleteSelectedCols} disabled={!selectedCols.length || data.cols<=1}>− Excluir coluna</button>
+          <button
+            onPointerDown={e=>e.preventDefault()}
+            onClick={e=>{e.preventDefault();e.stopPropagation();addCellToSelected();}}
+            disabled={selectionMode!=="cells" || selected.length!==1}
+          >+ Adicionar célula</button>
           <button
             onPointerDown={e=>e.preventDefault()}
             onClick={e=>{e.preventDefault();e.stopPropagation();deleteSelectedCell();}}
