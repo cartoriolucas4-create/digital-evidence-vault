@@ -977,6 +977,8 @@ function App() {
 
   const logout = async () => {
     setToast("");
+    window.localStorage.removeItem("mcr_recovery_login");
+    setRecoveryLogin(false);
     const { error } = await supabase.auth.signOut();
     if (error) setToast("Não foi possível sair. Tente novamente.");
   };
