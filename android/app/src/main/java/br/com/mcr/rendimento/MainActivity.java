@@ -112,7 +112,7 @@ public class MainActivity extends AppCompatActivity {
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
         webView.addJavascriptInterface(new McrAndroidBridge(), "MCRAndroid");
-        settings.setUserAgentString(settings.getUserAgentString() + " MCRAndroid/1.0");
+        settings.setUserAgentString(settings.getUserAgentString() + " MCRAndroid/1.2.0");
 
         webView.setWebViewClient(new WebViewClient() {
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
@@ -223,7 +223,8 @@ public class MainActivity extends AppCompatActivity {
         errorView.setVisibility(View.GONE);
         loadingView.setVisibility(View.VISIBLE);
         webView.clearCache(false);
-        webView.loadUrl(WEB_URL + "?mcr_android=1&v=" + System.currentTimeMillis());
+        // Sempre abre a versão publicada atual e evita reutilizar recursos antigos da WebView.
+        webView.loadUrl(WEB_URL + "?mcr_android=1&sync=cloud&v=" + System.currentTimeMillis());
     }
 
     @Override
