@@ -223,7 +223,7 @@ public class MainActivity extends AppCompatActivity {
         errorView.setVisibility(View.GONE);
         loadingView.setVisibility(View.VISIBLE);
         webView.clearCache(false);
-        webView.loadUrl(WEB_URL);
+        webView.loadUrl(WEB_URL + "?mcr_android=1&v=" + System.currentTimeMillis());
     }
 
     @Override
