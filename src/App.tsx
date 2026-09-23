@@ -3367,17 +3367,6 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
     notify("Célula adicionada.");
   };
 
-  const addCellToSelected=()=>{
-    if(selectionMode!=="cells" || selected.length!==1){
-      notify("Selecione uma única célula para adicionar outra.");
-      return;
-    }
-    const [row,col]=selected[0].split("-").map(Number);
-    const count=data.rowCellCounts[row]??data.cols;
-    if(!Number.isInteger(row)||!Number.isInteger(col)||col<0||col>=count) return;
-    addCellToRow(row,col);
-  };
-
   const deleteSelectedRows=()=>{
     if(!selectedRows.length || data.rows<=1) return;
     if(!window.confirm(`Excluir ${selectedRows.length} linha(s) selecionada(s)?`)) return;
@@ -3542,15 +3531,6 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
           return <div key={id} data-planner-row={row} data-planner-col={col} className={"planner-cell "+(active?"selected":"")} style={{backgroundColor:cell.bg,gridColumn:col+2,gridRow:row+2,position:"relative"}}
             onPointerDown={e=>{const target=e.target as HTMLElement;if(target.closest("input,textarea,button,select")) return;if(e.shiftKey&&selected.length){const first=selected[0].split("-").map(Number);selectRect(first[0],row,first[1],col);return;}startCellSelection(row,col,e)}}
             onClick={(e)=>{const target=e.target as HTMLElement;if(target.closest("input,textarea,button,select")) return;if(e.ctrlKey||e.metaKey)toggleSelected(id);}}>
-            {active && selectionMode==="cells" && selected.length===1 && <button
-              type="button"
-              className="planner-cell-add-button"
-              title="Adicionar célula nesta linha"
-              aria-label="Adicionar célula nesta linha"
-              onPointerDown={e=>e.stopPropagation()}
-              onClick={e=>{e.stopPropagation();addCellToSelected();}}
-              style={{position:"absolute",top:"4px",right:"4px",zIndex:5,width:"22px",height:"22px",padding:0,border:"1px solid rgba(0,0,0,.16)",borderRadius:"5px",background:"rgba(255,255,255,.92)",color:"inherit",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",boxShadow:"0 1px 3px rgba(0,0,0,.12)"}}
-            ><Plus size={13}/></button>}
             <span className="planner-resize-handle planner-row-resize" onPointerDown={e=>beginResize("row",row,e)} />
             <div className="planner-subject-wrap">
             <input
