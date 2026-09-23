@@ -11,7 +11,7 @@
   "description": "Controle de questões, desempenho e metas para concursos públicos.",
   "icons": [
     {
-      "src": "/digital-evidence-vault/mcr-icon.svg",
+      "src": "/mcr-icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
