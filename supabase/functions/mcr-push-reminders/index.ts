@@ -26,20 +26,11 @@ async function ensureVapidKeys() {
     return config;
   }
 
-  const keyPair = await crypto.subtle.generateKey(
-    { name: "ECDSA", namedCurve: "P-256" },
-    true,
-    ["sign", "verify"]
-  ) as CryptoKeyPair;
-
-  const publicJwk = await crypto.subtle.exportKey("jwk", keyPair.publicKey);
-  const privateJwk = await crypto.subtle.exportKey("jwk", keyPair.privateKey);
-  const publicKey = b64(new Uint8Array([
-    4,
-    ...Uint8Array.from(atob(publicJwk.x!.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - publicJwk.x!.length % 4) % 4)), c => c.charCodeAt(0)),
-    ...Uint8Array.from(atob(publicJwk.y!.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - publicJwk.y!.length % 4) % 4)), c => c.charCodeAt(0))
-  ]));
-  const privateKey = privateJwk.d!;
+  // Generate VAPID keys using web-push so the public/private encodings
+  // are exactly those expected by PushManager and webpush.
+  const generated = webpush.generateVAPIDKeys();
+  const publicKey = generated.publicKey;
+  const privateKey = generated.privateKey;
 
   const { error } = await admin
     .from("mcr_push_config")
@@ -157,7 +148,7 @@ Deno.serve(async (req) => {
   } catch (error) {
     return new Response(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : String(error) }), {
       status: 500,
-      headers: { "Content-Type": "application/json" }
+      headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
     });
   }
 });
