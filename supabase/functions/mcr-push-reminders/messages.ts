@@ -55,5 +55,8 @@ export const EXTERNAL_STUDY_REMINDER_MESSAGES = [
   ["👀 A meta está ali.", "A pergunta é: você vai atrás dela hoje?"],
   ["🔥 Mais uma sessão. Mais algumas questões. Mais um passo.", "Entra no MCR e registra."],
   ["😏 Não espere segunda-feira.", "Faça hoje aquilo que você pode fazer agora."],
-  ["🫵 Chega de negociar com a procrastinação.", "Entre no MCR e lance suas questões."]
+  ["🫵 Chega de negociar com a procrastinação.", "Entre no MCR e lance suas questões."],
+  ["🔥 Seu objetivo não vai se cumprir sozinho.", "Entra no MCR, faz algumas questões e registra."],
+  ["😏 A questão é simples:", "Você vai estudar hoje ou vai deixar para depois de novo?"],
+  ["🎯 Seu esforço de hoje precisa aparecer no seu histórico.", "Entre no MCR e registre suas questões."]
 ] as const;
