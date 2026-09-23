@@ -933,33 +933,48 @@ function App() {
       const isIOS = /iPad|iPhone|iPod/.test(userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
       const isHomeScreenApp = window.matchMedia?.("(display-mode: standalone)").matches || Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
       if (isIOS && !isHomeScreenApp) {
-        notify("📱 No iPhone, o Web Push funciona quando o MCR é adicionado à Tela de Início. No Safari, toque em Compartilhar → Adicionar à Tela de Início → ative “Abrir como App”. Depois abra o MCR pelo ícone da Tela de Início e tente ativar novamente.");
+        notify("📱 No iPhone/iPad, primeiro adicione o MCR à Tela de Início como app. Safari → Compartilhar → Adicionar à Tela de Início → “Abrir como App”. Depois abra pelo novo ícone e toque em Ativar novamente.");
         return;
       }
     }
-    if (!session?.user?.id || typeof window === "undefined" || !("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) {
-      notify("Seu navegador não oferece Web Push neste modo. No iPhone, abra o MCR pelo ícone adicionado à Tela de Início.");
+
+    if (!session?.user?.id || typeof window === "undefined" || !("Notification" in window) || !("serviceWorker" in navigator)) {
+      notify("Este modo não oferece a infraestrutura necessária para Web Push. No Android, use Chrome; no iPhone/iPad, abra o MCR pelo ícone da Tela de Início.");
       return;
     }
+
     try {
       if (!window.isSecureContext) throw new Error("O Web Push exige uma conexão HTTPS segura.");
+
       const permission = Notification.permission === "granted"
         ? "granted"
         : await Notification.requestPermission();
       setPushPermission(permission);
+
       if (permission !== "granted") {
         notify(permission === "denied"
-          ? "As notificações estão bloqueadas no navegador. Libere a permissão para este site e tente novamente."
+          ? "As notificações estão bloqueadas. Libere a permissão para o MCR nas configurações do navegador e tente novamente."
           : "As notificações não foram autorizadas.");
         return;
       }
 
       const baseUrl = import.meta.env.BASE_URL || "/";
+      const basePath = new URL(baseUrl, window.location.origin).pathname;
       const swUrl = new URL("sw.js", window.location.origin + baseUrl).toString();
-      await navigator.serviceWorker.register(swUrl, {
-        scope: new URL(baseUrl, window.location.origin).pathname,
+
+      const registration = await navigator.serviceWorker.register(swUrl, {
+        scope: basePath,
         updateViaCache: "none",
       });
+
+      await navigator.serviceWorker.ready;
+
+      // Alguns navegadores não expõem PushManager como propriedade global.
+      // O suporte correto é verificado pela ServiceWorkerRegistration.
+      const pushManager = registration.pushManager;
+      if (!pushManager) {
+        throw new Error("O navegador não disponibilizou o PushManager para o Service Worker.");
+      }
 
       const keyResponse = await fetch(MCR_PUSH_FUNCTION_URL, {
         method: "GET",
@@ -977,17 +992,18 @@ function App() {
         throw new Error("A chave pública do Web Push está inválida.");
       }
 
-      const registration = await navigator.serviceWorker.ready;
-      let subscription = await registration.pushManager.getSubscription();
+      let subscription = await pushManager.getSubscription();
       if (!subscription) {
-        subscription = await registration.pushManager.subscribe({
+        subscription = await pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey,
         });
       }
 
       const json = subscription.toJSON();
-      if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) throw new Error("O navegador retornou uma assinatura inválida.");
+      if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
+        throw new Error("O navegador retornou uma assinatura inválida.");
+      }
 
       const client = supabase as any;
       const { error } = await client.from("mcr_push_subscriptions").upsert({
@@ -1026,8 +1042,9 @@ function App() {
   };
 
   useEffect(() => {
-    if (!session?.user?.id || typeof window === "undefined" || !("serviceWorker" in navigator) || !("PushManager" in window)) return;
+    if (!session?.user?.id || typeof window === "undefined" || !("serviceWorker" in navigator)) return;
     void navigator.serviceWorker.ready.then(async (registration) => {
+      if (!registration.pushManager) return;
       const subscription = await registration.pushManager.getSubscription();
       setPushEnabled(!!subscription);
       if ("Notification" in window) setPushPermission(Notification.permission);
