@@ -222,6 +222,7 @@ public class MainActivity extends AppCompatActivity {
     private void loadApp() {
         errorView.setVisibility(View.GONE);
         loadingView.setVisibility(View.VISIBLE);
+        webView.clearCache(false);
         webView.loadUrl(WEB_URL);
     }
 
