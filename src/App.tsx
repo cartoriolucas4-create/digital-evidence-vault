@@ -928,8 +928,17 @@ function App() {
   };
 
   const enablePushNotifications = async () => {
+    if (typeof window !== "undefined") {
+      const userAgent = navigator.userAgent || "";
+      const isIOS = /iPad|iPhone|iPod/.test(userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+      const isHomeScreenApp = window.matchMedia?.("(display-mode: standalone)").matches || Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
+      if (isIOS && !isHomeScreenApp) {
+        notify("📱 No iPhone, o Web Push funciona quando o MCR é adicionado à Tela de Início. No Safari, toque em Compartilhar → Adicionar à Tela de Início → ative “Abrir como App”. Depois abra o MCR pelo ícone da Tela de Início e tente ativar novamente.");
+        return;
+      }
+    }
     if (!session?.user?.id || typeof window === "undefined" || !("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) {
-      notify("Seu navegador não oferece Web Push neste dispositivo.");
+      notify("Seu navegador não oferece Web Push neste modo. No iPhone, abra o MCR pelo ícone adicionado à Tela de Início.");
       return;
     }
     try {
