@@ -534,3 +534,24 @@ html[data-theme="dark"] .status.warn{
 .push-status{font-size:11px;font-weight:800;color:#8a9099;white-space:nowrap}
 .push-status.active{color:#198754}
 @media (max-width:720px){.push-setting{align-items:flex-start;flex-direction:column}.push-setting-actions{width:100%;justify-content:space-between}.push-setting-actions .btn{flex:1}}
+
+
+/* Final dark-mode overrides for Settings panels */
+html[data-theme="dark"] .button-color-setting,
+html[data-theme="dark"] .push-setting{
+  background:#11151b !important;
+  color:#edf1f5 !important;
+  border-color:#343c48 !important;
+}
+html[data-theme="dark"] .button-color-setting strong,
+html[data-theme="dark"] .push-setting strong{
+  color:#f5f7fa !important;
+}
+html[data-theme="dark"] .button-color-setting small,
+html[data-theme="dark"] .push-setting small{
+  color:#aeb7c2 !important;
+}
+html[data-theme="dark"] .button-color-picker{
+  background:#1c222b !important;
+  border-color:#343c48 !important;
+}
