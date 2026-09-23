@@ -933,23 +933,53 @@ function App() {
       return;
     }
     try {
-      const permission = await Notification.requestPermission();
+      if (!window.isSecureContext) throw new Error("O Web Push exige uma conexão HTTPS segura.");
+      const permission = Notification.permission === "granted"
+        ? "granted"
+        : await Notification.requestPermission();
       setPushPermission(permission);
       if (permission !== "granted") {
-        notify("As notificações não foram autorizadas.");
+        notify(permission === "denied"
+          ? "As notificações estão bloqueadas no navegador. Libere a permissão para este site e tente novamente."
+          : "As notificações não foram autorizadas.");
         return;
       }
-      const keyResponse = await fetch(MCR_PUSH_FUNCTION_URL, { cache: "no-store" });
-      if (!keyResponse.ok) throw new Error("Servidor de notificações indisponível.");
-      const keyData = await keyResponse.json();
-      if (!keyData.publicKey) throw new Error("Chave de notificações não disponível.");
+
+      const baseUrl = import.meta.env.BASE_URL || "/";
+      const swUrl = new URL("sw.js", window.location.origin + baseUrl).toString();
+      await navigator.serviceWorker.register(swUrl, {
+        scope: new URL(baseUrl, window.location.origin).pathname,
+        updateViaCache: "none",
+      });
+
+      const keyResponse = await fetch(MCR_PUSH_FUNCTION_URL, {
+        method: "GET",
+        cache: "no-store",
+        headers: { Accept: "application/json" },
+      });
+      const keyText = await keyResponse.text();
+      let keyData: { publicKey?: string; error?: string } = {};
+      try { keyData = JSON.parse(keyText); } catch {}
+      if (!keyResponse.ok) throw new Error(keyData.error || `Servidor de notificações respondeu HTTP ${keyResponse.status}.`);
+      if (!keyData.publicKey) throw new Error("O servidor não forneceu a chave pública do Web Push.");
+
+      const applicationServerKey = urlBase64ToUint8Array(keyData.publicKey);
+      if (applicationServerKey.byteLength !== 65 || applicationServerKey[0] !== 4) {
+        throw new Error("A chave pública do Web Push está inválida.");
+      }
+
       const registration = await navigator.serviceWorker.ready;
       let subscription = await registration.pushManager.getSubscription();
       if (!subscription) {
-        subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(keyData.publicKey) });
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey,
+        });
       }
+
       const json = subscription.toJSON();
-      if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) throw new Error("Assinatura inválida.");
+      if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) throw new Error("O navegador retornou uma assinatura inválida.");
+
       const client = supabase as any;
       const { error } = await client.from("mcr_push_subscriptions").upsert({
         user_id: session.user.id,
@@ -959,12 +989,14 @@ function App() {
         user_agent: navigator.userAgent,
         enabled: true,
       }, { onConflict: "endpoint" });
-      if (error) throw error;
+      if (error) throw new Error(`Banco de notificações: ${error.message}`);
+
       setPushEnabled(true);
       notify("🔔 Notificações de lembrete ativadas neste dispositivo.");
     } catch (error) {
       console.error("Web Push", error);
-      notify("Não foi possível ativar as notificações. Se necessário, permita notificações nas configurações do navegador.");
+      const message = error instanceof Error ? error.message : "erro desconhecido";
+      notify(`Não foi possível ativar as notificações: ${message}`);
     }
   };
 
