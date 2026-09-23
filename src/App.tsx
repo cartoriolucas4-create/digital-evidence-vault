@@ -3305,32 +3305,45 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
     setSelectionMode("cells");setSelectedRows([]);setSelectedCols([]);
     setSelected(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]);
   };
-  const deleteSelectedCell=()=>{
-    if(selectionMode!=="cells" || selected.length!==1){
+  const deleteSelectedCell=(cellIdToDelete?:string)=>{
+    const targetId=cellIdToDelete??(selected.length===1?selected[0]:null);
+    if(selectionMode!=="cells" || !targetId){
       notify("Selecione uma única célula para excluir.");
       return;
     }
-    const [row,col]=selected[0].split("-").map(Number);
+    if(selected.length>1 && !cellIdToDelete){
+      notify("Selecione apenas uma célula para excluir.");
+      return;
+    }
+    const [row,col]=targetId.split("-").map(Number);
     const count=data.rowCellCounts[row]??data.cols;
     if(!Number.isInteger(row)||!Number.isInteger(col)||col<0||col>=count) return;
     if(count<=1){
       notify("A linha precisa manter pelo menos uma célula.");
       return;
     }
+
     commitPlannerChange(prev=>{
-      const nextCount=Math.max(1,(prev.rowCellCounts[row]??prev.cols)-1);
-      const cells={...prev.cells};
       const oldCount=prev.rowCellCounts[row]??prev.cols;
+      if(col>=oldCount) return prev;
+
+      const cells={...prev.cells};
+      // Remove a célula estrutural e compacta somente esta linha para a esquerda.
       for(let c=col;c<oldCount-1;c++){
-        const source=cells[cellId(row,c+1)]??defaultCell();
-        cells[cellId(row,c)]={...source,id:cellId(row,c)};
+        const source=cells[cellId(row,c+1)];
+        if(source) cells[cellId(row,c)]={...source,id:cellId(row,c)};
+        else delete cells[cellId(row,c)];
       }
       delete cells[cellId(row,oldCount-1)];
+
       const rowCellCounts=[...prev.rowCellCounts];
-      rowCellCounts[row]=nextCount;
+      rowCellCounts[row]=Math.max(1,oldCount-1);
       return {...prev,rowCellCounts,cells};
     });
-    setSelected([]);setSelectedParts([]);setSelectionMode("cells");
+
+    setSelected([]);
+    setSelectedParts([]);
+    setSelectionMode("cells");
     notify("Célula excluída.");
   };
 
@@ -3506,7 +3519,11 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
           <button onClick={addCol}>+ Adicionar coluna</button>
           <button onClick={deleteSelectedRows} disabled={!selectedRows.length || data.rows<=1}>− Excluir linha</button>
           <button onClick={deleteSelectedCols} disabled={!selectedCols.length || data.cols<=1}>− Excluir coluna</button>
-          <button onClick={deleteSelectedCell} disabled={selectionMode!=="cells" || selected.length!==1}>− Excluir célula</button>
+          <button
+            onPointerDown={e=>e.preventDefault()}
+            onClick={e=>{e.preventDefault();e.stopPropagation();deleteSelectedCell();}}
+            disabled={selectionMode!=="cells" || selected.length!==1}
+          >− Excluir célula</button>
           <button onClick={copyWeek}>Duplicar semana</button>
           <button onClick={()=>setFullscreen(v=>!v)}>{fullscreen?"Sair da tela cheia":"Tela cheia"}</button>
           <button onClick={resetPlanner}>Limpar semana</button>
