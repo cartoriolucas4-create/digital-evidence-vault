@@ -109,7 +109,7 @@ const monthBounds = (date = new Date()) => {
 const isLastDayOfMonth = (date = new Date()) => date.getDate() === new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
 const monthLabel = (date = new Date()) => date.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
 const uid = () => globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-const MCR_PUSH_FUNCTION_URL = "https://krulxfcxalaxosebmiyh.supabase.co/functions/v1/mcr-push-reminders";
+const MCR_PUSH_FUNCTION_URL = "https://gojjlppvdzijujrqsqww.supabase.co/functions/v1/mcr-push-reminders";
 const urlBase64ToUint8Array = (base64String: string) => {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
