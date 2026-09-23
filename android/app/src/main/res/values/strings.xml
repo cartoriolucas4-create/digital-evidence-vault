@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MCR — Meu Controle de Rendimento</string>
+    <string name="loading">Carregando MCR…</string>
+    <string name="connection_error">Não foi possível carregar o MCR. Verifique sua conexão e tente novamente.</string>
+    <string name="retry">Tentar novamente</string>
+</resources>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="mcr_pink">#D63384</color>
+    <color name="mcr_dark">#11151B</color>
+    <color name="mcr_black">#000000</color>
+    <color name="mcr_white">#FFFFFF</color>
+</resources>
