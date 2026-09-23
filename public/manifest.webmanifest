@@ -1,13 +1,20 @@
 {
   "name": "MCR — Meu Controle de Rendimento",
   "short_name": "MCR",
-  "id": "/digital-evidence-vault/",
-  "start_url": "/digital-evidence-vault/",
-  "scope": "/digital-evidence-vault/",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#d63384",
   "lang": "pt-BR",
   "description": "Controle de questões, desempenho e metas para concursos públicos.",
-  "icons": [{"src": "/digital-evidence-vault/mcr-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"}]
+  "icons": [
+    {
+      "src": "/digital-evidence-vault/mcr-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
 }
