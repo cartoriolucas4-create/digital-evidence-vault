@@ -2741,12 +2741,12 @@ function PlannerColorPalette({title,colors,onPick,onCustom}:{title:string;colors
 function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:{userId:string;notify:(message:string)=>void;defaultSmallColor:string;completedSmallColor:string;}) {
   type CellPartStyle = { bg:string; fg:string; bold:boolean; italic:boolean; underline:boolean; strike:boolean; size:number; fontFamily:string; align:"left"|"center"|"right"; vertical:"top"|"middle"|"bottom"; wrap:"overflow"|"wrap"|"clip" };
   type Cell = { id:string; subject:string; text:string; studiedWeek?:string; bg:string; fg:string; subjectBg:string; subjectFg:string; bold:boolean; italic:boolean; underline:boolean; strike:boolean; size:number; fontFamily:string; align:"left"|"center"|"right"; vertical:"top"|"middle"|"bottom"; wrap:"overflow"|"wrap"|"clip"; subjectStyle?:CellPartStyle; textStyle?:CellPartStyle };
-  type PlannerData = { version:2; weekOffset:number; cols:number; rows:number; headers:string[]; colWidths:number[]; rowHeights:number[]; cells:Record<string,Cell> };
+  type PlannerData = { version:3; weekOffset:number; cols:number; rows:number; headers:string[]; colWidths:number[]; rowHeights:number[]; rowCellCounts:number[]; cells:Record<string,Cell> };
   const defaultHeaders=["SEGUNDA","TERÇA","QUARTA","QUINTA","SEXTA","SÁBADO","DOMINGO"];
   const defaultPartStyle=(kind:"subject"|"text"):CellPartStyle=>kind==="subject"?({bg:"#f7f8fa",fg:"#17202a",bold:true,italic:false,underline:false,strike:false,size:14,fontFamily:"Arial",align:"center",vertical:"top",wrap:"wrap"}):({bg:"#ffffff",fg:"#17202a",bold:true,italic:false,underline:false,strike:false,size:14,fontFamily:"Arial",align:"center",vertical:"top",wrap:"wrap"});
   const defaultCell=():Cell=>({id:uid(),subject:"",text:"",bg:"#ffffff",fg:"#17202a",subjectBg:"#f7f8fa",subjectFg:"#17202a",bold:false,italic:false,underline:false,strike:false,size:14,fontFamily:"Arial",align:"left",vertical:"top",wrap:"wrap",subjectStyle:defaultPartStyle("subject"),textStyle:defaultPartStyle("text")});
   const cleanPlannerField=(value:unknown)=>{const text=String(value??"").trim();const normalized=text.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toUpperCase();return normalized.startsWith("MATERIA")||normalized.startsWith("OBSERVACOES")||normalized.startsWith("OBSERVACAO")?"":text;};
-  const makeInitial=():PlannerData=>({version:3,weekOffset:0,cols:7,rows:4,headers:[...defaultHeaders],colWidths:Array(7).fill(190),rowHeights:Array(4).fill(180),cells:{}});
+  const makeInitial=():PlannerData=>({version:3,weekOffset:0,cols:7,rows:4,headers:[...defaultHeaders],colWidths:Array(7).fill(190),rowHeights:Array(4).fill(180),rowCellCounts:Array(4).fill(7),cells:{}});
   const key="mcr_planner_"+userId;
   const normalizePlanner=(raw:any):PlannerData=>{
     const cols=Math.max(1,Number(raw?.cols)||7);
@@ -2754,6 +2754,10 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
     const headers=Array.from({length:cols},(_,i)=>String(raw?.headers?.[i]??defaultHeaders[i]??("COLUNA "+(i+1))));
     const colWidths=Array.from({length:cols},(_,i)=>{const v=Number(raw?.colWidths?.[i]);return Number.isFinite(v)&&v>=120?v:190;});
     const rowHeights=Array.from({length:rows},(_,i)=>{const v=Number(raw?.rowHeights?.[i]);return Number.isFinite(v)&&v>=90?v:180;});
+    const rowCellCounts=Array.from({length:rows},(_,i)=>{
+      const v=Number(raw?.rowCellCounts?.[i]);
+      return Number.isFinite(v)?Math.max(1,Math.min(cols,v)):cols;
+    });
     const cells:Record<string,Cell>={};
     Object.entries(raw?.cells??{}).forEach(([id,value]:any)=>{
       const subject=cleanPlannerField(value?.subject); const text=cleanPlannerField(value?.text); {
@@ -2769,7 +2773,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
         cells[id]={...base,subjectStyle,textStyle};
       }
     });
-    return {version:3,weekOffset:Number(raw?.weekOffset)||0,cols,rows,headers,colWidths,rowHeights,cells};
+    return {version:3,weekOffset:Number(raw?.weekOffset)||0,cols,rows,headers,colWidths,rowHeights,rowCellCounts,cells};
   };
   const plannerHasContent=(planner:PlannerData)=>{
     if(Object.keys(planner.cells).length>0) return true;
@@ -3056,7 +3060,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
     const cols=[] as number[];
     for(let r=Math.min(r1,r2);r<=Math.max(r1,r2);r++) rows.push(r);
     for(let col=Math.min(c1,c2);col<=Math.max(c1,c2);col++) cols.push(col);
-    return {rows,cols,ids:rows.flatMap(r=>cols.map(col=>cellId(r,col)))};
+    return {rows,cols,ids:rows.flatMap(r=>cols.filter(col=>col<(data.rowCellCounts[r]??data.cols)).map(col=>cellId(r,col)))};
   };
   const selectRect=(r1:number,r2:number,c1:number,c2:number)=>{
     const rect=cellsInRect(r1,r2,c1,c2);
@@ -3080,12 +3084,12 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
   const selectRowsRange=(start:number,end:number)=>{
     const rows=Array.from({length:Math.abs(end-start)+1},(_,i)=>Math.min(start,end)+i);
     setSelectedParts([]);setSelectionMode("rows");setSelectedRows(rows);setSelectedCols([]);
-    setSelected(rows.flatMap(row=>Array.from({length:data.cols},(_,col)=>cellId(row,col))));
+    setSelected(rows.flatMap(row=>Array.from({length:data.rowCellCounts[row]??data.cols},(_,col)=>cellId(row,col))));
   };
   const selectColsRange=(start:number,end:number)=>{
     const cols=Array.from({length:Math.abs(end-start)+1},(_,i)=>Math.min(start,end)+i);
     setSelectedParts([]);setSelectionMode("cols");setSelectedRows([]);setSelectedCols(cols);
-    setSelected(cols.flatMap(col=>Array.from({length:data.rows},(_,row)=>cellId(row,col))));
+    setSelected(cols.flatMap(col=>Array.from({length:data.rows},(_,row)=>col<(data.rowCellCounts[row]??data.cols)?cellId(row,col):null).filter(Boolean) as string[]));
   };
   const selectRow=(row:number)=>selectRowsRange(row,row);
   const selectCol=(col:number)=>selectColsRange(col,col);
@@ -3111,7 +3115,11 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
     const stop=()=>{dragging=false;window.removeEventListener("pointermove",move);window.removeEventListener("pointerup",stop);};
     window.addEventListener("pointermove",move);window.addEventListener("pointerup",stop);
   };
-  const selectAll=()=>{setSelectedParts([]);const ids=Array.from({length:data.rows*data.cols},(_,i)=>cellId(Math.floor(i/data.cols),i%data.cols));setSelectionMode("cells");setSelectedRows([]);setSelectedCols([]);setSelected(ids);};
+  const selectAll=()=>{
+    setSelectedParts([]);
+    const ids=Array.from({length:data.rows},(_,row)=>Array.from({length:data.rowCellCounts[row]??data.cols},(_,col)=>cellId(row,col))).flat();
+    setSelectionMode("cells");setSelectedRows([]);setSelectedCols([]);setSelected(ids);
+  };
   const plannerSelectionBounds=()=>{
     const ids=selected.length?selected:[cellId(0,0)];
     const coords=ids.map(id=>{const [r,col]=id.split("-").map(Number);return {r,col};}).filter(v=>Number.isFinite(v.r)&&Number.isFinite(v.col));
@@ -3256,7 +3264,9 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
         if(delta){
           event.preventDefault();
           const first=selected[0]??"0-0";const [row,col]=first.split("-").map(Number);
-          const nextRow=Math.max(0,Math.min(data.rows-1,row+delta[0]));const nextCol=Math.max(0,Math.min(data.cols-1,col+delta[1]));
+          const nextRow=Math.max(0,Math.min(data.rows-1,row+delta[0]));
+          const nextRowCellCount=data.rowCellCounts[nextRow]??data.cols;
+          const nextCol=Math.max(0,Math.min(Math.max(0,nextRowCellCount-1),col+delta[1]));
           selectRect(nextRow,nextRow,nextCol,nextCol);
         }
         return;
@@ -3295,6 +3305,79 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
     setSelectionMode("cells");setSelectedRows([]);setSelectedCols([]);
     setSelected(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]);
   };
+  const deleteSelectedCell=()=>{
+    if(selectionMode!=="cells" || selected.length!==1){
+      notify("Selecione uma única célula para excluir.");
+      return;
+    }
+    const [row,col]=selected[0].split("-").map(Number);
+    const count=data.rowCellCounts[row]??data.cols;
+    if(!Number.isInteger(row)||!Number.isInteger(col)||col<0||col>=count) return;
+    if(count<=1){
+      notify("A linha precisa manter pelo menos uma célula.");
+      return;
+    }
+    commitPlannerChange(prev=>{
+      const nextCount=Math.max(1,(prev.rowCellCounts[row]??prev.cols)-1);
+      const cells={...prev.cells};
+      const oldCount=prev.rowCellCounts[row]??prev.cols;
+      for(let c=col;c<oldCount-1;c++){
+        const source=cells[cellId(row,c+1)]??defaultCell();
+        cells[cellId(row,c)]={...source,id:cellId(row,c)};
+      }
+      delete cells[cellId(row,oldCount-1)];
+      const rowCellCounts=[...prev.rowCellCounts];
+      rowCellCounts[row]=nextCount;
+      return {...prev,rowCellCounts,cells};
+    });
+    setSelected([]);setSelectedParts([]);setSelectionMode("cells");
+    notify("Célula excluída.");
+  };
+
+  const addCellToRow=(row:number,col:number)=>{
+    const count=data.rowCellCounts[row]??data.cols;
+    if(count>=data.cols){
+      commitPlannerChange(prev=>{
+        const nextCols=prev.cols+1;
+        const headers=[...(prev.headers??[]),"COLUNA "+(nextCols)];
+        const colWidths=[...(prev.colWidths??[]),190];
+        const rowCellCounts=[...prev.rowCellCounts];
+        rowCellCounts[row]=(rowCellCounts[row]??prev.cols)+1;
+        const cells={...prev.cells};
+        cells[cellId(row,count)]={...defaultCell(),id:cellId(row,count)};
+        return {...prev,cols:nextCols,headers,colWidths,rowCellCounts,cells};
+      });
+      setSelected([cellId(row,count)]);setSelectedRows([]);setSelectedCols([]);setSelectionMode("cells");setSelectedParts([]);
+      notify("Célula adicionada.");
+      return;
+    }
+    const insertAt=Math.max(0,Math.min(count,col+1));
+    commitPlannerChange(prev=>{
+      const cells={...prev.cells};
+      for(let c=count;c>insertAt;c--){
+        const source=cells[cellId(row,c-1)]??defaultCell();
+        cells[cellId(row,c)]={...source,id:cellId(row,c)};
+      }
+      cells[cellId(row,insertAt)]={...defaultCell(),id:cellId(row,insertAt)};
+      const rowCellCounts=[...prev.rowCellCounts];
+      rowCellCounts[row]=count+1;
+      return {...prev,rowCellCounts,cells};
+    });
+    setSelected([cellId(row,insertAt)]);setSelectedRows([]);setSelectedCols([]);setSelectionMode("cells");setSelectedParts([]);
+    notify("Célula adicionada.");
+  };
+
+  const addCellToSelected=()=>{
+    if(selectionMode!=="cells" || selected.length!==1){
+      notify("Selecione uma única célula para adicionar outra.");
+      return;
+    }
+    const [row,col]=selected[0].split("-").map(Number);
+    const count=data.rowCellCounts[row]??data.cols;
+    if(!Number.isInteger(row)||!Number.isInteger(col)||col<0||col>=count) return;
+    addCellToRow(row,col);
+  };
+
   const deleteSelectedRows=()=>{
     if(!selectedRows.length || data.rows<=1) return;
     if(!window.confirm(`Excluir ${selectedRows.length} linha(s) selecionada(s)?`)) return;
@@ -3303,7 +3386,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
       const rowsToKeep=Array.from({length:prev.rows},(_,r)=>r).filter(r=>!remove.has(r));
       const cells:Record<string,Cell>={};
       rowsToKeep.forEach((oldR,newR)=>{for(let col=0;col<prev.cols;col++){const oldId=cellId(oldR,col);const value=prev.cells[oldId];if(value) cells[cellId(newR,col)]={...value,id:cellId(newR,col)};}});
-      return {...prev,rows:rowsToKeep.length,rowHeights:rowsToKeep.map(r=>prev.rowHeights[r]??180),cells};
+      return {...prev,rows:rowsToKeep.length,rowHeights:rowsToKeep.map(r=>prev.rowHeights[r]??180),rowCellCounts:rowsToKeep.map(r=>prev.rowCellCounts[r]??prev.cols),cells};
     });
     setSelected([]);setSelectedRows([]);setSelectionMode("cells");
   };
@@ -3315,8 +3398,21 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
       const colsToKeep=Array.from({length:prev.cols},(_,col)=>col).filter(col=>!remove.has(col));
       const headers=colsToKeep.map(col=>prev.headers[col]??("COLUNA "+(col+1)));
       const cells:Record<string,Cell>={};
-      for(let row=0;row<prev.rows;row++) colsToKeep.forEach((oldCol,newCol)=>{const oldId=cellId(row,oldCol);const value=prev.cells[oldId];if(value) cells[cellId(row,newCol)]={...value,id:cellId(row,newCol)};});
-      return {...prev,cols:colsToKeep.length,headers,colWidths:colsToKeep.map(col=>prev.colWidths[col]??190),cells};
+      const rowCellCounts:number[]=[];
+      for(let row=0;row<prev.rows;row++){
+        const oldCount=prev.rowCellCounts[row]??prev.cols;
+        const keptCols=Array.from({length:oldCount},(_,col)=>col).filter(col=>!remove.has(col));
+        const newCount=Math.max(1,keptCols.length);
+        rowCellCounts[row]=newCount;
+        keptCols.slice(0,newCount).forEach((oldCol,newCol)=>{
+          const value=prev.cells[cellId(row,oldCol)];
+          if(value) cells[cellId(row,newCol)]={...value,id:cellId(row,newCol)};
+        });
+        if(!cells[cellId(row,0)]){
+          cells[cellId(row,0)]={...defaultCell(),id:cellId(row,0)};
+        }
+      }
+      return {...prev,cols:colsToKeep.length,headers,colWidths:colsToKeep.map(col=>prev.colWidths[col]??190),rowCellCounts,cells};
     });
     setSelected([]);setSelectedCols([]);setSelectionMode("cells");
   };
@@ -3324,11 +3420,11 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
   const applyText=()=>{commitPlannerChange(prev=>{const cells={...prev.cells};selected.forEach(id=>{cells[id]={...getCell(id),fg:textColor}});return {...prev,cells}});notify("Cor do texto das observações aplicada.");};
   const applySubjectFill=()=>{commitPlannerChange(prev=>{const cells={...prev.cells};selected.forEach(id=>{cells[id]={...getCell(id),subjectBg:subjectFillColor}});return {...prev,cells}});notify("Cor da matéria aplicada.");};
   const clearSelection=()=>{setSelected([]);setSelectedRows([]);setSelectedCols([]);setSelectionMode("cells");};
-  const addRow=()=>commitPlannerChange(prev=>({...prev,rows:prev.rows+1,rowHeights:[...prev.rowHeights,180]}));
+  const addRow=()=>commitPlannerChange(prev=>({...prev,rows:prev.rows+1,rowHeights:[...prev.rowHeights,180],rowCellCounts:[...prev.rowCellCounts,prev.cols]}));
   const addCol=()=>commitPlannerChange(prev=>{
     const headers=[...(prev.headers??[])];
     headers.push("COLUNA "+(prev.cols+1));
-    return {...prev,cols:prev.cols+1,headers,colWidths:[...prev.colWidths,190]};
+    return {...prev,cols:prev.cols+1,headers,colWidths:[...prev.colWidths,190],rowCellCounts:prev.rowCellCounts.map(count=>count+1)};
   });
   const resetPlanner=()=>{if(window.confirm("Limpar todo o conteúdo desta semana?")){commitPlannerChange(prev=>({...prev,cells:{}}));setSelected([]);}};
   const startNextCycle=()=>{
@@ -3353,7 +3449,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
     setSelectionMode("cells");
     notify("Novo ciclo iniciado. As matérias voltaram para a cor padrão e para não estudadas.");
   };
-  const copyWeek=()=>{commitPlannerChange(prev=>{const cells:{[key:string]:Cell}={...prev.cells};for(let r=0;r<prev.rows;r++)for(let col=0;col<prev.cols;col++){const id=cellId(r,col);cells[id]={...getCell(id),id:uid()};}return {...prev,cells}});notify("Semana duplicada.");};
+  const copyWeek=()=>{commitPlannerChange(prev=>{const cells:{[key:string]:Cell}={...prev.cells};for(let r=0;r<prev.rows;r++)for(let col=0;col<(prev.rowCellCounts[r]??prev.cols);col++){const id=cellId(r,col);cells[id]={...getCell(id),id:uid()};}return {...prev,cells}});notify("Semana duplicada.");};
 
   return <div className={"planner-shell "+(fullscreen?"planner-fullscreen":"")}>
     {shortcutHelpOpen ? <div className="planner-shortcuts-backdrop" role="dialog" aria-modal="true" onClick={()=>setShortcutHelpOpen(false)}>
@@ -3421,6 +3517,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
           <button onClick={addCol}>+ Adicionar coluna</button>
           <button onClick={deleteSelectedRows} disabled={!selectedRows.length || data.rows<=1}>− Excluir linha</button>
           <button onClick={deleteSelectedCols} disabled={!selectedCols.length || data.cols<=1}>− Excluir coluna</button>
+          <button onClick={deleteSelectedCell} disabled={selectionMode!=="cells" || selected.length!==1}>− Excluir célula</button>
           <button onClick={copyWeek}>Duplicar semana</button>
           <button onClick={()=>setFullscreen(v=>!v)}>{fullscreen?"Sair da tela cheia":"Tela cheia"}</button>
           <button onClick={resetPlanner}>Limpar semana</button>
@@ -3434,17 +3531,26 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
         <button className="planner-corner-selector" title="Selecionar toda a planilha" onClick={selectAll}>□</button>
         {Array.from({length:data.cols},(_,col)=>{
           const label=data.headers?.[col]??("COLUNA "+(col+1));
-          return <div className={"planner-day "+(selectedCols.includes(col)?"axis-selected":"")} key={"head-"+col} onPointerDown={e=>{if((e.target as HTMLElement).closest(".planner-resize-handle")) return;startAxisSelection("col",col,e)}} onClick={()=>selectCol(col)}>
+          return <div className={"planner-day "+(selectedCols.includes(col)?"axis-selected":"")} key={"head-"+col} style={{gridColumn:col+2,gridRow:1}} onPointerDown={e=>{if((e.target as HTMLElement).closest(".planner-resize-handle")) return;startAxisSelection("col",col,e)}} onClick={()=>selectCol(col)}>
             <span className="planner-resize-handle planner-col-resize" onPointerDown={e=>{e.stopPropagation();beginResize("col",col,e)}} aria-hidden="true"/><input onClick={e=>{e.stopPropagation();selectCol(col)}} value={label} onChange={e=>updateHeader(col,e.target.value)} onKeyDown={e=>{if(e.key==="Delete"||e.key==="Backspace"){e.preventDefault();e.stopPropagation();deleteSelectedCols();}}} aria-label={"Nome da coluna "+(col+1)} spellCheck={false}/>
           </div>;
         })}
         {Array.from({length:data.rows},(_,row)=>[
-          <button key={"row-head-"+row} className={"planner-row-selector "+(selectedRows.includes(row)?"axis-selected":"")} onPointerDown={e=>startAxisSelection("row",row,e)} onClick={()=>selectRow(row)}>{row+1}</button>,
-          ...Array.from({length:data.cols},(_,col)=>{
+          <button key={"row-head-"+row} className={"planner-row-selector "+(selectedRows.includes(row)?"axis-selected":"")} style={{gridColumn:1,gridRow:row+2}} onPointerDown={e=>startAxisSelection("row",row,e)} onClick={()=>selectRow(row)}>{row+1}</button>,
+          ...Array.from({length:data.rowCellCounts[row]??data.cols},(_,col)=>{
           const id=cellId(row,col), cell=getCell(id), active=selected.includes(id);
-          return <div key={id} data-planner-row={row} data-planner-col={col} className={"planner-cell "+(active?"selected":"")} style={{backgroundColor:cell.bg}}
+          return <div key={id} data-planner-row={row} data-planner-col={col} className={"planner-cell "+(active?"selected":"")} style={{backgroundColor:cell.bg,gridColumn:col+2,gridRow:row+2,position:"relative"}}
             onPointerDown={e=>{const target=e.target as HTMLElement;if(target.closest("input,textarea,button,select")) return;if(e.shiftKey&&selected.length){const first=selected[0].split("-").map(Number);selectRect(first[0],row,first[1],col);return;}startCellSelection(row,col,e)}}
             onClick={(e)=>{const target=e.target as HTMLElement;if(target.closest("input,textarea,button,select")) return;if(e.ctrlKey||e.metaKey)toggleSelected(id);}}>
+            {active && selectionMode==="cells" && selected.length===1 && <button
+              type="button"
+              className="planner-cell-add-button"
+              title="Adicionar célula nesta linha"
+              aria-label="Adicionar célula nesta linha"
+              onPointerDown={e=>e.stopPropagation()}
+              onClick={e=>{e.stopPropagation();addCellToSelected();}}
+              style={{position:"absolute",top:"4px",right:"4px",zIndex:5,width:"22px",height:"22px",padding:0,border:"1px solid rgba(0,0,0,.16)",borderRadius:"5px",background:"rgba(255,255,255,.92)",color:"inherit",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",boxShadow:"0 1px 3px rgba(0,0,0,.12)"}}
+            ><Plus size={13}/></button>}
             <span className="planner-resize-handle planner-row-resize" onPointerDown={e=>beginResize("row",row,e)} />
             <div className="planner-subject-wrap">
             <input
