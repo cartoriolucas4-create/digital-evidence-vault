@@ -434,6 +434,62 @@ function App() {
     void loadCloudState();
   }, [session?.user?.id]);
 
+  // Fallback robusto para Android/WebView: Realtime é um acelerador, mas a nuvem continua sendo a fonte de verdade.
+  // Isso também recupera alterações caso o WebSocket seja interrompido ou o aplicativo fique em segundo plano.
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    const userId = session.user.id;
+    let cancelled = false;
+
+    const syncPreferencesFromCloud = async () => {
+      const { data, error } = await (supabase as any)
+        .from("study_user_state")
+        .select("preferences")
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (cancelled || error || !data) return;
+
+      const prefs = (data.preferences ?? {}) as UserCloudPreferences;
+      const json = JSON.stringify(prefs);
+      if (json === cloudPreferencesRemoteJson.current) return;
+
+      cloudPreferencesRemoteJson.current = json;
+      if (prefs.theme) setTheme(prefs.theme);
+      if (prefs.buttonColor) setButtonColor(prefs.buttonColor);
+      if (prefs.plannerDefaultColor) setPlannerDefaultColor(prefs.plannerDefaultColor);
+      if (prefs.plannerCompletedColor) setPlannerCompletedColor(prefs.plannerCompletedColor);
+      if (typeof prefs.plannerSidebarCollapsed === "boolean") setPlannerSidebarCollapsed(prefs.plannerSidebarCollapsed);
+      setDefaultSourceId(prefs.defaultSourceId ?? "");
+      setDefaultQuestionTypeId(prefs.defaultQuestionTypeId ?? "");
+
+      const syncedStudyStreak = prefs.studyStreak ?? { count: 0, lastQualifiedAt: "" };
+      studyStreakRef.current = syncedStudyStreak;
+      setStudyStreak(syncedStudyStreak);
+
+      const contextualState: ContextualNotificationState = {
+        notifications: Array.isArray(prefs.contextualNotifications) ? prefs.contextualNotifications : [],
+        rotation: prefs.contextualNotificationRotation ?? {},
+        sentPeriod: prefs.contextualNotificationSentPeriod ?? {},
+      };
+      contextualNotificationStateRef.current = contextualState;
+      setContextualNotifications(contextualState.notifications.slice(0, 5));
+    };
+
+    void syncPreferencesFromCloud();
+    const timer = window.setInterval(() => { void syncPreferencesFromCloud(); }, 4000);
+
+    const onResume = () => { void syncPreferencesFromCloud(); };
+    window.addEventListener("focus", onResume);
+    document.addEventListener("visibilitychange", onResume);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", onResume);
+      document.removeEventListener("visibilitychange", onResume);
+    };
+  }, [session?.user?.id]);
+
   useEffect(() => {
     if(!session?.user?.id) return;
     const userId=session.user.id;
@@ -2784,7 +2840,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
   const [data,setData]=useState<PlannerData>(()=>normalizePlanner(readStore<PlannerData>(key,makeInitial())));
   const plannerRemoteReady=useRef(false);
   const plannerRemoteTimer=useRef<ReturnType<typeof setTimeout> | null>(null);
-  const plannerLastRemoteJson=useRef<string | null>(null);
+  const plannerLastRemoteJson=useRef<string | null>(null);  const plannerDataRef=useRef<PlannerData>(data);
   const plannerSyncChannel=useRef<ReturnType<typeof supabase.channel> | null>(null);
   const plannerLocalEditAt=useRef(0);
   const [selected,setSelected]=useState<string[]>([]);
@@ -2804,7 +2860,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
   const plannerHistory=useRef<{past:PlannerData[];future:PlannerData[]}>({past:[],future:[]});
   const plannerHistoryMode=useRef<"undo"|"redo"|null>(null);
   const plannerPreviousData=useRef<PlannerData>(data);
-  const resizing=useRef<{type:"col"|"row";index:number;start:number;size:number}|null>(null);
+  const resizing=useRef<{type:"col"|"row";index:number;start:number;size:number}|null>(null);  useEffect(()=>{ plannerDataRef.current=data; },[data]);
 
   useEffect(()=>{
     setData(prev=>normalizePlanner(prev));
@@ -2887,6 +2943,50 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
     return()=>{ plannerSyncChannel.current=null; void supabase.removeChannel(channel); };
   },[userId,key]);
 
+  // Sincronização de segurança do planejamento: consulta a versão persistida periodicamente.
+  // Assim o APK recebe alterações mesmo se um evento Realtime/Broadcast for perdido.
+  useEffect(()=>{
+    if(!userId) return;
+    let cancelled=false;
+    const syncPlannerFromCloud=async()=>{
+      const client=supabase as any;
+      const {data:remote,error}=await client
+        .from("study_user_state")
+        .select("planner_data,updated_at")
+        .eq("user_id",userId)
+        .maybeSingle();
+      if(cancelled || error || !remote?.planner_data) return;
+
+      const next=normalizePlanner(remote.planner_data);
+      const json=JSON.stringify(next);
+      const currentJson=JSON.stringify(normalizePlanner(plannerDataRef.current));
+      if(json===currentJson) {
+        plannerLastRemoteJson.current=json;
+        return;
+      }
+
+      // Não sobrescrever uma edição local que ainda está sendo gravada.
+      if(Date.now()-plannerLocalEditAt.current<1500) return;
+
+      plannerLastRemoteJson.current=json;
+      setData(next);
+      writeStore(key,next);
+    };
+
+    void syncPlannerFromCloud();
+    const timer=window.setInterval(()=>{ void syncPlannerFromCloud(); },4000);
+    const onResume=()=>{ void syncPlannerFromCloud(); };
+    window.addEventListener("focus",onResume);
+    document.addEventListener("visibilitychange",onResume);
+
+    return()=>{
+      cancelled=true;
+      window.clearInterval(timer);
+      window.removeEventListener("focus",onResume);
+      document.removeEventListener("visibilitychange",onResume);
+    };
+  },[userId,key]);
+
   useEffect(()=>{
     writeStore(key,data);
     if(!plannerRemoteReady.current)return;
@@ -2924,6 +3024,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
     };
   },[key,data,userId]);
   const commitPlannerChange=(updater:(prev:PlannerData)=>PlannerData)=>{
+    plannerLocalEditAt.current=Date.now();
     plannerHistory.current.past=[...plannerHistory.current.past.slice(-99),data];
     plannerHistory.current.future=[];
     plannerHistoryMode.current=null;
