@@ -12,7 +12,9 @@ if (!rootElement) {
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/digital-evidence-vault/sw.js", { scope: "/digital-evidence-vault/" }).catch((error) => console.warn("MCR Service Worker", error));
+    const baseUrl = import.meta.env.BASE_URL || "/";
+    const swUrl = new URL("sw.js", window.location.origin + baseUrl).toString();
+    navigator.serviceWorker.register(swUrl, { scope: new URL(baseUrl, window.location.origin).pathname }).catch((error) => console.warn("MCR Service Worker", error));
   });
 }
 
