@@ -1167,14 +1167,16 @@ function App() {
     if (!session?.user.id) return;
     setSettingsReady(false);
     const client = supabase as any;
+    const userId = session.user.id;
     const [disciplinesResult, subjectsResult, sourcesResult, typesResult, settingsResult] = await Promise.all([
-      client.from("study_disciplines").select("*").order("created_at", { ascending: true }),
-      client.from("study_subjects").select("*").order("created_at", { ascending: true }),
-      client.from("study_sources").select("*").order("name"),
-      client.from("study_question_types").select("*").order("name"),
-      client.from("study_settings").select("*").maybeSingle(),
+      client.from("study_disciplines").select("*").eq("user_id", userId).order("created_at", { ascending: true }),
+      client.from("study_subjects").select("*").eq("user_id", userId).order("created_at", { ascending: true }),
+      client.from("study_sources").select("*").eq("user_id", userId).order("name"),
+      client.from("study_question_types").select("*").eq("user_id", userId).order("name"),
+      client.from("study_settings").select("*").eq("user_id", userId).maybeSingle(),
     ]);
-    const firstError = [disciplinesResult, subjectsResult, sourcesResult, typesResult, settingsResult].find((result) => result.error)?.error;
+    const results = { disciplinesResult, subjectsResult, sourcesResult, typesResult, settingsResult };
+    const firstError = Object.values(results).find((result: any) => result.error)?.error;
     if (firstError) throw firstError;
     setDisciplines(disciplinesResult.data ?? []);
     setSubjects(subjectsResult.data ?? []);
@@ -1500,7 +1502,7 @@ function App() {
     const client = supabase as any;
     const { data, error } = await client
       .from("study_entries")
-      .select("*")
+      .select("*, discipline:study_disciplines(name), subject:study_subjects(name), source:study_sources(name), question_type:study_question_types(name)")
       .gte("study_date", applied.from)
       .lte("study_date", applied.to)
       .order("study_date", { ascending: false });
@@ -2453,7 +2455,7 @@ function Entries({disciplines,subjects=[],sources,types,defaultSourceId="",defau
         const dateCompare = String(b.study_date ?? "").localeCompare(String(a.study_date ?? ""));
         if (dateCompare !== 0) return dateCompare;
         return String(b.created_at ?? "").localeCompare(String(a.created_at ?? ""));
-      }).map((entry: Entry) => <tr key={entry.id}><td>{new Date(`${entry.study_date}T12:00:00`).toLocaleDateString("pt-BR")}</td><td>{disciplines.find((x: Discipline)=>x.id===entry.discipline_id)?.name ?? entry.discipline_name_snapshot ?? "—"}</td><td>{subjects.find((x: Subject)=>x.id===entry.subject_id)?.name ?? entry.subject_name_snapshot ?? "—"}</td><td>{sources.find((x: Source)=>x.id===entry.source_id)?.name ?? entry.source_name_snapshot ?? "—"}</td><td>{types.find((x: QuestionType)=>x.id===entry.question_type_id)?.name ?? entry.question_type_name_snapshot ?? "—"}</td><td>{entry.questions}</td><td>{entry.correct}</td><td>{entry.questions-entry.correct}</td><td>{percent(entry.correct,entry.questions).toFixed(1)}%</td><td>{entry.notes ?? "—"}</td><td className="actions"><button className="btn small" onClick={() => {setEditing(entry);setOpen(true)}}>Editar</button><button className="btn small danger" onClick={() => remove(entry.id)}><Trash2 size={13}/></button></td></tr>) : <tr><td colSpan={11}><div className="empty">Nenhum lançamento encontrado.</div></td></tr>}
+      }).map((entry: Entry) => <tr key={entry.id}><td>{new Date(`${entry.study_date}T12:00:00`).toLocaleDateString("pt-BR")}</td><td>{disciplines.find((x: Discipline)=>x.id===entry.discipline_id)?.name ?? entry.discipline?.name ?? entry.discipline_name_snapshot ?? "—"}</td><td>{subjects.find((x: Subject)=>x.id===entry.subject_id)?.name ?? entry.subject?.name ?? entry.subject_name_snapshot ?? "—"}</td><td>{sources.find((x: Source)=>x.id===entry.source_id)?.name ?? entry.source?.name ?? entry.source_name_snapshot ?? "—"}</td><td>{types.find((x: QuestionType)=>x.id===entry.question_type_id)?.name ?? entry.question_type?.name ?? entry.question_type_name_snapshot ?? "—"}</td><td>{entry.questions}</td><td>{entry.correct}</td><td>{entry.questions-entry.correct}</td><td>{percent(entry.correct,entry.questions).toFixed(1)}%</td><td>{entry.notes ?? "—"}</td><td className="actions"><button className="btn small" onClick={() => {setEditing(entry);setOpen(true)}}>Editar</button><button className="btn small danger" onClick={() => remove(entry.id)}><Trash2 size={13}/></button></td></tr>) : <tr><td colSpan={11}><div className="empty">Nenhum lançamento encontrado.</div></td></tr>}
     </tbody></table></div></section>
     {open && <LaunchModal initial={editing} disciplines={disciplines} subjects={subjects} sources={sources} types={types} defaultSourceId={defaultSourceId} defaultQuestionTypeId={defaultQuestionTypeId} onClose={() => {setOpen(false);setEditing(null)}} onSave={save}/>}
   </>;
