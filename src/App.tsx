@@ -1503,7 +1503,8 @@ function App() {
       .select("*")
       .gte("study_date", applied.from)
       .lte("study_date", applied.to)
-      .order("study_date", { ascending: false });
+      .order("study_date", { ascending: false })
+      .order("created_at", { ascending: false });
     if (error) throw error;
     const filtered = (data ?? []).filter((entry: Entry) =>
       (!applied.disciplineId || entry.discipline_id === applied.disciplineId) &&
