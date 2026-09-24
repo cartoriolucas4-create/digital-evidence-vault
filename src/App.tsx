@@ -101,6 +101,12 @@ const dateMinus = (days: number) => {
 };
 
 const percent = (correct: number, questions: number) => questions > 0 ? (correct / questions) * 100 : 0;
+
+const relatedName = (entry: any, relation: "discipline" | "subject" | "source" | "question_type") => {
+  const value = entry?.[relation];
+  if (Array.isArray(value)) return typeof value[0]?.name === "string" ? value[0].name : "";
+  return typeof value?.name === "string" ? value.name : "";
+};
 const monthBounds = (date = new Date()) => {
   const year = date.getFullYear(), month = date.getMonth();
   const format = (value: Date) => `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
@@ -614,10 +620,10 @@ function App() {
 
     const enriched = reportEntries.map((entry) => ({
       entry,
-      discipline: entry.discipline_id ? disciplineMap.get(entry.discipline_id) ?? entry.discipline_name_snapshot ?? "Disciplina removida" : entry.discipline_name_snapshot ?? "Sem disciplina",
-      subject: entry.subject_id ? subjectMap.get(entry.subject_id) ?? entry.subject_name_snapshot ?? "Assunto removido" : entry.subject_name_snapshot ?? "Sem assunto",
-      source: entry.source_id ? sourceMap.get(entry.source_id) ?? entry.source_name_snapshot ?? "Origem removida" : entry.source_name_snapshot ?? "—",
-      type: entry.question_type_id ? typeMap.get(entry.question_type_id) ?? entry.question_type_name_snapshot ?? "Tipo removido" : entry.question_type_name_snapshot ?? "—",
+      discipline: relatedName(entry, "discipline") || (entry.discipline_id ? disciplineMap.get(entry.discipline_id) : "") || entry.discipline_name_snapshot || "Sem disciplina",
+      subject: relatedName(entry, "subject") || (entry.subject_id ? subjectMap.get(entry.subject_id) : "") || entry.subject_name_snapshot || "Sem assunto",
+      source: relatedName(entry, "source") || (entry.source_id ? sourceMap.get(entry.source_id) : "") || entry.source_name_snapshot || "—",
+      type: relatedName(entry, "question_type") || (entry.question_type_id ? typeMap.get(entry.question_type_id) : "") || entry.question_type_name_snapshot || "—",
       questions: Number(entry.questions || 0),
       correct: Number(entry.correct || 0),
       errors: Math.max(0, Number(entry.questions || 0) - Number(entry.correct || 0)),
@@ -1617,9 +1623,11 @@ function App() {
     const groups = new Map<string, any>();
     entries.forEach((entry) => {
       const id = entry.discipline_id ?? "snapshot:" + (entry.discipline_name_snapshot ?? "Sem disciplina");
-      const name = entry.discipline_id
-        ? disciplines.find((discipline) => discipline.id === entry.discipline_id)?.name ?? entry.discipline_name_snapshot ?? "Disciplina removida"
-        : entry.discipline_name_snapshot ?? "Disciplina removida";
+      const relatedDiscipline = relatedName(entry, "discipline");
+      const name = relatedDiscipline ||
+        disciplines.find((discipline) => discipline.id === entry.discipline_id)?.name ||
+        entry.discipline_name_snapshot ||
+        "Sem disciplina";
       const current = groups.get(id) ?? { id, name, questions: 0, correct: 0, errors: 0, accuracy: 0 };
       current.questions += Number(entry.questions || 0);
       current.correct += Number(entry.correct || 0);
@@ -1634,12 +1642,16 @@ function App() {
     const groups = new Map<string, any>();
     entries.forEach((entry) => {
       const id = entry.subject_id ?? "snapshot:" + (entry.subject_name_snapshot ?? "Sem assunto");
-      const name = entry.subject_id
-        ? subjects.find((subject) => subject.id === entry.subject_id)?.name ?? entry.subject_name_snapshot ?? "Assunto removido"
-        : entry.subject_name_snapshot ?? "Assunto removido";
-      const disciplineName = entry.discipline_id
-        ? disciplines.find((discipline) => discipline.id === entry.discipline_id)?.name ?? entry.discipline_name_snapshot ?? "—"
-        : entry.discipline_name_snapshot ?? "—";
+      const relatedSubject = relatedName(entry, "subject");
+      const name = relatedSubject ||
+        subjects.find((subject) => subject.id === entry.subject_id)?.name ||
+        entry.subject_name_snapshot ||
+        "Sem assunto";
+      const relatedDiscipline = relatedName(entry, "discipline");
+      const disciplineName = relatedDiscipline ||
+        disciplines.find((discipline) => discipline.id === entry.discipline_id)?.name ||
+        entry.discipline_name_snapshot ||
+        "—";
       const current = groups.get(id) ?? { id, name, disciplineName, questions: 0, correct: 0, errors: 0, accuracy: 0 };
       current.questions += Number(entry.questions || 0);
       current.correct += Number(entry.correct || 0);
