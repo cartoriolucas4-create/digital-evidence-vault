@@ -2398,30 +2398,44 @@ function Entries({disciplines,subjects=[],sources,types,defaultSourceId="",defau
 
   const save = async (value: any) => {
     const client = supabase as any;
-    const payload = {
+    const basePayload = {
       study_date: value.study_date,
       discipline_id: value.discipline_id,
-      subject_id: value.subject_id,
       source_id: value.source_id || null,
       question_type_id: value.question_type_id || null,
-      questions: Number(value.questions),
-      correct: Number(value.correct),
       notes: value.notes || null,
     };
-    let result: any;
-    let createdEntry: Entry | null = null;
+
     if (editing) {
-      result = await client.from("study_entries").update(payload).eq("id", editing.id).select("*").single();
-    } else {
-      result = await client.from("study_entries").insert(payload).select("*").single();
-      createdEntry = result.data as Entry | null;
+      const row = value.rows?.[0];
+      const payload = {
+        ...basePayload,
+        subject_id: row.subject_id,
+        questions: Number(row.questions),
+        correct: Number(row.correct),
+      };
+      const result = await client.from("study_entries").update(payload).eq("id", editing.id).select("*").single();
+      if (result.error) return notify(result.error.message);
+      const createdEntry = result.data as Entry | null;
+      notify("Lançamento atualizado.");
+      setOpen(false); setEditing(null); refresh();
+      if (createdEntry && onPerformanceEntry) void onPerformanceEntry(createdEntry);
+      return;
     }
+
+    const payloads = (value.rows ?? []).map((row: any) => ({
+      ...basePayload,
+      subject_id: row.subject_id,
+      questions: Number(row.questions),
+      correct: Number(row.correct),
+    }));
+    const result = await client.from("study_entries").insert(payloads).select("*");
     if (result.error) return notify(result.error.message);
-    if (editing) createdEntry = result.data as Entry | null;
-    notify(editing ? "Lançamento atualizado." : "Lançamento criado.");
+    const createdEntries = (result.data ?? []) as Entry[];
+    notify(createdEntries.length > 1 ? createdEntries.length + " lançamentos criados." : "Lançamento criado.");
     setOpen(false); setEditing(null); refresh();
-    if (createdEntry && onPerformanceEntry) void onPerformanceEntry(createdEntry);
-    if (!editing && createdEntry && onStudyActivity) void onStudyActivity();
+    if (onPerformanceEntry) createdEntries.forEach((entry) => void onPerformanceEntry(entry));
+    if (createdEntries.length && onStudyActivity) void onStudyActivity();
   };
 
   const remove = async (id: string) => {
@@ -2435,40 +2449,102 @@ function Entries({disciplines,subjects=[],sources,types,defaultSourceId="",defau
   return <>
     <div className="toolbar"><div><h1 className="page-title">Lançamentos</h1><p className="subtitle">Registre suas sessões de questões na sua conta.</p></div><button className="btn primary" onClick={() => {setEditing(null);setOpen(true)}}><Plus size={15}/> Novo lançamento</button></div>
     <section className="section"><div className="table-wrap"><table className="table"><thead><tr><th>Data</th><th>Disciplina</th><th>Assunto</th><th>Origem</th><th>Tipo</th><th>Questões</th><th>Acertos</th><th>Erros</th><th>%</th><th>Observações</th><th>Ações</th></tr></thead><tbody>
-      {entries.length ? entries.map((entry: Entry) => <tr key={entry.id}><td>{new Date(`${entry.study_date}T12:00:00`).toLocaleDateString("pt-BR")}</td><td>{disciplines.find((x: Discipline)=>x.id===entry.discipline_id)?.name ?? entry.discipline_name_snapshot ?? "—"}</td><td>{subjects.find((x: Subject)=>x.id===entry.subject_id)?.name ?? entry.subject_name_snapshot ?? "—"}</td><td>{sources.find((x: Source)=>x.id===entry.source_id)?.name ?? entry.source_name_snapshot ?? "—"}</td><td>{types.find((x: QuestionType)=>x.id===entry.question_type_id)?.name ?? entry.question_type_name_snapshot ?? "—"}</td><td>{entry.questions}</td><td>{entry.correct}</td><td>{entry.questions-entry.correct}</td><td>{percent(entry.correct,entry.questions).toFixed(1)}%</td><td>{entry.notes ?? "—"}</td><td className="actions"><button className="btn small" onClick={() => {setEditing(entry);setOpen(true)}}>Editar</button><button className="btn small danger" onClick={() => remove(entry.id)}><Trash2 size={13}/></button></td></tr>) : <tr><td colSpan={11}><div className="empty">Nenhum lançamento encontrado.</div></td></tr>}
-    </tbody></table></div></section>
-    {open && <LaunchModal initial={editing} disciplines={disciplines} subjects={subjects} sources={sources} types={types} defaultSourceId={defaultSourceId} defaultQuestionTypeId={defaultQuestionTypeId} onClose={() => {setOpen(false);setEditing(null)}} onSave={save}/>}
-  </>;
-}
-
-function LaunchModal({initial,disciplines,subjects=[],sources=[],types=[],defaultSourceId="",defaultQuestionTypeId="",onClose,onSave}:any) {
+      {entries.length ? entries.map((entry: Entry) => <tr key={entry.id}><td>{new Date(`${entry.study_date}T12:00:00`).toLocaleDateString("pt-BR")}</td><td>{disciplines.find((x: Discipline)=>x.id===entry.discipline_id)?.name ?? entry.discipline_name_snapshot ?? "—"}</td><td>{subjects.find((x: Subject)=>x.id===entry.subject_id)?.name ?? entry.subject_name_snapshot ?? "—"}</td><td>{sources.find((x: Source)=>x.id===entry.source_id)?.name ?? entry.source_name_snapshot ?? "—"}</td><td>{types.find((x: QuestionType)=>x.id===entry.question_type_id)?.name ?? entry.question_type_name_snapshot ?? "—"}</td><td>{entry.questions}</td><td>{entry.correct}</td><td>{entry.questions-entry.correct}</td><td>{percent(entry.correct,entry.questions).toFixed(1)}%</td><td>{entry.notes ?? "—"}</td><td className="actions"><button className="btn small" onClick={() => {setEditing(entry);setOpen(true)}}>Editfunction LaunchModal({initial,disciplines,subjects=[],sources=[],types=[],defaultSourceId="",defaultQuestionTypeId="",onClose,onSave}:any) {
   const [value,setValue] = useState<any>({
-    study_date: initial?.study_date ?? localDate(), discipline_id: initial?.discipline_id ?? "", subject_id: initial?.subject_id ?? "",
-    source_id: initial?.source_id ?? defaultSourceId ?? "", question_type_id: initial?.question_type_id ?? defaultQuestionTypeId ?? "", questions: initial?.questions ?? "", correct: initial?.correct ?? "", notes: initial?.notes ?? "",
+    study_date: initial?.study_date ?? localDate(),
+    discipline_id: initial?.discipline_id ?? "",
+    source_id: initial?.source_id ?? defaultSourceId ?? "",
+    question_type_id: initial?.question_type_id ?? defaultQuestionTypeId ?? "",
+    notes: initial?.notes ?? "",
+    rows: [{
+      subject_id: initial?.subject_id ?? "",
+      questions: initial?.questions ?? "",
+      correct: initial?.correct ?? "",
+    }],
   });
+
   const availableSubjects = subjects.filter((s: Subject) => String(s.discipline_id ?? "") === String(value.discipline_id ?? ""));
-  const errors = Math.max(0, Number(value.questions || 0) - Number(value.correct || 0));
+
+  const updateRow = (index: number, patch: any) => {
+    setValue((current: any) => ({
+      ...current,
+      rows: current.rows.map((row: any, rowIndex: number) => rowIndex === index ? {...row, ...patch} : row),
+    }));
+  };
+
+  const addRow = () => {
+    setValue((current: any) => ({
+      ...current,
+      rows: [...current.rows, {subject_id: "", questions: "", correct: ""}],
+    }));
+  };
+
+  const removeRow = (index: number) => {
+    setValue((current: any) => ({
+      ...current,
+      rows: current.rows.length > 1 ? current.rows.filter((_: any, rowIndex: number) => rowIndex !== index) : current.rows,
+    }));
+  };
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    const questions = Number(value.questions);
-    const correct = Number(value.correct);
-    if (!value.discipline_id || !value.subject_id) return window.alert("Selecione disciplina e assunto.");
-    if (!Number.isFinite(questions) || questions < 1 || !Number.isFinite(correct) || correct < 0 || correct > questions) return window.alert("Informe questões maiores que zero e acertos entre 0 e o total.");
+    if (!value.discipline_id) return window.alert("Selecione uma disciplina.");
+
+    const selectedSubjects = new Set<string>();
+    for (const row of value.rows) {
+      if (!row.subject_id) return window.alert("Selecione o assunto de todas as linhas.");
+      if (selectedSubjects.has(String(row.subject_id))) return window.alert("Não repita o mesmo assunto no mesmo lançamento.");
+      selectedSubjects.add(String(row.subject_id));
+
+      const questions = Number(row.questions);
+      const correct = Number(row.correct);
+      if (!Number.isFinite(questions) || questions < 1 || !Number.isFinite(correct) || correct < 0 || correct > questions) {
+        return window.alert("Informe, em cada assunto, questões maiores que zero e acertos entre 0 e o total.");
+      }
+    }
+
     onSave(value);
   };
 
-  return <div className="modal-backdrop"><div className="modal"><div className="toolbar"><h2>{initial ? "Editar lançamento" : "Novo lançamento"}</h2><button className="btn small" onClick={onClose}>Fechar</button></div><form onSubmit={submit}>
+  return <div className="modal-backdrop"><div className="modal"><div className="toolbar"><div><h2>{initial ? "Editar lançamento" : "Novo lançamento"}</h2>{!initial && <p className="subtitle">Registre um ou vários assuntos da mesma disciplina de uma só vez.</p>}</div><button className="btn small" onClick={onClose}>Fechar</button></div><form onSubmit={submit}>
     <div className="form-grid">
       <Field label="Data"><input type="date" value={value.study_date} onChange={(e)=>setValue({...value,study_date:e.target.value})}/></Field>
-      <Field label="Disciplina"><select required value={value.discipline_id} onChange={(e)=>setValue({...value,discipline_id:e.target.value,subject_id:""})}><option value="">Selecione</option>{disciplines.map((x: Discipline)=><option key={x.id} value={x.id}>{x.name}</option>)}</select></Field>
-      <Field label="Assunto"><select required value={value.subject_id} onChange={(e)=>setValue({...value,subject_id:e.target.value})}><option value="">Selecione</option>{availableSubjects.map((x: Subject)=><option key={x.id} value={x.id}>{x.name}</option>)}</select></Field>
+      <Field label="Disciplina"><select required value={value.discipline_id} onChange={(e)=>setValue({...value,discipline_id:e.target.value,rows:value.rows.map((row:any)=>({...row,subject_id:""}))})}><option value="">Selecione</option>{disciplines.map((x: Discipline)=><option key={x.id} value={x.id}>{x.name}</option>)}</select></Field>
       <Field label="Banca / origem"><select value={value.source_id} onChange={(e)=>setValue({...value,source_id:e.target.value})}><option value="">Nenhuma</option>{sources.map((x: Source)=><option key={x.id} value={x.id}>{x.name}</option>)}</select></Field>
       <Field label="Tipo"><select value={value.question_type_id} onChange={(e)=>setValue({...value,question_type_id:e.target.value})}><option value="">Nenhum</option>{types.map((x: QuestionType)=><option key={x.id} value={x.id}>{x.name}</option>)}</select></Field>
-      <Field label="Questões"><input required min="1" type="number" value={value.questions} onChange={(e)=>setValue({...value,questions:e.target.value})}/></Field>
-      <Field label="Acertos"><input required min="0" type="number" value={value.correct} onChange={(e)=>setValue({...value,correct:e.target.value})}/></Field>
-      <Field label="Erros calculados"><input readOnly value={errors}/></Field>
-      <Field label="Aproveitamento"><input readOnly value={value.questions ? `${percent(Number(value.correct),Number(value.questions)).toFixed(1)}%` : "—"}/></Field>
+
+      <div className="field wide">
+        <label>Assuntos e desempenho</label>
+        {!initial && <small style={{display:"block",marginBottom:"8px",opacity:.7}}>Escolha um ou vários assuntos. Cada linha vira um lançamento separado e mantém suas estatísticas individuais.</small>}
+        <div className="table-wrap">
+          <table className="table" style={{minWidth:"680px"}}>
+            <thead><tr><th>Assunto</th><th>Questões</th><th>Acertos</th><th>Erros</th><th>%</th><th></th></tr></thead>
+            <tbody>
+              {value.rows.map((row:any,index:number) => {
+                const questions = Number(row.questions || 0);
+                const correct = Number(row.correct || 0);
+                const errors = Math.max(0, questions - correct);
+                const accuracy = questions > 0 ? percent(correct, questions).toFixed(1) + "%" : "—";
+                return <tr key={index}>
+                  <td><select required value={row.subject_id} onChange={(e)=>updateRow(index,{subject_id:e.target.value})} style={{minWidth:"240px"}}><option value="">Selecione</option>{availableSubjects.map((x: Subject)=><option key={x.id} value={x.id}>{x.name}</option>)}</select></td>
+                  <td><input required min="1" type="number" value={row.questions} onChange={(e)=>updateRow(index,{questions:e.target.value})} style={{width:"85px"}}/></td>
+                  <td><input required min="0" type="number" value={row.correct} onChange={(e)=>updateRow(index,{correct:e.target.value})} style={{width:"85px"}}/></td>
+                  <td><input readOnly value={errors} style={{width:"70px"}}/></td>
+                  <td><input readOnly value={accuracy} style={{width:"70px"}}/></td>
+                  <td><button type="button" className="btn small danger" onClick={()=>removeRow(index)} disabled={value.rows.length===1} title={value.rows.length===1 ? "Mantenha pelo menos um assunto" : "Remover assunto"}><Trash2 size={13}/></button></td>
+                </tr>;
+              })}
+            </tbody>
+          </table>
+        </div>
+        {!initial && <button type="button" className="btn small" onClick={addRow} style={{marginTop:"10px"}}><Plus size={14}/> Adicionar assunto</button>}
+      </div>
+
+      <div className="field wide"><label>Observações</label><textarea rows={4} value={value.notes} onChange={(e)=>setValue({...value,notes:e.target.value})}/></div>
+    </div>
+    <div className="modal-actions"><button type="button" className="btn" onClick={onClose}>Cancelar</button><button className="btn primary">{initial ? "Salvar lançamento" : "Salvar lançamento"}</button></div>
+  </form></div></div>;
+}ld label="Aproveitamento"><input readOnly value={value.questions ? `${percent(Number(value.correct),Number(value.questions)).toFixed(1)}%` : "—"}/></Field>
       <div className="field wide"><label>Observações</label><textarea rows={4} value={value.notes} onChange={(e)=>setValue({...value,notes:e.target.value})}/></div>
     </div>
     <div className="modal-actions"><button type="button" className="btn" onClick={onClose}>Cancelar</button><button className="btn primary">Salvar lançamento</button></div>
