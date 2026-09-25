@@ -425,7 +425,7 @@ function App() {
       else setPlannerSidebarCollapsed(localSidebarCollapsed);
       setDefaultSourceId(prefs.defaultSourceId ?? "");
       setDefaultQuestionTypeId(prefs.defaultQuestionTypeId ?? "");
-      setPerformanceNotifications(Array.isArray(prefs.performanceNotifications) ? prefs.performanceNotifications.slice(0, 20) : []);
+      setPerformanceNotifications(Array.isArray(prefs.performanceNotifications) ? prefs.performanceNotifications.slice(0, 5) : []);
       const loadedStudyStreak = prefs.studyStreak ?? { count: 0, lastQualifiedAt: "" };
       studyStreakRef.current = loadedStudyStreak;
       setStudyStreak(loadedStudyStreak);
@@ -469,7 +469,7 @@ function App() {
       if (typeof prefs.plannerSidebarCollapsed === "boolean") setPlannerSidebarCollapsed(prefs.plannerSidebarCollapsed);
       setDefaultSourceId(prefs.defaultSourceId ?? "");
       setDefaultQuestionTypeId(prefs.defaultQuestionTypeId ?? "");
-      setPerformanceNotifications(Array.isArray(prefs.performanceNotifications) ? prefs.performanceNotifications.slice(0, 20) : []);
+      setPerformanceNotifications(Array.isArray(prefs.performanceNotifications) ? prefs.performanceNotifications.slice(0, 5) : []);
 
       const syncedStudyStreak = prefs.studyStreak ?? { count: 0, lastQualifiedAt: "" };
       studyStreakRef.current = syncedStudyStreak;
@@ -517,7 +517,7 @@ function App() {
         if(typeof prefs.plannerSidebarCollapsed==="boolean") setPlannerSidebarCollapsed(prefs.plannerSidebarCollapsed);
         setDefaultSourceId(prefs.defaultSourceId ?? "");
         setDefaultQuestionTypeId(prefs.defaultQuestionTypeId ?? "");
-        setPerformanceNotifications(Array.isArray(prefs.performanceNotifications) ? prefs.performanceNotifications.slice(0, 20) : []);
+        setPerformanceNotifications(Array.isArray(prefs.performanceNotifications) ? prefs.performanceNotifications.slice(0, 5) : []);
         const syncedStudyStreak = prefs.studyStreak ?? { count: 0, lastQualifiedAt: "" };
         studyStreakRef.current = syncedStudyStreak;
         setStudyStreak(syncedStudyStreak);
@@ -546,7 +546,7 @@ function App() {
       contextualNotifications: contextualNotificationStateRef.current.notifications,
       contextualNotificationRotation: contextualNotificationStateRef.current.rotation,
       contextualNotificationSentPeriod: contextualNotificationStateRef.current.sentPeriod,
-      performanceNotifications: performanceNotifications.slice(0, 20),
+      performanceNotifications: performanceNotifications.slice(0, 5),
       defaultSourceId,
       defaultQuestionTypeId,
       studyStreak,
@@ -1512,7 +1512,7 @@ function App() {
     const prefs = (state?.preferences ?? {}) as UserCloudPreferences;
     setPerformanceNotifications(
       Array.isArray(prefs.performanceNotifications)
-        ? prefs.performanceNotifications.slice(0, 20)
+        ? prefs.performanceNotifications.slice(0, 5)
         : []
     );
   };
@@ -1889,8 +1889,20 @@ function App() {
     ? new Date(latestQuestionEntry.updated_at ?? latestQuestionEntry.created_at ?? latestQuestionEntry.study_date).getTime()
     : 0;
   const inactiveFor24Hours = Boolean(latestQuestionTimestamp && Date.now() - latestQuestionTimestamp >= 24 * 60 * 60 * 1000);
+  // O painel trabalha com uma fila única: no máximo 5 notificações, sempre da mais nova para a mais antiga.
+  // As fontes continuam separadas para preservar leitura/sincronização, mas a apresentação segue uma única hierarquia temporal.
+  const notificationFeed = [
+    ...contextualNotifications.map((item) => ({ kind: "contextual" as const, id: item.id, created_at: item.created_at, item })),
+    ...adminStudentNotifications.map((item) => ({ kind: "admin" as const, id: item.id, created_at: item.created_at, item })),
+    ...performanceNotifications.map((item) => ({ kind: "performance" as const, id: item.id, created_at: item.created_at, item })),
+  ]
+    .filter((item) => Number.isFinite(new Date(item.created_at).getTime()))
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, 5);
+
+  const unreadNotificationCount = notificationFeed.filter((entry) => !entry.item.read_at).length;
   const unreadPerformanceCount = performanceNotifications.filter((item) => !item.read_at).length;
-  const notificationCount = unreadPerformanceCount + (inactiveFor24Hours && !inactivityNotificationRead ? 1 : 0) + (isLastDayOfMonth() ? 2 : 0) + (lucasDailyNotification ? 1 : 0) + adminStudentNotifications.filter((item) => !item.read_at).length + contextualNotifications.filter((item) => !item.read_at).length;
+  const notificationCount = unreadNotificationCount + (inactiveFor24Hours && !inactivityNotificationRead ? 1 : 0) + (isLastDayOfMonth() ? 2 : 0) + (lucasDailyNotification ? 1 : 0);
   const displayedStudyStreak = studyStreak.lastQualifiedAt && Date.now() - Date.parse(studyStreak.lastQualifiedAt) > 24 * 60 * 60 * 1000 ? 0 : studyStreak.count;
 
   useEffect(() => {
@@ -2082,7 +2094,7 @@ function App() {
             )
           )
           .slice(0, 20);
-        setPerformanceNotifications(next);
+        setPerformanceNotifications(next.slice(0, 5));
         await savePerformanceNotificationsFallback(next);
         notifyBrowser(title, message, `mcr-performance-${notificationType}`);
         void sendPushNotification({ title, body: message, tag: `mcr-performance-${notificationType}` });
@@ -2091,7 +2103,7 @@ function App() {
       }
 
       const insertedNotification = inserted as PerformanceNotification;
-      setPerformanceNotifications((current) => [insertedNotification, ...current].slice(0, 20));
+      setPerformanceNotifications((current) => [insertedNotification, ...current].slice(0, 5));
       notifyBrowser(title, message, `mcr-performance-${notificationType}`);
       void sendPushNotification({ title, body: message, tag: `mcr-performance-${notificationType}` });
       notify(message);
@@ -2139,7 +2151,7 @@ function App() {
     }
 
     const next = performanceNotifications.map((item) => item.id === id ? { ...item, read_at: readAt } : item);
-    setPerformanceNotifications(next);
+    setPerformanceNotifications(next.slice(0, 5));
     await savePerformanceNotificationsFallback(next);
   };
 
@@ -2157,7 +2169,7 @@ function App() {
     }
 
     const next = performanceNotifications.map((item) => item.read_at ? item : { ...item, read_at: readAt });
-    setPerformanceNotifications(next);
+    setPerformanceNotifications(next.slice(0, 5));
     await savePerformanceNotificationsFallback(next);
   };
 
@@ -2187,16 +2199,31 @@ function App() {
                   <button onClick={() => setNotificationOpen(false)} aria-label="Fechar"><X size={14}/></button>
                 </div>
               </div>
-              {contextualNotifications.slice(0, 5).map((n) => <div key={n.id} className={"monthly-notification performance-notification " + (n.read_at ? "read" : "unread")}>
-                <span className="notification-icon performance-exceptional"><Bell size={15}/></span>
-                <span><strong>{n.title}</strong><small>{n.message}</small><small className="notification-date">{new Date(n.created_at).toLocaleString("pt-BR")} • {n.read_at ? "Lida" : "Não lida"}</small></span>
-                {!n.read_at && <button type="button" className="notification-mark-all" onClick={() => void markContextualNotificationRead(n.id)}>Marcar como lida</button>}
-              </div>)}
-              {adminStudentNotifications.slice(0, 5).map((n) => <div key={n.id} className={"monthly-notification performance-notification " + (n.read_at ? "read" : "unread")}>
-                <span className="notification-icon performance-exceptional"><Bell size={15}/></span>
-                <span><strong>{n.title}</strong><small>{n.message}</small><small className="notification-date">{new Date(n.created_at).toLocaleString("pt-BR")} • {n.read_at ? "Lida" : "Não lida"}</small></span>
-                {!n.read_at && <button type="button" className="notification-mark-all" onClick={() => void markAdminStudentNotificationRead(n.id)}>Marcar como lida</button>}
-              </div>)}
+              {notificationFeed.map((entry) => {
+                if (entry.kind === "contextual") {
+                  const n = entry.item;
+                  return <div key={"contextual-" + n.id} className={"monthly-notification performance-notification " + (n.read_at ? "read" : "unread")}>
+                    <span className="notification-icon performance-exceptional"><Bell size={15}/></span>
+                    <span><strong>{n.title}</strong><small>{n.message}</small><small className="notification-date">{new Date(n.created_at).toLocaleString("pt-BR")} • {n.read_at ? "Lida" : "Não lida"}</small></span>
+                    {!n.read_at && <button type="button" className="notification-mark-all" onClick={() => void markContextualNotificationRead(n.id)}>Marcar como lida</button>}
+                  </div>;
+                }
+                if (entry.kind === "admin") {
+                  const n = entry.item;
+                  return <div key={"admin-" + n.id} className={"monthly-notification performance-notification " + (n.read_at ? "read" : "unread")}>
+                    <span className="notification-icon performance-exceptional"><Bell size={15}/></span>
+                    <span><strong>{n.title}</strong><small>{n.message}</small><small className="notification-date">{new Date(n.created_at).toLocaleString("pt-BR")} • {n.read_at ? "Lida" : "Não lida"}</small></span>
+                    {!n.read_at && <button type="button" className="notification-mark-all" onClick={() => void markAdminStudentNotificationRead(n.id)}>Marcar como lida</button>}
+                  </div>;
+                }
+                const item = entry.item;
+                return <button key={"performance-" + item.id} className={"monthly-notification performance-notification " + (item.read_at ? "read" : "unread")} onClick={() => markPerformanceNotificationRead(item.id)}>
+                  <span className={"notification-icon performance-" + item.notification_type}>
+                    {item.notification_type === "drop" || item.notification_type === "drop_severe" || item.notification_type === "attention" ? <AlertTriangle size={15}/> : item.notification_type === "record" ? <Trophy size={15}/> : item.title.startsWith("⏸️") ? <PauseCircle size={15}/> : item.notification_type === "evolution" ? <TrendingUp size={15}/> : item.notification_type === "recovery" ? <Sparkles size={15}/> : <Target size={15}/>}
+                  </span>
+                  <span><strong>{personalizeNotificationTitle(item.title, studentName)}</strong><small>{personalizeNotificationText(item.message, studentName)}</small><small className="notification-date">{new Date(item.created_at).toLocaleString("pt-BR")} • {item.read_at ? "Lida" : "Não lida"}</small></span>
+                </button>;
+              })}
               {lucasDailyNotification && <button className="monthly-notification performance-notification unread" onClick={() => setLucasDailyNotification(null)}>
                 <span className="notification-icon performance-exceptional"><Sparkles size={15}/></span>
                 <span><strong>💌 Mensagem do Lucas</strong><small>{lucasDailyNotification.message}</small><small className="notification-date">Hoje</small></span>
@@ -2205,15 +2232,9 @@ function App() {
                 <span className="notification-icon performance-attention"><AlertTriangle size={15}/></span>
                 <span><strong>{studentName ? studentName + ", já faz 24 horas sem lançar questões." : "Já faz 24 horas sem lançar questões."}</strong><small>Registre suas questões para manter seu acompanhamento de desempenho atualizado.</small><small className="notification-date">Agora</small></span>
               </button>}
-              {performanceNotifications.map((item) => <button key={item.id} className={"monthly-notification performance-notification " + (item.read_at ? "read" : "unread")} onClick={() => markPerformanceNotificationRead(item.id)}>
-                <span className={"notification-icon performance-" + item.notification_type}>
-                  {item.notification_type === "drop" || item.notification_type === "drop_severe" || item.notification_type === "attention" ? <AlertTriangle size={15}/> : item.notification_type === "record" ? <Trophy size={15}/> : item.title.startsWith("⏸️") ? <PauseCircle size={15}/> : item.notification_type === "evolution" ? <TrendingUp size={15}/> : item.notification_type === "recovery" ? <Sparkles size={15}/> : <Target size={15}/>}
-                </span>
-                <span><strong>{personalizeNotificationTitle(item.title, studentName)}</strong><small>{personalizeNotificationText(item.message, studentName)}</small><small className="notification-date">{new Date(item.created_at).toLocaleDateString("pt-BR")}</small></span>
-              </button>)}
               {isLastDayOfMonth() && <button className="monthly-notification" onClick={() => exportMonthlyPdf()}><span className="notification-icon"><FileDown size={15}/></span><span><strong>{studentName ? studentName + ", seu rendimento mensal está pronto." : "Seu rendimento mensal está pronto"}</strong><small>{studentName ? "Exporte seu resumo mensal em PDF." : "Exporte o resumo mensal em PDF."}</small></span></button>}
               {isLastDayOfMonth() && <button className="monthly-notification" onClick={() => exportMonthlyBackup()}><span className="notification-icon"><Upload size={15}/></span><span><strong>{studentName ? studentName + ", seu backup mensal está disponível." : "Backup mensal disponível"}</strong><small>{studentName ? "Faça o backup dos seus dados dos últimos 30 dias." : "Faça o backup dos dados dos últimos 30 dias."}</small></span></button>}
-              {!contextualNotifications.length && !performanceNotifications.length && !adminStudentNotifications.length && !lucasDailyNotification && !inactiveFor24Hours && !isLastDayOfMonth() && <div className="notification-empty">{studentName ? studentName + ", nenhuma observação importante por enquanto. O MCR só aparece quando identifica algo relevante." : "Nenhuma observação importante por enquanto. O MCR só aparece quando identifica algo relevante."}</div>}
+              {!notificationFeed.length && !lucasDailyNotification && !inactiveFor24Hours && !isLastDayOfMonth() && <div className="notification-empty">{studentName ? studentName + ", nenhuma observação importante por enquanto. O MCR só aparece quando identifica algo relevante." : "Nenhuma observação importante por enquanto. O MCR só aparece quando identifica algo relevante."}</div>}
             </div>}
           </div>
           <span className="user">{session.user.email}</span>
