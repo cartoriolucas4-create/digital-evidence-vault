@@ -115,6 +115,10 @@ const monthBounds = (date = new Date()) => {
 const isLastDayOfMonth = (date = new Date()) => date.getDate() === new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
 const monthLabel = (date = new Date()) => date.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
 const uid = () => globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+const newestFirst = <T extends { created_at: string }>(items: T[], limit?: number) => {
+  const sorted = [...items].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+  return typeof limit === "number" ? sorted.slice(0, limit) : sorted;
+};
 const MCR_PUSH_FUNCTION_URL = "https://gojjlppvdzijujrqsqww.supabase.co/functions/v1/mcr-push-reminders";
 const urlBase64ToUint8Array = (base64String: string) => {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -431,7 +435,9 @@ function App() {
       setStudyStreak(loadedStudyStreak);
 
       const contextualState: ContextualNotificationState = {
-        notifications: Array.isArray(prefs.contextualNotifications) ? prefs.contextualNotifications : [],
+        notifications: Array.isArray(prefs.contextualNotifications)
+          ? newestFirst(prefs.contextualNotifications)
+          : [],
         rotation: prefs.contextualNotificationRotation ?? {},
         sentPeriod: prefs.contextualNotificationSentPeriod ?? {},
       };
@@ -476,7 +482,9 @@ function App() {
       setStudyStreak(syncedStudyStreak);
 
       const contextualState: ContextualNotificationState = {
-        notifications: Array.isArray(prefs.contextualNotifications) ? prefs.contextualNotifications : [],
+        notifications: Array.isArray(prefs.contextualNotifications)
+          ? newestFirst(prefs.contextualNotifications)
+          : [],
         rotation: prefs.contextualNotificationRotation ?? {},
         sentPeriod: prefs.contextualNotificationSentPeriod ?? {},
       };
@@ -522,7 +530,9 @@ function App() {
         studyStreakRef.current = syncedStudyStreak;
         setStudyStreak(syncedStudyStreak);
         const contextualState: ContextualNotificationState = {
-          notifications: Array.isArray(prefs.contextualNotifications) ? prefs.contextualNotifications : [],
+          notifications: Array.isArray(prefs.contextualNotifications)
+          ? newestFirst(prefs.contextualNotifications)
+          : [],
           rotation: prefs.contextualNotificationRotation ?? {},
           sentPeriod: prefs.contextualNotificationSentPeriod ?? {},
         };
@@ -1512,7 +1522,7 @@ function App() {
     const prefs = (state?.preferences ?? {}) as UserCloudPreferences;
     setPerformanceNotifications(
       Array.isArray(prefs.performanceNotifications)
-        ? prefs.performanceNotifications.slice(0, 5)
+        ? newestFirst(prefs.performanceNotifications, 5)
         : []
     );
   };
