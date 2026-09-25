@@ -425,6 +425,7 @@ function App() {
       else setPlannerSidebarCollapsed(localSidebarCollapsed);
       setDefaultSourceId(prefs.defaultSourceId ?? "");
       setDefaultQuestionTypeId(prefs.defaultQuestionTypeId ?? "");
+      setPerformanceNotifications(Array.isArray(prefs.performanceNotifications) ? prefs.performanceNotifications.slice(0, 20) : []);
       const loadedStudyStreak = prefs.studyStreak ?? { count: 0, lastQualifiedAt: "" };
       studyStreakRef.current = loadedStudyStreak;
       setStudyStreak(loadedStudyStreak);
@@ -468,6 +469,7 @@ function App() {
       if (typeof prefs.plannerSidebarCollapsed === "boolean") setPlannerSidebarCollapsed(prefs.plannerSidebarCollapsed);
       setDefaultSourceId(prefs.defaultSourceId ?? "");
       setDefaultQuestionTypeId(prefs.defaultQuestionTypeId ?? "");
+      setPerformanceNotifications(Array.isArray(prefs.performanceNotifications) ? prefs.performanceNotifications.slice(0, 20) : []);
 
       const syncedStudyStreak = prefs.studyStreak ?? { count: 0, lastQualifiedAt: "" };
       studyStreakRef.current = syncedStudyStreak;
@@ -515,6 +517,7 @@ function App() {
         if(typeof prefs.plannerSidebarCollapsed==="boolean") setPlannerSidebarCollapsed(prefs.plannerSidebarCollapsed);
         setDefaultSourceId(prefs.defaultSourceId ?? "");
         setDefaultQuestionTypeId(prefs.defaultQuestionTypeId ?? "");
+        setPerformanceNotifications(Array.isArray(prefs.performanceNotifications) ? prefs.performanceNotifications.slice(0, 20) : []);
         const syncedStudyStreak = prefs.studyStreak ?? { count: 0, lastQualifiedAt: "" };
         studyStreakRef.current = syncedStudyStreak;
         setStudyStreak(syncedStudyStreak);
@@ -543,6 +546,7 @@ function App() {
       contextualNotifications: contextualNotificationStateRef.current.notifications,
       contextualNotificationRotation: contextualNotificationStateRef.current.rotation,
       contextualNotificationSentPeriod: contextualNotificationStateRef.current.sentPeriod,
+      performanceNotifications: performanceNotifications.slice(0, 20),
       defaultSourceId,
       defaultQuestionTypeId,
       studyStreak,
@@ -560,7 +564,7 @@ function App() {
       }
     },150);
     return()=>window.clearTimeout(timer);
-  }, [theme, buttonColor, plannerDefaultColor, plannerCompletedColor, plannerSidebarCollapsed, defaultSourceId, defaultQuestionTypeId, studyStreak, session?.user?.id, cloudStateReady]);
+  }, [theme, buttonColor, plannerDefaultColor, plannerCompletedColor, plannerSidebarCollapsed, performanceNotifications, defaultSourceId, defaultQuestionTypeId, studyStreak, session?.user?.id, cloudStateReady]);
 
   useEffect(() => {
     if (session?.user?.id && cloudStateReady) {
@@ -1225,9 +1229,8 @@ function App() {
             .slice(0, 3)
             .forEach((item) => {
               notify(item.message);
-              if ("Notification" in window && Notification.permission === "granted") {
-                try { new Notification(item.title, { body: item.message }); } catch {}
-              }
+              notifyBrowser(item.title, item.message, "mcr-admin");
+              void sendPushNotification({ title: item.title, body: item.message, tag: "mcr-admin" });
             });
         }
         // Keep only the 5 newest messages in the compact notification center.
@@ -1351,11 +1354,8 @@ function App() {
       setContextualNotifications(nextState.notifications.slice(0, 5));
       notify(notification.message);
 
-      if ("Notification" in window && Notification.permission === "granted") {
-        try {
-          new Notification(notification.title, { body: notification.message });
-        } catch {}
-      }
+      notifyBrowser(notification.title, notification.message, "mcr-welcome");
+      void sendPushNotification({ title: notification.title, body: notification.message, tag: "mcr-welcome" });
 
       // Persiste no Supabase para não enviar novamente.
       await saveContextualNotificationState(nextState);
@@ -1529,9 +1529,17 @@ function App() {
       ...((current?.preferences ?? {}) as Record<string, unknown>),
       performanceNotifications: notifications.slice(0, 20),
     };
-    await client
+    const { error } = await client
       .from("study_user_state")
       .upsert({ user_id: session.user.id, preferences }, { onConflict: "user_id" });
+    if (!error) {
+      cloudPreferencesRemoteJson.current = JSON.stringify(preferences);
+      void preferencesSyncChannel.current?.send({
+        type: "broadcast",
+        event: "preferences_updated",
+        payload: { preferences },
+      });
+    }
   };
 
   const loadEntries = async () => {
@@ -1783,6 +1791,41 @@ function App() {
     window.setTimeout(() => setToast(""), 2200);
   };
 
+  const notifyBrowser = (title: string, body: string, tag?: string) => {
+    if (typeof window === "undefined" || !("Notification" in window) || Notification.permission !== "granted") return;
+    try {
+      new Notification(title, { body, tag: tag ?? "mcr-notification" });
+    } catch {
+      // Browser notification failures must never block a study launch.
+    }
+  };
+
+  const sendPushNotification = async (payload: { title: string; body: string; tag?: string }) => {
+    if (!session?.user?.id || typeof window === "undefined" || !("Notification" in window) || Notification.permission !== "granted") return;
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) return;
+      await fetch(MCR_PUSH_FUNCTION_URL, {
+        method: "POST",
+        cache: "no-store",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          type: "notification",
+          title: payload.title,
+          body: payload.body,
+          tag: payload.tag ?? "mcr-performance",
+          url: window.location.href,
+        }),
+      });
+    } catch {
+      // In-app notifications remain the source of truth if Web Push is unavailable.
+    }
+  };
+
   const updateStudyStreakFromQuestionLaunch = async () => {
     if (!session?.user?.id || !cloudStateReady) return;
 
@@ -1866,17 +1909,15 @@ function App() {
       const client = supabase as any;
       const { data: history, error } = await client
         .from("study_entries")
-        .select("id, study_date, questions, correct, subject_id, discipline_id")
+        .select("id, study_date, questions, correct, subject_id, discipline_id, created_at")
         .eq("subject_id", entry.subject_id)
         .neq("id", entry.id)
         .order("study_date", { ascending: false })
         .order("created_at", { ascending: false })
-         .limit(50);
+        .limit(50);
       if (error) return;
 
       const previous = (history ?? []) as Entry[];
-      if (previous.length < 3) return;
-
       const currentAccuracy = percent(Number(entry.correct || 0), Number(entry.questions || 0));
       const weighted = (items: Entry[]) => {
         const questions = items.reduce((sum, item) => sum + Number(item.questions || 0), 0);
@@ -1886,19 +1927,32 @@ function App() {
       const baseline = weighted(previous);
       const recent3 = weighted(previous.slice(0, 3));
       const prior3 = weighted(previous.slice(3, 6));
-      const priorBelowTarget = previous.slice(0, 3).every((item) => percent(Number(item.correct || 0), Number(item.questions || 0)) < targetAccuracy);
-      const previousBest = Math.max(...previous.map((item) => percent(Number(item.correct || 0), Number(item.questions || 0))));
-       const allHistory = [entry, ...previous].sort((a, b) => new Date(b.study_date).getTime() - new Date(a.study_date).getTime());
-       const fourWeeksAgo = Date.now() - 28 * 24 * 60 * 60 * 1000;
-       const stagnationHistory = allHistory.filter((item) => new Date(item.study_date).getTime() >= fourWeeksAgo && new Date(item.study_date).getTime() <= Date.now());
-       const stagnationAccuracies = stagnationHistory.map((item) => percent(Number(item.correct || 0), Number(item.questions || 0)));
-       const stagnationSpan = stagnationHistory.length >= 2
-         ? new Date(stagnationHistory[0].study_date).getTime() - new Date(stagnationHistory[stagnationHistory.length - 1].study_date).getTime()
-         : 0;
-       const stagnatedForFourWeeks =
-         stagnationHistory.length >= 4 &&
-         stagnationSpan >= 28 * 24 * 60 * 60 * 1000 &&
-         Math.max(...stagnationAccuracies) - Math.min(...stagnationAccuracies) <= 1;
+      const priorBelowTarget = previous.length > 0 &&
+        previous.slice(0, 3).every((item) => percent(Number(item.correct || 0), Number(item.questions || 0)) < targetAccuracy);
+      const previousBest = previous.length > 0
+        ? Math.max(...previous.map((item) => percent(Number(item.correct || 0), Number(item.questions || 0))))
+        : 0;
+
+      const allHistory = [entry, ...previous].sort((a, b) =>
+        new Date(b.study_date).getTime() - new Date(a.study_date).getTime()
+      );
+      const fourWeeksAgo = Date.now() - 28 * 24 * 60 * 60 * 1000;
+      const stagnationHistory = allHistory.filter((item) => {
+        const time = new Date(item.study_date).getTime();
+        return time >= fourWeeksAgo && time <= Date.now();
+      });
+      const stagnationAccuracies = stagnationHistory.map((item) =>
+        percent(Number(item.correct || 0), Number(item.questions || 0))
+      );
+      const stagnationSpan = stagnationHistory.length >= 2
+        ? new Date(stagnationHistory[0].study_date).getTime() -
+          new Date(stagnationHistory[stagnationHistory.length - 1].study_date).getTime()
+        : 0;
+      const stagnatedForFourWeeks =
+        stagnationHistory.length >= 4 &&
+        stagnationSpan >= 28 * 24 * 60 * 60 * 1000 &&
+        Math.max(...stagnationAccuracies) - Math.min(...stagnationAccuracies) <= 1;
+
       const subject = subjects.find((item) => item.id === entry.subject_id);
       const discipline = disciplines.find((item) => item.id === entry.discipline_id);
       const subjectName = subject?.name ?? entry.subject_name_snapshot ?? "este assunto";
@@ -1908,15 +1962,19 @@ function App() {
       let title = "";
       let message = "";
 
-      if (previous.length === 0 && currentAccuracy >= targetAccuracy) {
-        notificationType = "record";
-        title = "🏆 Excelente começo em " + subjectName;
-        message = "Parabéns! Você alcançou " + currentAccuracy.toFixed(0) + "% logo no primeiro lançamento desse assunto. Continue nesse ritmo.";
+      if (previous.length === 0) {
+        if (currentAccuracy >= targetAccuracy) {
+          notificationType = "record";
+          title = "🏆 Excelente começo em " + subjectName;
+          message = "Parabéns! Você alcançou " + currentAccuracy.toFixed(0) + "% logo no primeiro lançamento desse assunto. Continue nesse ritmo.";
+        } else {
+          return;
+        }
       } else if (stagnatedForFourWeeks) {
-         notificationType = "attention";
-         title = "⏸️ Desempenho estagnado em " + subjectName;
-         message = "Seu aproveitamento está praticamente no mesmo nível há mais de 4 semanas (" + Math.min(...stagnationAccuracies).toFixed(0) + "%–" + Math.max(...stagnationAccuracies).toFixed(0) + "%). Vale revisar a estratégia de estudo desse assunto.";
-       } else if (currentAccuracy <= baseline - 25) {
+        notificationType = "attention";
+        title = "⏸️ Desempenho estagnado em " + subjectName;
+        message = "Seu aproveitamento está praticamente no mesmo nível há mais de 4 semanas (" + Math.min(...stagnationAccuracies).toFixed(0) + "%–" + Math.max(...stagnationAccuracies).toFixed(0) + "%). Vale revisar a estratégia de estudo desse assunto.";
+      } else if (currentAccuracy <= baseline - 25) {
         notificationType = "drop_severe";
         title = "⚠️ Queda forte detectada";
         message = "Seu resultado em " + subjectName + " foi " + currentAccuracy.toFixed(0) + "%, enquanto seu padrão recente está em " + baseline.toFixed(0) + "%. Pode ser um bom momento para revisar esse assunto.";
@@ -1924,7 +1982,11 @@ function App() {
         notificationType = "drop";
         title = "⚠️ Atenção em " + subjectName;
         message = "Este lançamento ficou significativamente abaixo do seu padrão recente: " + currentAccuracy.toFixed(0) + "% agora contra " + baseline.toFixed(0) + "% de padrão.";
-      } else if (previous.length >= 4 && previous.slice(0, 4).every((item) => percent(Number(item.correct || 0), Number(item.questions || 0)) < targetAccuracy) && currentAccuracy < targetAccuracy) {
+      } else if (
+        previous.length >= 4 &&
+        previous.slice(0, 4).every((item) => percent(Number(item.correct || 0), Number(item.questions || 0)) < targetAccuracy) &&
+        currentAccuracy < targetAccuracy
+      ) {
         notificationType = "attention";
         title = "📚 " + subjectName + " merece atenção";
         message = "Seu desempenho vem ficando abaixo da sua meta nos últimos lançamentos. Priorize uma revisão antes de continuar avançando.";
@@ -1948,7 +2010,15 @@ function App() {
 
       if (!notificationType) return;
 
-      const sevenDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+      const sevenDaysAgoMs = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      const sevenDaysAgo = new Date(sevenDaysAgoMs).toISOString();
+      const { data: fallbackState } = await client
+        .from("study_user_state")
+        .select("preferences")
+        .eq("user_id", session.user.id)
+        .maybeSingle();
+      const fallbackStored = ((fallbackState?.preferences ?? {}) as UserCloudPreferences).performanceNotifications ?? [];
+
       const { data: recentSameType } = await client
         .from("study_performance_notifications")
         .select("id")
@@ -1959,52 +2029,76 @@ function App() {
         .limit(1);
       if ((recentSameType ?? []).length) return;
 
+      const fallbackRecentSameType = fallbackStored.some((item) =>
+        item.subject_id === entry.subject_id &&
+        item.notification_type === notificationType &&
+        item.title === title &&
+        new Date(item.created_at).getTime() >= sevenDaysAgoMs
+      );
+      if (fallbackRecentSameType) return;
+
       const startOfDay = new Date();
       startOfDay.setHours(0, 0, 0, 0);
       const { count: todayCount } = await client
         .from("study_performance_notifications")
         .select("id", { count: "exact", head: true })
         .gte("created_at", startOfDay.toISOString());
-      if (Number(todayCount || 0) >= 4) return;
+      const fallbackTodayCount = fallbackStored.filter((item) =>
+        new Date(item.created_at).getTime() >= startOfDay.getTime()
+      ).length;
+      if (Math.max(Number(todayCount || 0), fallbackTodayCount) >= 4) return;
+
+      const notificationPayload = {
+        user_id: session.user.id,
+        subject_id: entry.subject_id,
+        subject_name: subjectName,
+        discipline_name: disciplineName,
+        notification_type: notificationType,
+        title,
+        message,
+      };
 
       const { data: inserted, error: insertError } = await client
         .from("study_performance_notifications")
-        .insert({
-          user_id: session.user.id,
-          subject_id: entry.subject_id,
-          subject_name: subjectName,
-          discipline_name: disciplineName,
-          notification_type: notificationType,
-          title,
-          message,
-        })
+        .insert(notificationPayload)
         .select("*")
         .single();
+
       if (insertError) {
         const fallbackNotification: PerformanceNotification = {
+          ...notificationPayload,
           id: uid(),
-          user_id: session.user.id,
-          subject_id: entry.subject_id,
-          subject_name: subjectName,
-          discipline_name: disciplineName,
-          notification_type: notificationType,
-          title,
-          message,
           created_at: new Date().toISOString(),
           read_at: null,
         };
-        const next = [fallbackNotification, ...performanceNotifications].slice(0, 20);
+        const next = [fallbackNotification, ...fallbackStored]
+          .filter((item, index, all) =>
+            index === all.findIndex((candidate) =>
+              candidate.id === item.id ||
+              (candidate.subject_id === item.subject_id &&
+                candidate.notification_type === item.notification_type &&
+                candidate.title === item.title &&
+                Math.abs(Date.parse(candidate.created_at) - Date.parse(item.created_at)) < 10_000)
+            )
+          )
+          .slice(0, 20);
         setPerformanceNotifications(next);
         await savePerformanceNotificationsFallback(next);
+        notifyBrowser(title, message, `mcr-performance-${notificationType}`);
+        void sendPushNotification({ title, body: message, tag: `mcr-performance-${notificationType}` });
+        notify(message);
         return;
       }
 
-      setPerformanceNotifications((current) => [inserted as PerformanceNotification, ...current].slice(0, 20));
+      const insertedNotification = inserted as PerformanceNotification;
+      setPerformanceNotifications((current) => [insertedNotification, ...current].slice(0, 20));
+      notifyBrowser(title, message, `mcr-performance-${notificationType}`);
+      void sendPushNotification({ title, body: message, tag: `mcr-performance-${notificationType}` });
+      notify(message);
     } catch {
-      // Observações inteligentes nunca devem bloquear o lançamento de questões.
+      // Intelligent observations must never block saving a study entry.
     }
   };
-
   const markContextualNotificationRead = async (id: string) => {
     const readAt = new Date().toISOString();
     const state = contextualNotificationStateRef.current;
