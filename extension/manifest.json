@@ -1,0 +1,54 @@
+{
+  "manifest_version": 3,
+  "name": "MSK QConcursos → Digital Evidence Vault",
+  "version": "1.0.0",
+  "description": "Captura sessões do QConcursos, respeita o filtro estudado, evita duplicação por ID e exporta para o Digital Evidence Vault.",
+  "minimum_chrome_version": "116",
+  "permissions": [
+    "storage",
+    "tabs",
+    "scripting",
+    "sidePanel"
+  ],
+  "host_permissions": [
+    "https://*.qconcursos.com/*",
+    "https://krulxfcxalaxosebmiyh.supabase.co/*",
+    "https://id-preview--51db2a87-81ef-4c64-b932-a535dca4541d.lovable.app/*"
+  ],
+  "background": {
+    "service_worker": "service-worker.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Abrir MSK"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.qconcursos.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://id-preview--51db2a87-81ef-4c64-b932-a535dca4541d.lovable.app/*"
+      ],
+      "js": [
+        "site-bridge.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icon-128.png",
+    "32": "icon-128.png",
+    "48": "icon-128.png",
+    "128": "icon-128.png"
+  }
+}
