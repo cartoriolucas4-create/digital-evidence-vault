@@ -1621,6 +1621,33 @@ function App() {
   }, [session?.user?.id]);
 
   useEffect(() => {
+    if (!session?.user?.id) return;
+    const userId = session.user.id;
+    const channel = supabase.channel(`performance-notifications-${userId}`);
+    channel
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "study_performance_notifications", filter: `user_id=eq.${userId}` },
+        (payload: any) => {
+          const notification = payload.new as PerformanceNotification;
+          setPerformanceNotifications((current) =>
+            newestFirst(
+              current.some((item) => item.id === notification.id)
+                ? current
+                : [notification, ...current],
+            ).slice(0, 5)
+          );
+          notifyBrowser(notification.title, notification.message, `mcr-performance-${notification.notification_type}`);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [session?.user?.id]);
+
+  useEffect(() => {
     if (!session) return;
     Promise.all([loadCatalog(), loadEntries(), loadPerformanceNotifications(), loadLucasDailyNotification(), loadAdminStudentNotifications()]).catch((error) => {
       setToast(error instanceof Error ? error.message : "Não foi possível carregar os dados da conta.");
@@ -2064,6 +2091,7 @@ function App() {
       const { data: recentSameType } = await client
         .from("study_performance_notifications")
         .select("id")
+        .eq("user_id", session.user.id)
         .eq("subject_id", entry.subject_id)
         .eq("notification_type", notificationType)
         .eq("title", title)
@@ -2078,19 +2106,6 @@ function App() {
         new Date(item.created_at).getTime() >= sevenDaysAgoMs
       );
       if (fallbackRecentSameType) return;
-
-      const startOfDay = new Date();
-      startOfDay.setHours(0, 0, 0, 0);
-      const { count: todayCount } = await client
-        .from("study_performance_notifications")
-        .select("id", { count: "exact", head: true })
-        .gte("created_at", startOfDay.toISOString());
-      const fallbackTodayCount = fallbackStored.filter((item) =>
-        new Date(item.created_at).getTime() >= startOfDay.getTime()
-      ).length;
-      // Observações automáticas de desempenho são deliberadamente esparsas:
-      // no máximo 2 por dia, além dos lembretes externos e das mensagens administrativas.
-      if (Math.max(Number(todayCount || 0), fallbackTodayCount) >= 2) return;
 
       const notificationPayload = {
         user_id: session.user.id,
@@ -2150,7 +2165,9 @@ function App() {
           .eq("user_id", session.user.id)
           .not("id", "in", `(${keepIds.map((id: string) => `"${id}"`).join(",")})`);
       }
-      setPerformanceNotifications((current) => [insertedNotification, ...current].slice(0, 5));
+      setPerformanceNotifications((current) =>
+        newestFirst([insertedNotification, ...current]).slice(0, 5)
+      );
       notifyBrowser(title, message, `mcr-performance-${notificationType}`);
       void sendPushNotification({ title, body: message, tag: `mcr-performance-${notificationType}` });
       notify(message);
