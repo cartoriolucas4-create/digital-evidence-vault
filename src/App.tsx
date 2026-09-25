@@ -1307,7 +1307,7 @@ function App() {
     if (readError) return;
     const preferences = {
       ...((current?.preferences ?? {}) as Record<string, unknown>),
-      contextualNotifications: state.notifications,
+      contextualNotifications: state.notifications.slice(0, 5),
       contextualNotificationRotation: state.rotation,
       contextualNotificationSentPeriod: state.sentPeriod,
     };
@@ -2058,7 +2058,9 @@ function App() {
       const fallbackTodayCount = fallbackStored.filter((item) =>
         new Date(item.created_at).getTime() >= startOfDay.getTime()
       ).length;
-      if (Math.max(Number(todayCount || 0), fallbackTodayCount) >= 4) return;
+      // Observações automáticas de desempenho são deliberadamente esparsas:
+      // no máximo 2 por dia, além dos lembretes externos e das mensagens administrativas.
+      if (Math.max(Number(todayCount || 0), fallbackTodayCount) >= 2) return;
 
       const notificationPayload = {
         user_id: session.user.id,
@@ -2093,7 +2095,8 @@ function App() {
                 Math.abs(Date.parse(candidate.created_at) - Date.parse(item.created_at)) < 10_000)
             )
           )
-          .slice(0, 20);
+          .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+          .slice(0, 5);
         setPerformanceNotifications(next.slice(0, 5));
         await savePerformanceNotificationsFallback(next);
         notifyBrowser(title, message, `mcr-performance-${notificationType}`);
