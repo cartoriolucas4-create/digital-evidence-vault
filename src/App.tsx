@@ -1877,7 +1877,11 @@ function App() {
       let title = "";
       let message = "";
 
-      if (stagnatedForFourWeeks) {
+      if (previous.length === 0 && currentAccuracy >= targetAccuracy) {
+        notificationType = "record";
+        title = "🏆 Excelente começo em " + subjectName;
+        message = "Parabéns! Você alcançou " + currentAccuracy.toFixed(0) + "% logo no primeiro lançamento desse assunto. Continue nesse ritmo.";
+      } else if (stagnatedForFourWeeks) {
          notificationType = "attention";
          title = "⏸️ Desempenho estagnado em " + subjectName;
          message = "Seu aproveitamento está praticamente no mesmo nível há mais de 4 semanas (" + Math.min(...stagnationAccuracies).toFixed(0) + "%–" + Math.max(...stagnationAccuracies).toFixed(0) + "%). Vale revisar a estratégia de estudo desse assunto.";
@@ -2057,7 +2061,7 @@ function App() {
               </button>)}
               {isLastDayOfMonth() && <button className="monthly-notification" onClick={() => exportMonthlyPdf()}><span className="notification-icon"><FileDown size={15}/></span><span><strong>{studentName ? studentName + ", seu rendimento mensal está pronto." : "Seu rendimento mensal está pronto"}</strong><small>{studentName ? "Exporte seu resumo mensal em PDF." : "Exporte o resumo mensal em PDF."}</small></span></button>}
               {isLastDayOfMonth() && <button className="monthly-notification" onClick={() => exportMonthlyBackup()}><span className="notification-icon"><Upload size={15}/></span><span><strong>{studentName ? studentName + ", seu backup mensal está disponível." : "Backup mensal disponível"}</strong><small>{studentName ? "Faça o backup dos seus dados dos últimos 30 dias." : "Faça o backup dos dados dos últimos 30 dias."}</small></span></button>}
-              {!performanceNotifications.length && !adminStudentNotifications.length && !lucasDailyNotification && !inactiveFor24Hours && !isLastDayOfMonth() && <div className="notification-empty">{studentName ? studentName + ", nenhuma observação importante por enquanto. O MCR só aparece quando identifica algo relevante." : "Nenhuma observação importante por enquanto. O MCR só aparece quando identifica algo relevante."}</div>}
+              {!contextualNotifications.length && !performanceNotifications.length && !adminStudentNotifications.length && !lucasDailyNotification && !inactiveFor24Hours && !isLastDayOfMonth() && <div className="notification-empty">{studentName ? studentName + ", nenhuma observação importante por enquanto. O MCR só aparece quando identifica algo relevante." : "Nenhuma observação importante por enquanto. O MCR só aparece quando identifica algo relevante."}</div>}
             </div>}
           </div>
           <span className="user">{session.user.email}</span>
