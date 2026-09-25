@@ -189,8 +189,7 @@ Deno.serve(async (req) => {
           JSON.stringify({
             title: message[0],
             body: message[1],
-            tag: `mcr-study-reminder-${slot}`,
-            url: "/digital-evidence-vault/"
+            tag: `mcr-study-reminder-${slot}`
           }),
           { TTL: 3600 }
         );
