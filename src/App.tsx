@@ -160,6 +160,7 @@ type UserCloudPreferences = {
   contextualNotificationRotation?: Record<string, number>;
   contextualNotificationSentPeriod?: Record<string, string>;
   mcrWelcomeNotification?: ContextualNotification;
+  performanceNotifications?: PerformanceNotification[];
   defaultSourceId?: string;
   defaultQuestionTypeId?: string;
   studyStreak?: { count: number; lastQualifiedAt: string };
@@ -1489,18 +1490,48 @@ function App() {
 
   const loadPerformanceNotifications = async () => {
     if (!session?.user.id) return;
-    const { data, error } = await (supabase as any)
+    const client = supabase as any;
+    const { data, error } = await client
       .from("study_performance_notifications")
       .select("*")
       .order("created_at", { ascending: false })
       .limit(20);
-    // This optional notification table may not exist in older database versions.
-    // It must never block the account, dashboard, or planner from loading.
-    if (error) {
-      setPerformanceNotifications([]);
+
+    if (!error) {
+      setPerformanceNotifications((data ?? []) as PerformanceNotification[]);
       return;
     }
-    setPerformanceNotifications((data ?? []) as PerformanceNotification[]);
+
+    // Fallback: algumas bases antigas ainda não possuem a tabela específica.
+    // As observações continuam persistidas na preferência da conta para não desaparecerem.
+    const { data: state } = await client
+      .from("study_user_state")
+      .select("preferences")
+      .eq("user_id", session.user.id)
+      .maybeSingle();
+    const prefs = (state?.preferences ?? {}) as UserCloudPreferences;
+    setPerformanceNotifications(
+      Array.isArray(prefs.performanceNotifications)
+        ? prefs.performanceNotifications.slice(0, 20)
+        : []
+    );
+  };
+
+  const savePerformanceNotificationsFallback = async (notifications: PerformanceNotification[]) => {
+    if (!session?.user.id) return;
+    const client = supabase as any;
+    const { data: current } = await client
+      .from("study_user_state")
+      .select("preferences")
+      .eq("user_id", session.user.id)
+      .maybeSingle();
+    const preferences = {
+      ...((current?.preferences ?? {}) as Record<string, unknown>),
+      performanceNotifications: notifications.slice(0, 20),
+    };
+    await client
+      .from("study_user_state")
+      .upsert({ user_id: session.user.id, preferences }, { onConflict: "user_id" });
   };
 
   const loadEntries = async () => {
@@ -1949,7 +1980,24 @@ function App() {
         })
         .select("*")
         .single();
-      if (insertError) return;
+      if (insertError) {
+        const fallbackNotification: PerformanceNotification = {
+          id: uid(),
+          user_id: session.user.id,
+          subject_id: entry.subject_id,
+          subject_name: subjectName,
+          discipline_name: disciplineName,
+          notification_type: notificationType,
+          title,
+          message,
+          created_at: new Date().toISOString(),
+          read_at: null,
+        };
+        const next = [fallbackNotification, ...performanceNotifications].slice(0, 20);
+        setPerformanceNotifications(next);
+        await savePerformanceNotificationsFallback(next);
+        return;
+      }
 
       setPerformanceNotifications((current) => [inserted as PerformanceNotification, ...current].slice(0, 20));
     } catch {
@@ -1993,7 +2041,12 @@ function App() {
       .eq("id", id);
     if (!error) {
       setPerformanceNotifications((current) => current.map((item) => item.id === id ? { ...item, read_at: readAt } : item));
+      return;
     }
+
+    const next = performanceNotifications.map((item) => item.id === id ? { ...item, read_at: readAt } : item);
+    setPerformanceNotifications(next);
+    await savePerformanceNotificationsFallback(next);
   };
 
   const markAllPerformanceNotificationsRead = async () => {
@@ -2006,7 +2059,12 @@ function App() {
       .in("id", unread.map((item) => item.id));
     if (!error) {
       setPerformanceNotifications((current) => current.map((item) => item.read_at ? item : { ...item, read_at: readAt }));
+      return;
     }
+
+    const next = performanceNotifications.map((item) => item.read_at ? item : { ...item, read_at: readAt });
+    setPerformanceNotifications(next);
+    await savePerformanceNotificationsFallback(next);
   };
 
   if (authLoading) return <div className="fatal"><div className="fatal-card"><img className="mcr-logo mcr-logo-fatal" src={MCR_LOGO} alt="MCR — Meu Controle de Rendimento" /><p>Carregando sua sessão…</p></div></div>;
