@@ -2063,10 +2063,14 @@ function App() {
         notificationType = "recovery";
         title = "🔥 Boa recuperação em " + subjectName;
         message = "Seu desempenho voltou a subir após uma sequência abaixo da meta: " + currentAccuracy.toFixed(0) + "% agora, contra " + recent3.toFixed(0) + "% nos lançamentos recentes anteriores.";
-      } else if (currentAccuracy >= previousBest + 5 || (currentAccuracy >= 95 && currentAccuracy > previousBest)) {
+      } else if (currentAccuracy > previousBest && currentAccuracy >= targetAccuracy) {
         notificationType = "record";
         title = "🏆 Novo recorde em " + subjectName;
-        message = "Você alcançou " + currentAccuracy.toFixed(0) + "%, seu melhor resultado registrado até aqui nesse assunto.";
+        message = "Parabéns! Você alcançou " + currentAccuracy.toFixed(0) + "%, seu melhor resultado registrado até aqui nesse assunto.";
+      } else if (currentAccuracy >= targetAccuracy) {
+        notificationType = "exceptional";
+        title = "🎯 Excelente desempenho em " + subjectName;
+        message = "Parabéns! Você alcançou " + currentAccuracy.toFixed(0) + "% em " + subjectName + ". Continue nesse ritmo.";
       } else if (currentAccuracy >= baseline + 10) {
         notificationType = "exceptional";
         title = "🎯 Excelente desempenho em " + subjectName;
@@ -2079,8 +2083,6 @@ function App() {
 
       if (!notificationType) return;
 
-      const sevenDaysAgoMs = Date.now() - 7 * 24 * 60 * 60 * 1000;
-      const sevenDaysAgo = new Date(sevenDaysAgoMs).toISOString();
       const { data: fallbackState } = await client
         .from("study_user_state")
         .select("preferences")
@@ -2088,24 +2090,26 @@ function App() {
         .maybeSingle();
       const fallbackStored = ((fallbackState?.preferences ?? {}) as UserCloudPreferences).performanceNotifications ?? [];
 
-      const { data: recentSameType } = await client
+      // Não bloquear novas boas pontuações por vários dias: cada lançamento que
+      // satisfaz a regra pode gerar sua própria notificação. A proteção abaixo
+      // evita apenas duplicar o mesmo lançamento se o callback for disparado duas vezes.
+      const recentCutoff = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+      const { data: recentSameEntry } = await client
         .from("study_performance_notifications")
         .select("id")
         .eq("user_id", session.user.id)
         .eq("subject_id", entry.subject_id)
         .eq("notification_type", notificationType)
-        .eq("title", title)
-        .gte("created_at", sevenDaysAgo)
-        .limit(1);
-      if ((recentSameType ?? []).length) return;
+        .gte("created_at", recentCutoff)
+        .limit(10);
+      if ((recentSameEntry ?? []).some((item: any) => item.id === entry.id)) return;
 
-      const fallbackRecentSameType = fallbackStored.some((item) =>
+      const fallbackDuplicate = fallbackStored.some((item) =>
         item.subject_id === entry.subject_id &&
         item.notification_type === notificationType &&
-        item.title === title &&
-        new Date(item.created_at).getTime() >= sevenDaysAgoMs
+        Math.abs(Date.parse(item.created_at) - Date.now()) < 2 * 60 * 1000
       );
-      if (fallbackRecentSameType) return;
+      if (fallbackDuplicate) return;
 
       const notificationPayload = {
         user_id: session.user.id,
