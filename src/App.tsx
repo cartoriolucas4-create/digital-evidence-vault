@@ -2103,6 +2103,20 @@ function App() {
       }
 
       const insertedNotification = inserted as PerformanceNotification;
+      const { data: newestPerformance } = await client
+        .from("study_performance_notifications")
+        .select("id, created_at")
+        .eq("user_id", session.user.id)
+        .order("created_at", { ascending: false })
+        .limit(5);
+      const keepIds = (newestPerformance ?? []).map((row: { id: string }) => row.id);
+      if (keepIds.length) {
+        await client
+          .from("study_performance_notifications")
+          .delete()
+          .eq("user_id", session.user.id)
+          .not("id", "in", `(${keepIds.map((id: string) => `"${id}"`).join(",")})`);
+      }
       setPerformanceNotifications((current) => [insertedNotification, ...current].slice(0, 5));
       notifyBrowser(title, message, `mcr-performance-${notificationType}`);
       void sendPushNotification({ title, body: message, tag: `mcr-performance-${notificationType}` });
