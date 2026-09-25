@@ -1889,20 +1889,40 @@ function App() {
     ? new Date(latestQuestionEntry.updated_at ?? latestQuestionEntry.created_at ?? latestQuestionEntry.study_date).getTime()
     : 0;
   const inactiveFor24Hours = Boolean(latestQuestionTimestamp && Date.now() - latestQuestionTimestamp >= 24 * 60 * 60 * 1000);
-  // O painel trabalha com uma fila única: no máximo 5 notificações, sempre da mais nova para a mais antiga.
-  // As fontes continuam separadas para preservar leitura/sincronização, mas a apresentação segue uma única hierarquia temporal.
+  // Fila única e definitiva: todas as notificações são reunidas primeiro,
+  // ordenadas pela data real (mais nova -> mais antiga) e só então limitadas a 5.
+  // Nenhuma fonte pode "furar" a fila por ter sido renderizada separadamente.
   const notificationFeed = [
     ...contextualNotifications.map((item) => ({ kind: "contextual" as const, id: item.id, created_at: item.created_at, item })),
     ...adminStudentNotifications.map((item) => ({ kind: "admin" as const, id: item.id, created_at: item.created_at, item })),
     ...performanceNotifications.map((item) => ({ kind: "performance" as const, id: item.id, created_at: item.created_at, item })),
+    ...(lucasDailyNotification ? [{
+      kind: "lucas" as const,
+      id: "lucas-daily-" + lucasDailyNotification.sentDate,
+      created_at: lucasDailyNotification.sentDate + "T23:59:59-03:00",
+      item: lucasDailyNotification,
+    }] : []),
+    ...(inactiveFor24Hours ? [{
+      kind: "inactivity" as const,
+      id: "inactivity-24h",
+      created_at: new Date(latestQuestionTimestamp ? new Date(latestQuestionTimestamp).getTime() + 24 * 60 * 60 * 1000 : Date.now()).toISOString(),
+      item: null,
+    }] : []),
+    ...(isLastDayOfMonth() ? [
+      { kind: "monthly-pdf" as const, id: "monthly-pdf", created_at: new Date().toISOString(), item: null },
+      { kind: "monthly-backup" as const, id: "monthly-backup", created_at: new Date().toISOString(), item: null },
+    ] : []),
   ]
-    .filter((item) => Number.isFinite(new Date(item.created_at).getTime()))
-    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .filter((item) => Number.isFinite(Date.parse(item.created_at)))
+    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
     .slice(0, 5);
 
-  const unreadNotificationCount = notificationFeed.filter((entry) => !entry.item.read_at).length;
+  const unreadNotificationCount = notificationFeed.filter((entry) => {
+    if (entry.kind === "contextual" || entry.kind === "admin" || entry.kind === "performance") return !entry.item.read_at;
+    return entry.kind === "lucas" || entry.kind === "inactivity";
+  }).length;
   const unreadPerformanceCount = performanceNotifications.filter((item) => !item.read_at).length;
-  const notificationCount = unreadNotificationCount + (inactiveFor24Hours && !inactivityNotificationRead ? 1 : 0) + (isLastDayOfMonth() ? 2 : 0) + (lucasDailyNotification ? 1 : 0);
+  const notificationCount = unreadNotificationCount;
   const displayedStudyStreak = studyStreak.lastQualifiedAt && Date.now() - Date.parse(studyStreak.lastQualifiedAt) > 24 * 60 * 60 * 1000 ? 0 : studyStreak.count;
 
   useEffect(() => {
@@ -2233,6 +2253,31 @@ function App() {
                     {!n.read_at && <button type="button" className="notification-mark-all" onClick={() => void markAdminStudentNotificationRead(n.id)}>Marcar como lida</button>}
                   </div>;
                 }
+                if (entry.kind === "lucas") {
+                  const n = entry.item;
+                  return <button key={entry.id} className="monthly-notification performance-notification unread" onClick={() => setLucasDailyNotification(null)}>
+                    <span className="notification-icon performance-exceptional"><Sparkles size={15}/></span>
+                    <span><strong>💌 Mensagem do Lucas</strong><small>{n.message}</small><small className="notification-date">{new Date(n.sentDate + "T12:00:00-03:00").toLocaleDateString("pt-BR")}</small></span>
+                  </button>;
+                }
+                if (entry.kind === "inactivity") {
+                  return <button key={entry.id} className={"monthly-notification performance-notification " + (inactivityNotificationRead ? "read" : "unread")} onClick={() => setInactivityNotificationRead(true)}>
+                    <span className="notification-icon performance-attention"><AlertTriangle size={15}/></span>
+                    <span><strong>{studentName ? studentName + ", já faz 24 horas sem lançar questões." : "Já faz 24 horas sem lançar questões."}</strong><small>Registre suas questões para manter seu acompanhamento de desempenho atualizado.</small><small className="notification-date">Agora</small></span>
+                  </button>;
+                }
+                if (entry.kind === "monthly-pdf") {
+                  return <button key={entry.id} className="monthly-notification" onClick={() => exportMonthlyPdf()}>
+                    <span className="notification-icon"><FileDown size={15}/></span>
+                    <span><strong>{studentName ? studentName + ", seu rendimento mensal está pronto." : "Seu rendimento mensal está pronto"}</strong><small>{studentName ? "Exporte seu resumo mensal em PDF." : "Exporte o resumo mensal em PDF."}</small></span>
+                  </button>;
+                }
+                if (entry.kind === "monthly-backup") {
+                  return <button key={entry.id} className="monthly-notification" onClick={() => exportMonthlyBackup()}>
+                    <span className="notification-icon"><Upload size={15}/></span>
+                    <span><strong>{studentName ? studentName + ", seu backup mensal está disponível." : "Backup mensal disponível"}</strong><small>{studentName ? "Faça o backup dos seus dados dos últimos 30 dias." : "Faça o backup dos dados dos últimos 30 dias."}</small></span>
+                  </button>;
+                }
                 const item = entry.item;
                 return <button key={"performance-" + item.id} className={"monthly-notification performance-notification " + (item.read_at ? "read" : "unread")} onClick={() => markPerformanceNotificationRead(item.id)}>
                   <span className={"notification-icon performance-" + item.notification_type}>
@@ -2241,16 +2286,6 @@ function App() {
                   <span><strong>{personalizeNotificationTitle(item.title, studentName)}</strong><small>{personalizeNotificationText(item.message, studentName)}</small><small className="notification-date">{new Date(item.created_at).toLocaleString("pt-BR")} • {item.read_at ? "Lida" : "Não lida"}</small></span>
                 </button>;
               })}
-              {lucasDailyNotification && <button className="monthly-notification performance-notification unread" onClick={() => setLucasDailyNotification(null)}>
-                <span className="notification-icon performance-exceptional"><Sparkles size={15}/></span>
-                <span><strong>💌 Mensagem do Lucas</strong><small>{lucasDailyNotification.message}</small><small className="notification-date">Hoje</small></span>
-              </button>}
-              {inactiveFor24Hours && <button className={"monthly-notification performance-notification " + (inactivityNotificationRead ? "read" : "unread")} onClick={() => setInactivityNotificationRead(true)}>
-                <span className="notification-icon performance-attention"><AlertTriangle size={15}/></span>
-                <span><strong>{studentName ? studentName + ", já faz 24 horas sem lançar questões." : "Já faz 24 horas sem lançar questões."}</strong><small>Registre suas questões para manter seu acompanhamento de desempenho atualizado.</small><small className="notification-date">Agora</small></span>
-              </button>}
-              {isLastDayOfMonth() && <button className="monthly-notification" onClick={() => exportMonthlyPdf()}><span className="notification-icon"><FileDown size={15}/></span><span><strong>{studentName ? studentName + ", seu rendimento mensal está pronto." : "Seu rendimento mensal está pronto"}</strong><small>{studentName ? "Exporte seu resumo mensal em PDF." : "Exporte o resumo mensal em PDF."}</small></span></button>}
-              {isLastDayOfMonth() && <button className="monthly-notification" onClick={() => exportMonthlyBackup()}><span className="notification-icon"><Upload size={15}/></span><span><strong>{studentName ? studentName + ", seu backup mensal está disponível." : "Backup mensal disponível"}</strong><small>{studentName ? "Faça o backup dos seus dados dos últimos 30 dias." : "Faça o backup dos dados dos últimos 30 dias."}</small></span></button>}
               {!notificationFeed.length && !lucasDailyNotification && !inactiveFor24Hours && !isLastDayOfMonth() && <div className="notification-empty">{studentName ? studentName + ", nenhuma observação importante por enquanto. O MCR só aparece quando identifica algo relevante." : "Nenhuma observação importante por enquanto. O MCR só aparece quando identifica algo relevante."}</div>}
             </div>}
           </div>
