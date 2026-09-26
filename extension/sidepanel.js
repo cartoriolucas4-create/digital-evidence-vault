@@ -19,9 +19,9 @@ function renderMapping(st){
     row.appendChild(sel);list.appendChild(row);
   }
 }
-async function render(){
+let renderBusy=false;\nasync function render(){
   const st=await send("GET_STATE");if(!st)return;
-  $("#total").textContent=st.sessionQueue?.length||0;$("#answered").textContent=st.sessionQueue?.filter(q=>q.answered).length||0;$("#hits").textContent=st.sessionQueue?.filter(q=>q.correct).length||0;$("#sessionCount").textContent=st.sessionQueue?.length||0;
+  $("#total").textContent=st.sessionQueue?.length||0;\n  $("#answered").textContent=st.sessionQueue?.filter(q=>q.answered).length||0;$("#hits").textContent=st.sessionQueue?.filter(q=>q.correct).length||0;$("#sessionCount").textContent=st.sessionQueue?.length||0;
   const a=st.activeSession;$("#sessionTitle").textContent=a?.discipline||"Nenhuma sessão";$("#sessionMeta").textContent=a?.subjects?.length?"Filtro: "+a.subjects.join(" • "):"Abra o QConcursos e resolva questões.";$("#capture").checked=st.captureEnabled!==false;
   const exp=st.lastExport;if(exp)$("#exportResult").textContent="Última exportação: "+exp.ready+"/"+exp.total+" questões processadas"+(exp.skipped?" • "+exp.skipped+" pendentes":".");
   $("#authBadge").textContent=st.authAccessToken&&st.authExpiresAt>Date.now()+30000?"conectado":"desconectado";
@@ -33,9 +33,9 @@ async function render(){
 $("#refresh").onclick=render;
 $("#copyPrompt").onclick=async()=>{await navigator.clipboard.writeText(BULK_PROMPT);show("Prompt copiado. Cole no ChatGPT junto com seu edital.")};
 $("#bulk").addEventListener("input",()=>{const p=parseBulk($("#bulk").value);$("#bulkCount").textContent=p.length?p.length+" disciplinas • "+p.reduce((n,d)=>n+d.subjects.length,0)+" assuntos":"Nenhum edital carregado"});
-$("#saveBulk").onclick=async()=>{const parsed=parseBulk($("#bulk").value);if(!parsed.length){show("Cole a resposta do ChatGPT no padrão DISCIPLINA:/ASSUNTO:.",true);return}await send("SET_STATE",{patch:{edital:parsed,mappingOverrides:{}}});show("Edital salvo. A estrutura será usada para conferência e mapeamento.");render()};
+$("#saveBulk").onclick=async()=>{\n  const button=$("#saveBulk"),stateEl=$("#saveState"),raw=$("#bulk").value,parsed=parseBulk(raw);\n  if(!parsed.length){stateEl.textContent="✕ Não foi possível salvar: use o formato DISCIPLINA: / ASSUNTO:.";stateEl.className="save-state show";show("Edite o conteúdo antes de salvar.",true);return}\n  button.disabled=true;stateEl.textContent="Salvando edital…";stateEl.className="save-state show";\n  try{\n    const response=await send("SET_STATE",{patch:{edital:parsed,mappingOverrides:{},editalSavedAt:new Date().toISOString()}});\n    if(!response?.ok)throw new Error(response?.error||"A extensão não confirmou a gravação.");\n    const verify=await send("GET_STATE");\n    const savedCount=verify?.edital?.reduce((n,d)=>n+d.subjects.length,0)||0;\n    if(savedCount!==parsed.reduce((n,d)=>n+d.subjects.length,0))throw new Error("A verificação encontrou diferença na quantidade salva.");\n    stateEl.textContent="✓ Edital salvo com sucesso • "+verify.edital.length+" disciplinas • "+savedCount+" assuntos";\n    stateEl.className="save-state show";\n    show("✓ Edital salvo e confirmado.");\n    await render();\n  }catch(error){\n    stateEl.textContent="✕ Falha ao salvar: "+(error?.message||error);stateEl.className="save-state show";show(error?.message||"Falha ao salvar o edital.",true);\n  }finally{button.disabled=false}\n};
 $("#capture").onchange=async e=>send("SET_STATE",{patch:{captureEnabled:e.target.checked}});
 $("#connect").onclick=async()=>{show("Conectando ao Vault…");await send("REQUEST_SITE_SESSION");setTimeout(render,1200);setTimeout(render,2500)};
 $("#export").onclick=async()=>{show("Exportando questões únicas…");const r=await send("EXPORT");if(r?.ok)show("Exportado: "+r.ready+" questões."+(r.skipped?" "+r.skipped+" ficaram pendentes para conferência.":""));else show(r?.error||"Falha na exportação.",true);render()};
 function show(msg,error=false){const el=$("#status");el.textContent=msg;el.className="status show";el.style.borderColor=error?"#6b3b3b":"#3d4652";el.style.color=error?"#ff9d9d":"#bfc6d0";clearTimeout(show.t);show.t=setTimeout(()=>el.className="status",4500)}
-$("#version").textContent="v1.0.0";render();setInterval(render,3000);chrome.storage.onChanged.addListener(render);
+$("#version").textContent="v1.1.0";render();setInterval(render,3000);chrome.storage.onChanged.addListener(render);
