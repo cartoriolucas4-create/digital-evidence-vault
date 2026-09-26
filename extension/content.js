@@ -13,8 +13,10 @@
     try {
       const u = new URL(href, location.href);
       const path = u.pathname;
-      const m = path.match(/\/questoes(?:-de-concursos)?\/questoes\/([^/?#]+)/i);
+      const m = path.match(/\/questoes(?:-de-concursos)?(?:\/questoes)?\/([^/?#]+)/i);
       if (m?.[1]) return decodeURIComponent(m[1]);
+      const generic = path.match(/(?:quest(?:ao|ões|oes)|question)[^0-9]*(\d{5,12})/i);
+      if (generic?.[1]) return generic[1];
       const q = u.searchParams.get("question_id") || u.searchParams.get("questionId");
       if (q) return q;
     } catch {}
@@ -22,8 +24,16 @@
   }
 
   function extractQuestionIdFromText(text = "") {
-    const m = clean(text).match(/(?:^|\s)Q(\d{5,10})(?=\s|$|[.,:;!?])/i);
-    return m ? m[1] : "";
+    const patterns = [
+      /(?:^|\s)Q(\d{5,12})(?=\s|$|[.,:;!?])/i,
+      /(?:quest(?:ão|ao|oes|ões)|question)[\s:#-]*(?:id[\s:#-]*)?(\d{5,12})/i,
+      /(?:^|[/#?&_=-])(\d{6,12})(?:$|[/#?&_=-])/i
+    ];
+    for (const pattern of patterns) {
+      const m = clean(text).match(pattern);
+      if (m) return m[1];
+    }
+    return "";
   }
 
   function findFilterContainer() {
@@ -76,24 +86,35 @@
   }
 
   function getQuestionAnchors() {
-    const anchors = [...document.querySelectorAll("a[href]")];
     const result = [];
     const seen = new Set();
-    for (const a of anchors) {
-      const id = getQuestionIdFromHref(a.href) || extractQuestionIdFromText(a.textContent);
-      if (!id || seen.has(id)) continue;
+    const add = (id, element) => {
+      if (!id || seen.has(id)) return;
       seen.add(id);
-      result.push({ id, element: a });
+      result.push({ id, element });
+    };
+
+    for (const a of [...document.querySelectorAll("a[href]")]) {
+      add(getQuestionIdFromHref(a.href) || extractQuestionIdFromText(a.textContent), a);
     }
 
-    // QConcursos list pages often render the Q1234567 identifier as text.
+    for (const el of [...document.querySelectorAll("[data-question-id],[data-questionid],[data-id]")]) {
+      add(
+        extractQuestionIdFromText(
+          el.getAttribute("data-question-id") ||
+          el.getAttribute("data-questionid") ||
+          el.getAttribute("data-id") ||
+          el.textContent
+        ),
+        el
+      );
+    }
+
     for (const el of [...document.querySelectorAll("body *")]) {
       if (!visible(el)) continue;
-      const id = extractQuestionIdFromText(el.textContent);
-      if (!id || seen.has(id)) continue;
-      seen.add(id);
-      result.push({ id, element: el });
+      add(extractQuestionIdFromText(el.textContent), el);
     }
+
     return result;
   }
 
@@ -112,7 +133,8 @@
       if (!visible(node)) continue;
       const text = clean(node.innerText || node.textContent || "");
       if (!text || text.length > 28000) continue;
-      const hasId = text.includes(questionId) || new RegExp("\\bQ?" + questionId + "\\b", "i").test(text);
+      const hasId = text.includes(questionId) || new RegExp("\\bQ?" + questionId + "\\b", "i").test(text) ||
+        [...node.querySelectorAll("[data-question-id],[data-questionid],[data-id],[href]")].some(el => extractQuestionIdFromText(el.getAttribute("data-question-id") || el.getAttribute("data-questionid") || el.getAttribute("data-id") || el.getAttribute("href") || "") === questionId);
       if (!hasId) continue;
       const hasResult = /Parabéns!\s*Você acertou|Você acertou|^Incorreta\.?$|Você errou/i.test(text);
       if (hasResult) {
