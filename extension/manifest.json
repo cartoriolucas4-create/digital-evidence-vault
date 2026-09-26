@@ -13,7 +13,7 @@
   "host_permissions": [
     "https://*.qconcursos.com/*",
     "https://gojjlppvdzijujrqsqww.supabase.co/*",
-    "https://cartoriolucas4-create.github.io/digital-evidence-vault/*/*"
+    "https://cartoriolucas4-create.github.io/digital-evidence-vault/*"
   ],
   "background": {
     "service_worker": "service-worker.js",
@@ -37,7 +37,7 @@
     },
     {
       "matches": [
-        "https://cartoriolucas4-create.github.io/digital-evidence-vault/*/*"
+        "https://cartoriolucas4-create.github.io/digital-evidence-vault/*"
       ],
       "js": [
         "site-bridge.js"
