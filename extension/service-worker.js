@@ -1,6 +1,6 @@
 const SUPABASE_URL="https://gojjlppvdzijujrqsqww.supabase.co";
 const SUPABASE_KEY="sb_publishable_saC2eSfYJt7LxvJFKgodIw_FQrZUBTS";
-const SITE_ORIGIN="https://id-preview--51db2a87-81ef-4c64-b932-a535dca4541d.lovable.app";
+const SITE_ORIGIN="https://cartoriolucas4-create.github.io/digital-evidence-vault";
 const DEFAULTS={sessionQueue:[],activeSession:null,edital:[],mappingOverrides:{},siteUrl:SITE_ORIGIN,captureEnabled:true,lastExport:null};
 async function getState(){const local=await chrome.storage.local.get(DEFAULTS),auth=await chrome.storage.session.get(["authAccessToken","authExpiresAt"]);return{...local,...auth}}
 const setState=p=>chrome.storage.local.set(p),nowISO=()=>new Date().toISOString(),normalize=v=>(v||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\s+/g," ").trim().toLowerCase();
