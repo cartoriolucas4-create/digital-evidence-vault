@@ -13,7 +13,7 @@
   "host_permissions": [
     "https://*.qconcursos.com/*",
     "https://gojjlppvdzijujrqsqww.supabase.co/*",
-    "https://id-preview--51db2a87-81ef-4c64-b932-a535dca4541d.lovable.app/*"
+    "https://cartoriolucas4-create.github.io/digital-evidence-vault/*/*"
   ],
   "background": {
     "service_worker": "service-worker.js",
@@ -37,7 +37,7 @@
     },
     {
       "matches": [
-        "https://id-preview--51db2a87-81ef-4c64-b932-a535dca4541d.lovable.app/*"
+        "https://cartoriolucas4-create.github.io/digital-evidence-vault/*/*"
       ],
       "js": [
         "site-bridge.js"
