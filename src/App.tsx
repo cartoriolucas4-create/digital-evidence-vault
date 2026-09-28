@@ -2364,7 +2364,7 @@ function App() {
               byDiscipline={byDiscipline} bySubject={bySubject} attention={attention} targetAccuracy={targetAccuracy} entries={entries} onExportMonthly={exportMonthlyPdf}
             />
           )}
-          {tab === "planner" && <Planner userId={session.user.id} notify={notify} defaultSmallColor={plannerDefaultColor} completedSmallColor={plannerCompletedColor} />}
+          {tab === "planner" && <Planner userId={session.user.id} notify={notify} defaultSmallColor={plannerDefaultColor} completedSmallColor={plannerCompletedColor} entries={entries} subjects={subjects} />}
           {tab === "entries" && <Entries disciplines={disciplines} subjects={subjects} sources={sources} types={types} defaultSourceId={defaultSourceId} defaultQuestionTypeId={defaultQuestionTypeId} entries={entries} refresh={() => loadEntries().catch((error) => notify(error instanceof Error ? error.message : "Não foi possível carregar os lançamentos."))} notify={notify} onPerformanceEntry={evaluatePerformanceEntry} onStudyActivity={updateStudyStreakFromQuestionLaunch}/>} 
           {tab === "catalog" && <Catalog disciplines={disciplines} subjects={subjects} sources={sources} types={types} defaultSourceId={defaultSourceId} setDefaultSourceId={setDefaultSourceId} defaultQuestionTypeId={defaultQuestionTypeId} setDefaultQuestionTypeId={setDefaultQuestionTypeId} refresh={() => loadCatalog().catch((error) => notify(error instanceof Error ? error.message : "Não foi possível carregar o cadastro."))} notify={notify} catalogDeleteOpen={catalogDeleteOpen} setCatalogDeleteOpen={setCatalogDeleteOpen} catalogDeletePassword={catalogDeletePassword} setCatalogDeletePassword={setCatalogDeletePassword} catalogDeleteBusy={catalogDeleteBusy} deleteAllCatalogData={deleteAllCatalogData}/>}
           {tab === "settings" && (
@@ -3149,7 +3149,7 @@ function PlannerColorPalette({title,colors,onPick,onCustom}:{title:string;colors
   </div>;
 }
 
-function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:{userId:string;notify:(message:string)=>void;defaultSmallColor:string;completedSmallColor:string;}) {
+function Planner({userId,notify,defaultSmallColor,completedSmallColor,entries,subjects}:{userId:string;notify:(message:string)=>void;defaultSmallColor:string;completedSmallColor:string;entries:Entry[];subjects:Subject[];}) {
   type CellPartStyle = { bg:string; fg:string; bold:boolean; italic:boolean; underline:boolean; strike:boolean; size:number; fontFamily:string; align:"left"|"center"|"right"; vertical:"top"|"middle"|"bottom"; wrap:"overflow"|"wrap"|"clip" };
   type Cell = { id:string; subject:string; text:string; studiedWeek?:string; bg:string; fg:string; subjectBg:string; subjectFg:string; bold:boolean; italic:boolean; underline:boolean; strike:boolean; size:number; fontFamily:string; align:"left"|"center"|"right"; vertical:"top"|"middle"|"bottom"; wrap:"overflow"|"wrap"|"clip"; subjectStyle?:CellPartStyle; textStyle?:CellPartStyle };
   type PlannerData = { version:3; weekOffset:number; cols:number; rows:number; headers:string[]; colWidths:number[]; rowHeights:number[]; rowCellCounts:number[]; cells:Record<string,Cell> };
@@ -3462,7 +3462,45 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
   },[weekStart]);
 
   const weekKey=useMemo(()=>weekStart.toISOString().slice(0,10),[weekStart]);
-  const isStudiedThisWeek=(id:string)=>getCell(id).studiedWeek===weekKey;
+  const weekEndKey=useMemo(()=>{
+    const end=new Date(weekStart);
+    end.setDate(end.getDate()+6);
+    return end.toISOString().slice(0,10);
+  },[weekStart]);
+
+  const normalizeSubjectName=(value:string)=>String(value||"")
+    .normalize("NFD")
+    .replace(/[\\u0300-\\u036f]/g,"")
+    .trim()
+    .replace(/\\s+/g," ")
+    .toUpperCase();
+
+  // Verde automático: se a matéria tiver pelo menos um lançamento de estudo
+  // dentro da semana atualmente exibida, o quadradinho fica na cor de estudada.
+  // O ✓ manual continua funcionando normalmente.
+  const studiedSubjectNamesThisWeek=useMemo(()=>{
+    const names=new Set<string>();
+    entries.forEach(entry=>{
+      const date=String(entry.study_date||"").slice(0,10);
+      if(date<weekKey || date>weekEndKey) return;
+      const subjectName =
+        entry.subject_name_snapshot ||
+        entry.subject?.name ||
+        (entry.subject_id ? subjects.find(subject=>subject.id===entry.subject_id)?.name : "") ||
+        "";
+      const normalized=normalizeSubjectName(subjectName);
+      if(normalized) names.add(normalized);
+    });
+    return names;
+  },[entries,subjects,weekKey,weekEndKey]);
+
+  const isStudiedThisWeek=(id:string)=>{
+    const cell=getCell(id);
+    if(cell.studiedWeek===weekKey) return true;
+    const cellSubject=normalizeSubjectName(cell.subject);
+    return Boolean(cellSubject && studiedSubjectNamesThisWeek.has(cellSubject));
+  };
+
   const toggleStudied=(id:string)=>{
     commitPlannerChange(prev=>{
       const cell={...getCell(id)};
