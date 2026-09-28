@@ -406,6 +406,28 @@ function App() {
     const localButton = readStore<string>(`mcr_button_color_${session.user.id}`, "#d63384");
     const localPlanner = readStore<{defaultColor?:string;completedColor?:string}>(`mcr_planner_colors_${session.user.id}`, {});
     const localSidebarCollapsed = readStore<boolean>(`mcr_planner_sidebar_collapsed_${session.user.id}`, false);
+    const applyCloudPreferences = (prefs: UserCloudPreferences) => {
+      cloudPreferencesRemoteJson.current = JSON.stringify(prefs);
+      if (prefs.theme) setTheme(prefs.theme);
+      if (prefs.buttonColor) setButtonColor(prefs.buttonColor);
+      if (prefs.plannerDefaultColor) setPlannerDefaultColor(prefs.plannerDefaultColor);
+      if (prefs.plannerCompletedColor) setPlannerCompletedColor(prefs.plannerCompletedColor);
+      if (typeof prefs.plannerSidebarCollapsed === "boolean") setPlannerSidebarCollapsed(prefs.plannerSidebarCollapsed);
+      setDefaultSourceId(prefs.defaultSourceId ?? "");
+      setDefaultQuestionTypeId(prefs.defaultQuestionTypeId ?? "");
+      setPerformanceNotifications(Array.isArray(prefs.performanceNotifications) ? newestFirst(prefs.performanceNotifications, 5) : []);
+      const loadedStudyStreak = prefs.studyStreak ?? { count: 0, lastQualifiedAt: "" };
+      studyStreakRef.current = loadedStudyStreak;
+      setStudyStreak(loadedStudyStreak);
+      const contextualState: ContextualNotificationState = {
+        notifications: Array.isArray(prefs.contextualNotifications) ? newestFirst(prefs.contextualNotifications) : [],
+        rotation: prefs.contextualNotificationRotation ?? {},
+        sentPeriod: prefs.contextualNotificationSentPeriod ?? {},
+      };
+      contextualNotificationStateRef.current = contextualState;
+      setContextualNotifications(contextualState.notifications.slice(0, 5));
+    };
+
     const loadCloudState = async () => {
       const { data, error } = await (supabase as any)
         .from("study_user_state")
@@ -418,31 +440,14 @@ function App() {
         return;
       }
       const prefs = (data?.preferences ?? {}) as UserCloudPreferences;
-      cloudPreferencesRemoteJson.current=JSON.stringify(prefs);
-      if (prefs.theme) setTheme(prefs.theme); else setTheme(localTheme);
-      if (prefs.buttonColor) setButtonColor(prefs.buttonColor); else setButtonColor(localButton);
-      if (prefs.plannerDefaultColor) setPlannerDefaultColor(prefs.plannerDefaultColor);
-      else if (localPlanner.defaultColor) setPlannerDefaultColor(localPlanner.defaultColor);
-      if (prefs.plannerCompletedColor) setPlannerCompletedColor(prefs.plannerCompletedColor);
-      else if (localPlanner.completedColor) setPlannerCompletedColor(localPlanner.completedColor);
-      if (typeof prefs.plannerSidebarCollapsed === "boolean") setPlannerSidebarCollapsed(prefs.plannerSidebarCollapsed);
-      else setPlannerSidebarCollapsed(localSidebarCollapsed);
-      setDefaultSourceId(prefs.defaultSourceId ?? "");
-      setDefaultQuestionTypeId(prefs.defaultQuestionTypeId ?? "");
-      setPerformanceNotifications(Array.isArray(prefs.performanceNotifications) ? prefs.performanceNotifications.slice(0, 5) : []);
-      const loadedStudyStreak = prefs.studyStreak ?? { count: 0, lastQualifiedAt: "" };
-      studyStreakRef.current = loadedStudyStreak;
-      setStudyStreak(loadedStudyStreak);
-
-      const contextualState: ContextualNotificationState = {
-        notifications: Array.isArray(prefs.contextualNotifications)
-          ? newestFirst(prefs.contextualNotifications)
-          : [],
-        rotation: prefs.contextualNotificationRotation ?? {},
-        sentPeriod: prefs.contextualNotificationSentPeriod ?? {},
-      };
-      contextualNotificationStateRef.current = contextualState;
-      setContextualNotifications(contextualState.notifications.slice(0, 5));
+      applyCloudPreferences(prefs);
+      // A cloud row is authoritative. Only migrate the old local-only color values
+      // when the cloud preference has never been configured.
+      if (!prefs.plannerDefaultColor && localPlanner.defaultColor) setPlannerDefaultColor(localPlanner.defaultColor);
+      if (!prefs.plannerCompletedColor && localPlanner.completedColor) setPlannerCompletedColor(localPlanner.completedColor);
+      if (!prefs.theme) setTheme(localTheme);
+      if (!prefs.buttonColor) setButtonColor(localButton);
+      if (typeof prefs.plannerSidebarCollapsed !== "boolean") setPlannerSidebarCollapsed(localSidebarCollapsed);
       setCloudStateReady(true);
     };
     void loadCloudState();
@@ -517,28 +522,24 @@ function App() {
         const prefs=(message?.payload?.preferences ?? {}) as UserCloudPreferences;
         const json=JSON.stringify(prefs);
         if(json===cloudPreferencesRemoteJson.current) return;
-        cloudPreferencesRemoteJson.current=json;
-        if(prefs.theme) setTheme(prefs.theme);
-        if(prefs.buttonColor) setButtonColor(prefs.buttonColor);
-        if(prefs.plannerDefaultColor) setPlannerDefaultColor(prefs.plannerDefaultColor);
-        if(prefs.plannerCompletedColor) setPlannerCompletedColor(prefs.plannerCompletedColor);
-        if(typeof prefs.plannerSidebarCollapsed==="boolean") setPlannerSidebarCollapsed(prefs.plannerSidebarCollapsed);
-        setDefaultSourceId(prefs.defaultSourceId ?? "");
-        setDefaultQuestionTypeId(prefs.defaultQuestionTypeId ?? "");
-        setPerformanceNotifications(Array.isArray(prefs.performanceNotifications) ? prefs.performanceNotifications.slice(0, 5) : []);
-        const syncedStudyStreak = prefs.studyStreak ?? { count: 0, lastQualifiedAt: "" };
-        studyStreakRef.current = syncedStudyStreak;
-        setStudyStreak(syncedStudyStreak);
-        const contextualState: ContextualNotificationState = {
-          notifications: Array.isArray(prefs.contextualNotifications)
-          ? newestFirst(prefs.contextualNotifications)
-          : [],
-          rotation: prefs.contextualNotificationRotation ?? {},
-          sentPeriod: prefs.contextualNotificationSentPeriod ?? {},
-        };
-        contextualNotificationStateRef.current = contextualState;
-        setContextualNotifications(contextualState.notifications.slice(0, 5));
+        applyCloudPreferences(prefs);
       })
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "study_user_state", filter: `user_id=eq.${userId}` },
+        (payload:any) => {
+          const prefs = ((payload?.new?.preferences ?? {}) as UserCloudPreferences);
+          applyCloudPreferences(prefs);
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "study_user_state", filter: `user_id=eq.${userId}` },
+        (payload:any) => {
+          const prefs = ((payload?.new?.preferences ?? {}) as UserCloudPreferences);
+          applyCloudPreferences(prefs);
+        },
+      )
       .subscribe();
     return()=>{ preferencesSyncChannel.current=null; void supabase.removeChannel(channel); };
   },[session?.user?.id]);
@@ -3293,6 +3294,21 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,subjects}:
         setData(next);
         writeStore(key,next);
       })
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "study_user_state", filter: `user_id=eq.${userId}` },
+        (payload:any) => {
+          const incoming=payload?.new?.planner_data;
+          if(!incoming) return;
+          const next=normalizePlanner(incoming);
+          const json=JSON.stringify(next);
+          if(json===plannerLastRemoteJson.current) return;
+          plannerLastRemoteJson.current=json;
+          if(Date.now()-plannerLocalEditAt.current<1500) return;
+          setData(next);
+          writeStore(key,next);
+        },
+      )
       .subscribe();
     return()=>{ plannerSyncChannel.current=null; void supabase.removeChannel(channel); };
   },[userId,key]);
