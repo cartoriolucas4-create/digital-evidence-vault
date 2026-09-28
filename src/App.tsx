@@ -3470,9 +3470,9 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,entries,su
 
   const normalizeSubjectName=(value:string)=>String(value||"")
     .normalize("NFD")
-    .replace(/[\\u0300-\\u036f]/g,"")
+    .replace(/[\u0300-\u036f]/g,"")
     .trim()
-    .replace(/\\s+/g," ")
+    .replace(/\s+/g," ")
     .toUpperCase();
 
   // Verde automático: se a matéria tiver pelo menos um lançamento de estudo
