@@ -1587,7 +1587,12 @@ function App() {
           loadPerformanceNotifications(),
           loadAdminStudentNotifications(false),
         ]);
-        await syncPreferencesFromCloud();
+        const { data: stateRow } = await (supabase as any)
+          .from("study_user_state")
+          .select("preferences")
+          .eq("user_id", session.user.id)
+          .maybeSingle();
+        if (stateRow?.preferences) applyCloudPreferences(stateRow.preferences as UserCloudPreferences);
       } catch (error) {
         console.warn("MCR global sync", error);
       } finally {
