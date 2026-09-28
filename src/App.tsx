@@ -406,28 +406,6 @@ function App() {
     const localButton = readStore<string>(`mcr_button_color_${session.user.id}`, "#d63384");
     const localPlanner = readStore<{defaultColor?:string;completedColor?:string}>(`mcr_planner_colors_${session.user.id}`, {});
     const localSidebarCollapsed = readStore<boolean>(`mcr_planner_sidebar_collapsed_${session.user.id}`, false);
-    const applyCloudPreferences = (prefs: UserCloudPreferences) => {
-      cloudPreferencesRemoteJson.current = JSON.stringify(prefs);
-      if (prefs.theme) setTheme(prefs.theme);
-      if (prefs.buttonColor) setButtonColor(prefs.buttonColor);
-      if (prefs.plannerDefaultColor) setPlannerDefaultColor(prefs.plannerDefaultColor);
-      if (prefs.plannerCompletedColor) setPlannerCompletedColor(prefs.plannerCompletedColor);
-      if (typeof prefs.plannerSidebarCollapsed === "boolean") setPlannerSidebarCollapsed(prefs.plannerSidebarCollapsed);
-      setDefaultSourceId(prefs.defaultSourceId ?? "");
-      setDefaultQuestionTypeId(prefs.defaultQuestionTypeId ?? "");
-      setPerformanceNotifications(Array.isArray(prefs.performanceNotifications) ? newestFirst(prefs.performanceNotifications, 5) : []);
-      const loadedStudyStreak = prefs.studyStreak ?? { count: 0, lastQualifiedAt: "" };
-      studyStreakRef.current = loadedStudyStreak;
-      setStudyStreak(loadedStudyStreak);
-      const contextualState: ContextualNotificationState = {
-        notifications: Array.isArray(prefs.contextualNotifications) ? newestFirst(prefs.contextualNotifications) : [],
-        rotation: prefs.contextualNotificationRotation ?? {},
-        sentPeriod: prefs.contextualNotificationSentPeriod ?? {},
-      };
-      contextualNotificationStateRef.current = contextualState;
-      setContextualNotifications(contextualState.notifications.slice(0, 5));
-    };
-
     const loadCloudState = async () => {
       const { data, error } = await (supabase as any)
         .from("study_user_state")
@@ -455,6 +433,28 @@ function App() {
 
   // Fallback robusto para Android/WebView: Realtime é um acelerador, mas a nuvem continua sendo a fonte de verdade.
   // Isso também recupera alterações caso o WebSocket seja interrompido ou o aplicativo fique em segundo plano.
+  const applyCloudPreferences = (prefs: UserCloudPreferences) => {
+    cloudPreferencesRemoteJson.current = JSON.stringify(prefs);
+    if (prefs.theme) setTheme(prefs.theme);
+    if (prefs.buttonColor) setButtonColor(prefs.buttonColor);
+    if (prefs.plannerDefaultColor) setPlannerDefaultColor(prefs.plannerDefaultColor);
+    if (prefs.plannerCompletedColor) setPlannerCompletedColor(prefs.plannerCompletedColor);
+    if (typeof prefs.plannerSidebarCollapsed === "boolean") setPlannerSidebarCollapsed(prefs.plannerSidebarCollapsed);
+    setDefaultSourceId(prefs.defaultSourceId ?? "");
+    setDefaultQuestionTypeId(prefs.defaultQuestionTypeId ?? "");
+    setPerformanceNotifications(Array.isArray(prefs.performanceNotifications) ? newestFirst(prefs.performanceNotifications, 5) : []);
+    const loadedStudyStreak = prefs.studyStreak ?? { count: 0, lastQualifiedAt: "" };
+    studyStreakRef.current = loadedStudyStreak;
+    setStudyStreak(loadedStudyStreak);
+    const contextualState: ContextualNotificationState = {
+      notifications: Array.isArray(prefs.contextualNotifications) ? newestFirst(prefs.contextualNotifications) : [],
+      rotation: prefs.contextualNotificationRotation ?? {},
+      sentPeriod: prefs.contextualNotificationSentPeriod ?? {},
+    };
+    contextualNotificationStateRef.current = contextualState;
+    setContextualNotifications(contextualState.notifications.slice(0, 5));
+  };
+
   useEffect(() => {
     if (!session?.user?.id) return;
     const userId = session.user.id;
@@ -498,7 +498,7 @@ function App() {
     };
 
     void syncPreferencesFromCloud();
-    const timer = window.setInterval(() => { void syncPreferencesFromCloud(); }, 4000);
+    const timer = window.setInterval(() => { void syncPreferencesFromCloud(); }, 5000);
 
     const onResume = () => { void syncPreferencesFromCloud(); };
     window.addEventListener("focus", onResume);
@@ -1570,6 +1570,40 @@ function App() {
     );
     setEntries(filtered);
   };
+
+  // Sincronização global de segurança: ao voltar ao site, buscar novamente os
+  // dados persistentes mais importantes. Realtime é o caminho rápido; esta leitura
+  // evita estado antigo quando WebSocket/cache do navegador estiverem desatualizados.
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    let busy = false;
+    const syncAll = async () => {
+      if (busy || document.visibilityState === "hidden") return;
+      busy = true;
+      try {
+        await Promise.all([
+          loadCatalog(),
+          loadEntries(),
+          loadPerformanceNotifications(),
+          loadAdminStudentNotifications(false),
+        ]);
+        await syncPreferencesFromCloud();
+      } catch (error) {
+        console.warn("MCR global sync", error);
+      } finally {
+        busy = false;
+      }
+    };
+    const onResume = () => { if (document.visibilityState !== "hidden") void syncAll(); };
+    window.addEventListener("focus", onResume);
+    document.addEventListener("visibilitychange", onResume);
+    const timer = window.setInterval(() => { void syncAll(); }, 10000);
+    return () => {
+      window.removeEventListener("focus", onResume);
+      document.removeEventListener("visibilitychange", onResume);
+      window.clearInterval(timer);
+    };
+  }, [session?.user?.id, applied.from, applied.to, applied.disciplineId, applied.subjectId, applied.sourceId]);
 
   useEffect(() => {
     if (!session?.user?.id) return;
