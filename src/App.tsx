@@ -3478,8 +3478,52 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,entries,su
   // Verde automático: se a matéria tiver pelo menos um lançamento de estudo
   // dentro da semana atualmente exibida, o quadradinho fica na cor de estudada.
   // O ✓ manual continua funcionando normalmente.
+  const [cloudStudiedSubjectNames, setCloudStudiedSubjectNames] = useState<string[]>([]);
+
+  const loadCloudStudiedSubjects = async () => {
+    if (!userId) return;
+    const { data, error } = await (supabase as any)
+      .from("study_entries")
+      .select("study_date, subject_id, subject:study_subjects(name)")
+      .gte("study_date", weekKey)
+      .lte("study_date", weekEndKey)
+      .order("study_date", { ascending: false });
+    if (error) return;
+    const names = new Set<string>();
+    (data ?? []).forEach((entry:any) => {
+      const related = Array.isArray(entry.subject) ? entry.subject[0] : entry.subject;
+      const subjectName = related?.name || subjects.find(subject => subject.id === entry.subject_id)?.name || "";
+      const normalized = normalizeSubjectName(subjectName);
+      if (normalized) names.add(normalized);
+    });
+    setCloudStudiedSubjectNames(Array.from(names));
+  };
+
+  // A cor verde do planejamento vem dos lançamentos reais salvos na nuvem,
+  // e não apenas do estado/localStorage deste navegador.
+  useEffect(() => {
+    void loadCloudStudiedSubjects();
+    const channel = supabase.channel(`planner-studied-${userId}-${weekKey}`);
+    channel
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "study_entries", filter: `user_id=eq.${userId}` },
+        () => { void loadCloudStudiedSubjects(); },
+      )
+      .subscribe();
+
+    const timer = window.setInterval(() => {
+      void loadCloudStudiedSubjects();
+    }, 5000);
+
+    return () => {
+      window.clearInterval(timer);
+      void supabase.removeChannel(channel);
+    };
+  }, [userId, weekKey, weekEndKey, subjects]);
+
   const studiedSubjectNamesThisWeek=useMemo(()=>{
-    const names=new Set<string>();
+    const names=new Set<string>(cloudStudiedSubjectNames);
     entries.forEach(entry=>{
       const date=String(entry.study_date||"").slice(0,10);
       if(date<weekKey || date>weekEndKey) return;
@@ -3492,7 +3536,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,entries,su
       if(normalized) names.add(normalized);
     });
     return names;
-  },[entries,subjects,weekKey,weekEndKey]);
+  },[cloudStudiedSubjectNames,entries,subjects,weekKey,weekEndKey]);
 
   const isStudiedThisWeek=(id:string)=>{
     const cell=getCell(id);
