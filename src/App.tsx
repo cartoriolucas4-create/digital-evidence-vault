@@ -1381,7 +1381,7 @@ function App() {
     const state = contextualNotificationStateRef.current;
     if (state.sentPeriod[category] === periodKey) return;
 
-    const config = CONTEXTUAL_NOTIFICATION_MESSAGES[category];
+    const config = CONTEXTUAL_NOTIFICATION_MESSAGES[category as Exclude<ContextualNotification["category"], "welcome">];
     const currentRotation = Number(state.rotation[category] ?? 0);
     const message = config.messages[currentRotation % config.messages.length];
     const nextRotation = (currentRotation + 1) % config.messages.length;
