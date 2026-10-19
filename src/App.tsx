@@ -3579,46 +3579,21 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,entries,su
     return names;
   },[cloudStudiedSubjectNames,entries,subjects,weekKey,weekEndKey]);
 
+  // A cor verde é uma escolha manual persistente: não muda ao trocar de semana,
+  // avançar o calendário ou registrar estudos. Só o clique na matéria ou "Próximo ciclo" altera.
   const isStudiedThisWeek=(id:string)=>{
     const cell=getCell(id);
-    // Cada marca pertence a uma semana específica; nunca tratar qualquer marca antiga
-    // como se fosse da semana atual. Uma desmarcação manual vale apenas para esta semana.
-    if(cell.studiedClearedWeek===weekKey) return false;
-    if(cell.studiedWeeks?.includes(weekKey) || cell.studiedWeek===weekKey) return true;
-    const cellSubject=normalizeSubjectName(cell.subject);
-    return Boolean(cellSubject && studiedSubjectNamesThisWeek.has(cellSubject));
+    return Boolean(cell.studiedWeeks?.length || cell.studiedWeek);
   };
-
-  // Registra de forma persistente a marca verde produzida por lançamentos reais.
-  // Assim, quando a semana muda, a cor já fica gravada no planejamento do aluno.
-  useEffect(()=>{
-    if(!plannerRemoteReady.current || studiedSubjectNamesThisWeek.size===0) return;
-    const matchingIds=Object.entries(data.cells)
-      .filter(([,cell])=>Boolean(cell.subject.trim()) && cell.studiedClearedWeek!==weekKey && studiedSubjectNamesThisWeek.has(normalizeSubjectName(cell.subject)))
-      .map(([id])=>id);
-    if(matchingIds.every(id=>data.cells[id]?.studiedWeeks?.includes(weekKey) || data.cells[id]?.studiedWeek===weekKey)) return;
-    commitPlannerChange(prev=>{
-      const cells={...prev.cells};
-      matchingIds.forEach(id=>{
-        const cell=cells[id];
-        if(!cell) return;
-        const weeks=Array.from(new Set([...(cell.studiedWeeks??[]),...(cell.studiedWeek?[cell.studiedWeek]:[]),weekKey]));
-        cells[id]={...cell,studiedWeeks:weeks,studiedWeek:undefined};
-      });
-      return {...prev,cells};
-    });
-  },[data.cells,studiedSubjectNamesThisWeek,weekKey]);
 
   const toggleStudied=(id:string)=>{
     commitPlannerChange(prev=>{
       const cell={...getCell(id)};
-      const wasMarkedThisWeek=Boolean(cell.studiedWeeks?.includes(weekKey) || cell.studiedWeek===weekKey);
-      // Preserve all other weeks when toggling this week. Never clear the full history.
-      const priorWeeks=Array.from(new Set([...(cell.studiedWeeks??[]),...(cell.studiedWeek?[cell.studiedWeek]:[])])).filter(week=>week!==weekKey);
+      const wasMarked=Boolean(cell.studiedWeeks?.length || cell.studiedWeek);
       const next={
         ...cell,
-        studiedWeeks:wasMarkedThisWeek?priorWeeks:Array.from(new Set([...priorWeeks,weekKey])),
-        studiedClearedWeek:wasMarkedThisWeek?weekKey:undefined,
+        studiedWeeks:wasMarked?[]:[weekKey],
+        studiedClearedWeek:undefined,
         studiedWeek:undefined
       };
       return {...prev,cells:{...prev.cells,[id]:next}};
