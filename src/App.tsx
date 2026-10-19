@@ -3236,6 +3236,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,entries,su
   const [data,setData]=useState<PlannerData>(()=>normalizePlanner(readStore<PlannerData>(key,makeInitial())));
   const plannerRemoteReady=useRef(false);
   const plannerRemoteTimer=useRef<ReturnType<typeof setTimeout> | null>(null);
+  const plannerSaveQueue=useRef<Promise<void>>(Promise.resolve());
   const plannerLastRemoteJson=useRef<string | null>(null);  const plannerDataRef=useRef<PlannerData>(data);
   const plannerSyncChannel=useRef<ReturnType<typeof supabase.channel> | null>(null);
   const plannerLocalEditAt=useRef(0);
@@ -3399,40 +3400,50 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,entries,su
   },[userId,key]);
 
   useEffect(()=>{
+    // Persistência local síncrona: a alteração fica no navegador imediatamente.
     writeStore(key,data);
     if(!plannerRemoteReady.current)return;
-    if(plannerRemoteTimer.current) clearTimeout(plannerRemoteTimer.current);
 
     const snapshot=normalizePlanner(data);
     const snapshotJson=JSON.stringify(snapshot);
     if(snapshotJson===plannerLastRemoteJson.current)return;
-    plannerRemoteTimer.current=setTimeout(async()=>{
-      const client=supabase as any;
-      const {data:saved,error}=await client
-        .from("study_user_state")
-        .upsert(
-          {user_id:userId,planner_data:snapshot},
-          {onConflict:"user_id"}
-        )
-        .select("planner_data,updated_at")
-        .single();
 
-      if(error){
-        notify("Alteração feita localmente, mas não foi possível sincronizar o planejamento com a nuvem.");
-        return;
-      }
+    // Enfileira gravações para que edições rápidas não concorram entre si.
+    // A gravação começa sem debounce de centenas de milissegundos.
+    plannerSaveQueue.current=plannerSaveQueue.current
+      .catch(()=>undefined)
+      .then(async()=>{
+        const client=supabase as any;
+        const {data:saved,error}=await client
+          .from("study_user_state")
+          .upsert(
+            {user_id:userId,planner_data:snapshot},
+            {onConflict:"user_id"}
+          )
+          .select("planner_data,updated_at")
+          .single();
 
-      if(saved?.planner_data){
-        const confirmed=normalizePlanner(saved.planner_data);
-        plannerLastRemoteJson.current=JSON.stringify(confirmed);
-        writeStore(key,confirmed);
-        void plannerSyncChannel.current?.send({type:"broadcast",event:"planner_updated",payload:{planner_data:confirmed}});
-      }
-    },350);
+        if(error){
+          notify("Não foi possível sincronizar uma alteração com a nuvem. Ela continua no navegador; verifique a conexão e tente novamente.");
+          throw error;
+        }
 
-    return ()=>{
-      if(plannerRemoteTimer.current) clearTimeout(plannerRemoteTimer.current);
-    };
+        if(saved?.planner_data){
+          const confirmed=normalizePlanner(saved.planner_data);
+          const confirmedJson=JSON.stringify(confirmed);
+          plannerLastRemoteJson.current=confirmedJson;
+
+          // Não substitua uma edição mais nova feita enquanto esta gravação estava em trânsito.
+          const currentJson=JSON.stringify(normalizePlanner(plannerDataRef.current));
+          if(currentJson===snapshotJson){
+            writeStore(key,confirmed);
+          }
+          void plannerSyncChannel.current?.send({type:"broadcast",event:"planner_updated",payload:{planner_data:confirmed}});
+        }
+      })
+      .catch((error)=>{
+        console.error("Planner cloud save failed",error);
+      });
   },[key,data,userId]);
   const commitPlannerChange=(updater:(prev:PlannerData)=>PlannerData)=>{
     plannerLocalEditAt.current=Date.now();
