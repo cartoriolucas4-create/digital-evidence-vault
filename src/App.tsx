@@ -3190,7 +3190,7 @@ function PlannerColorPalette({title,colors,onPick,onCustom}:{title:string;colors
 
 function Planner({userId,notify,defaultSmallColor,completedSmallColor,entries,subjects}:{userId:string;notify:(message:string)=>void;defaultSmallColor:string;completedSmallColor:string;entries:Entry[];subjects:Subject[];}) {
   type CellPartStyle = { bg:string; fg:string; bold:boolean; italic:boolean; underline:boolean; strike:boolean; size:number; fontFamily:string; align:"left"|"center"|"right"; vertical:"top"|"middle"|"bottom"; wrap:"overflow"|"wrap"|"clip" };
-  type Cell = { id:string; subject:string; text:string; studiedWeek?:string; bg:string; fg:string; subjectBg:string; subjectFg:string; bold:boolean; italic:boolean; underline:boolean; strike:boolean; size:number; fontFamily:string; align:"left"|"center"|"right"; vertical:"top"|"middle"|"bottom"; wrap:"overflow"|"wrap"|"clip"; subjectStyle?:CellPartStyle; textStyle?:CellPartStyle };
+  type Cell = { id:string; subject:string; text:string; studiedWeek?:string; studiedWeeks?:string[]; bg:string; fg:string; subjectBg:string; subjectFg:string; bold:boolean; italic:boolean; underline:boolean; strike:boolean; size:number; fontFamily:string; align:"left"|"center"|"right"; vertical:"top"|"middle"|"bottom"; wrap:"overflow"|"wrap"|"clip"; subjectStyle?:CellPartStyle; textStyle?:CellPartStyle };
   type PlannerData = { version:3; weekOffset:number; cols:number; rows:number; headers:string[]; colWidths:number[]; rowHeights:number[]; rowCellCounts:number[]; cells:Record<string,Cell> };
   const defaultHeaders=["SEGUNDA","TERÇA","QUARTA","QUINTA","SEXTA","SÁBADO","DOMINGO"];
   const defaultPartStyle=(kind:"subject"|"text"):CellPartStyle=>kind==="subject"?({bg:"#f7f8fa",fg:"#17202a",bold:true,italic:false,underline:false,strike:false,size:14,fontFamily:"Arial",align:"center",vertical:"top",wrap:"wrap"}):({bg:"#ffffff",fg:"#17202a",bold:true,italic:false,underline:false,strike:false,size:14,fontFamily:"Arial",align:"center",vertical:"top",wrap:"wrap"});
@@ -3579,15 +3579,37 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,entries,su
 
   const isStudiedThisWeek=(id:string)=>{
     const cell=getCell(id);
-    if(cell.studiedWeek===weekKey) return true;
+    // A marca verde é histórica: trocar a semana não apaga as semanas já estudadas.
+    if(cell.studiedWeeks?.length || cell.studiedWeek) return true;
     const cellSubject=normalizeSubjectName(cell.subject);
     return Boolean(cellSubject && studiedSubjectNamesThisWeek.has(cellSubject));
   };
 
+  // Registra de forma persistente a marca verde produzida por lançamentos reais.
+  // Assim, quando a semana muda, a cor já fica gravada no planejamento do aluno.
+  useEffect(()=>{
+    if(!plannerRemoteReady.current || studiedSubjectNamesThisWeek.size===0) return;
+    const matchingIds=Object.entries(data.cells)
+      .filter(([,cell])=>Boolean(cell.subject.trim()) && studiedSubjectNamesThisWeek.has(normalizeSubjectName(cell.subject)))
+      .map(([id])=>id);
+    if(matchingIds.every(id=>data.cells[id]?.studiedWeeks?.includes(weekKey) || data.cells[id]?.studiedWeek===weekKey)) return;
+    commitPlannerChange(prev=>{
+      const cells={...prev.cells};
+      matchingIds.forEach(id=>{
+        const cell=cells[id];
+        if(!cell) return;
+        const weeks=Array.from(new Set([...(cell.studiedWeeks??[]),...(cell.studiedWeek?[cell.studiedWeek]:[]),weekKey]));
+        cells[id]={...cell,studiedWeeks:weeks,studiedWeek:undefined};
+      });
+      return {...prev,cells};
+    });
+  },[data.cells,studiedSubjectNamesThisWeek,weekKey]);
+
   const toggleStudied=(id:string)=>{
     commitPlannerChange(prev=>{
       const cell={...getCell(id)};
-      const next={...cell,studiedWeek:cell.studiedWeek===weekKey?undefined:weekKey};
+      const wasStudied=Boolean(cell.studiedWeeks?.length || cell.studiedWeek || (normalizeSubjectName(cell.subject) && studiedSubjectNamesThisWeek.has(normalizeSubjectName(cell.subject))));
+      const next={...cell,studiedWeeks:wasStudied?[]:Array.from(new Set([...(cell.studiedWeeks??[]),weekKey])),studiedWeek:undefined};
       return {...prev,cells:{...prev.cells,[id]:next}};
     });
   };
@@ -4031,7 +4053,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,entries,su
     headers.push("COLUNA "+(prev.cols+1));
     return {...prev,cols:prev.cols+1,headers,colWidths:[...prev.colWidths,190],rowCellCounts:prev.rowCellCounts.map(count=>count+1)};
   });
-  const resetPlanner=()=>{if(window.confirm("Limpar todo o conteúdo desta semana?")){commitPlannerChange(prev=>({...prev,cells:{}}));setSelected([]);}};
+  const resetPlanner=()=>{if(window.confirm("Limpar todo o conteúdo e o histórico de cores verdes do planejamento? Esta ação não apaga seus lançamentos de estudo.")){commitPlannerChange(prev=>({...prev,cells:Object.fromEntries(Object.entries(prev.cells).map(([id,cell])=>[id,{...cell,studiedWeek:undefined,studiedWeeks:[]}]))}));setSelected([]);}};
   const startNextCycle=()=>{
     commitPlannerChange(prev=>{
       const cells={...prev.cells};
@@ -4040,6 +4062,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,entries,su
         cells[id]={
           ...cell,
           studiedWeek:undefined,
+          studiedWeeks:[],
           bg:"#ffffff",
           subjectBg:defaultSmallColor,
           subjectStyle:{...(cell.subjectStyle??defaultPartStyle("subject")),bg:defaultSmallColor},
