@@ -1165,7 +1165,7 @@ function App() {
       const subscription = await registration.pushManager.getSubscription();
       if (subscription) {
         const client = supabase as any;
-        await client.from("mcr_push_subscriptions").delete().eq("user_id", session.user.id).eq("endpoint", subscription.endpoint);
+        await client.from("mcr_push_subscriptions").delete().eq("user_id", session!.user.id).eq("endpoint", subscription.endpoint);
         await subscription.unsubscribe();
       }
       setPushEnabled(false);
@@ -1263,7 +1263,7 @@ function App() {
     period_key: "welcome",
   };
 
-  const CONTEXTUAL_NOTIFICATION_MESSAGES: Record<ContextualNotification["category"], { title: string; messages: string[] }> = {
+  const CONTEXTUAL_NOTIFICATION_MESSAGES: Record<Exclude<ContextualNotification["category"], "welcome">, { title: string; messages: string[] }> = {
     first_three_days: {
       title: "🚀 Começo de mês",
       messages: [
@@ -1381,7 +1381,7 @@ function App() {
     const state = contextualNotificationStateRef.current;
     if (state.sentPeriod[category] === periodKey) return;
 
-    const config = CONTEXTUAL_NOTIFICATION_MESSAGES[category];
+    const config = CONTEXTUAL_NOTIFICATION_MESSAGES[category as Exclude<ContextualNotification["category"], "welcome">];
     const currentRotation = Number(state.rotation[category] ?? 0);
     const message = config.messages[currentRotation % config.messages.length];
     const nextRotation = (currentRotation + 1) % config.messages.length;
@@ -3686,7 +3686,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,entries,su
     const anchor=dragSelection.current={anchorRow:row,anchorCol:col,dragging:true};
     selectRect(row,row,col,col);
     const stop=()=>{if(dragSelection.current){dragSelection.current.dragging=false;dragSelection.current=null;}}
-    const move=(ev:PointerEvent)=>{
+    const move=(ev:globalThis.PointerEvent)=>{
       if(!dragSelection.current?.dragging) return;
       const el=document.elementFromPoint(ev.clientX,ev.clientY)?.closest("[data-planner-row][data-planner-col]") as HTMLElement|null;
       if(!el) return;
@@ -3713,7 +3713,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,entries,su
     const anchor=index;
     if(axis==="row") selectRowsRange(anchor,anchor); else selectColsRange(anchor,anchor);
     let dragging=true;
-    const move=(ev:PointerEvent)=>{
+    const move=(ev:globalThis.PointerEvent)=>{
       if(!dragging) return;
       const el=document.elementFromPoint(ev.clientX,ev.clientY) as HTMLElement|null;
       const head=el?.closest(axis==="row"?".planner-row-selector":".planner-day") as HTMLElement|null;

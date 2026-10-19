@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.15"
   }
   public: {
     Tables: {
@@ -265,6 +265,86 @@ export type Database = {
           },
         ]
       }
+      mcr_admin_accounts: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          password_hash: string
+          username: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          password_hash: string
+          username: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          password_hash?: string
+          username?: string
+        }
+        Relationships: []
+      }
+      mcr_admin_notifications: {
+        Row: {
+          created_at: string
+          id: string
+          message: string
+          read_at: string | null
+          title: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message: string
+          read_at?: string | null
+          title: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string
+          read_at?: string | null
+          title?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      mcr_admin_sessions: {
+        Row: {
+          admin_id: string
+          created_at: string
+          expires_at: string
+          token: string
+        }
+        Insert: {
+          admin_id: string
+          created_at?: string
+          expires_at: string
+          token: string
+        }
+        Update: {
+          admin_id?: string
+          created_at?: string
+          expires_at?: string
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mcr_admin_sessions_admin_id_fkey"
+            columns: ["admin_id"]
+            isOneToOne: false
+            referencedRelation: "mcr_admin_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       question_types: {
         Row: {
           created_at: string
@@ -332,42 +412,54 @@ export type Database = {
         Row: {
           correct: number
           created_at: string
-          discipline_id: string
+          discipline_id: string | null
+          discipline_name_snapshot: string | null
           id: string
           notes: string | null
           question_type_id: string | null
+          question_type_name_snapshot: string | null
           questions: number
           source_id: string | null
+          source_name_snapshot: string | null
           study_date: string
-          subject_id: string
+          subject_id: string | null
+          subject_name_snapshot: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
           correct?: number
           created_at?: string
-          discipline_id: string
+          discipline_id?: string | null
+          discipline_name_snapshot?: string | null
           id?: string
           notes?: string | null
           question_type_id?: string | null
+          question_type_name_snapshot?: string | null
           questions?: number
           source_id?: string | null
+          source_name_snapshot?: string | null
           study_date?: string
-          subject_id: string
+          subject_id?: string | null
+          subject_name_snapshot?: string | null
           updated_at?: string
           user_id?: string
         }
         Update: {
           correct?: number
           created_at?: string
-          discipline_id?: string
+          discipline_id?: string | null
+          discipline_name_snapshot?: string | null
           id?: string
           notes?: string | null
           question_type_id?: string | null
+          question_type_name_snapshot?: string | null
           questions?: number
           source_id?: string | null
+          source_name_snapshot?: string | null
           study_date?: string
-          subject_id?: string
+          subject_id?: string | null
+          subject_name_snapshot?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -395,6 +487,53 @@ export type Database = {
           },
           {
             foreignKeyName: "study_entries_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "study_subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      study_performance_notifications: {
+        Row: {
+          created_at: string
+          discipline_name: string | null
+          id: string
+          message: string
+          notification_type: string
+          read_at: string | null
+          subject_id: string | null
+          subject_name: string
+          title: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          discipline_name?: string | null
+          id?: string
+          message: string
+          notification_type: string
+          read_at?: string | null
+          subject_id?: string | null
+          subject_name: string
+          title: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          discipline_name?: string | null
+          id?: string
+          message?: string
+          notification_type?: string
+          read_at?: string | null
+          subject_id?: string | null
+          subject_name?: string
+          title?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "study_performance_notifications_subject_id_fkey"
             columns: ["subject_id"]
             isOneToOne: false
             referencedRelation: "study_subjects"
@@ -506,6 +645,30 @@ export type Database = {
           },
         ]
       }
+      study_user_state: {
+        Row: {
+          discipline_order: Json
+          planner_data: Json | null
+          preferences: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          discipline_order?: Json
+          planner_data?: Json | null
+          preferences?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          discipline_order?: Json
+          planner_data?: Json | null
+          preferences?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       subjects: {
         Row: {
           created_at: string
@@ -585,12 +748,28 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_login: {
+        Args: { p_password: string; p_username: string }
+        Returns: Json
+      }
+      clear_study_catalog: { Args: { p_user_id: string }; Returns: undefined }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
         Returns: boolean
+      }
+      mcr_users_for_admin: {
+        Args: { p_key: string }
+        Returns: {
+          created_at: string
+          email: string
+          email_confirmed_at: string
+          id: string
+          last_sign_in_at: string
+          name: string
+        }[]
       }
     }
     Enums: {
