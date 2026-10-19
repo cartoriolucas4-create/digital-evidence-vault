@@ -3581,8 +3581,10 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,entries,su
 
   const isStudiedThisWeek=(id:string)=>{
     const cell=getCell(id);
-    // A marca verde é histórica: trocar a semana não apaga as semanas já estudadas.
-    if(cell.studiedWeeks?.length || cell.studiedWeek) return true;
+    // Cada marca pertence a uma semana específica; nunca tratar qualquer marca antiga
+    // como se fosse da semana atual. Uma desmarcação manual vale apenas para esta semana.
+    if(cell.studiedClearedWeek===weekKey) return false;
+    if(cell.studiedWeeks?.includes(weekKey) || cell.studiedWeek===weekKey) return true;
     const cellSubject=normalizeSubjectName(cell.subject);
     return Boolean(cellSubject && studiedSubjectNamesThisWeek.has(cellSubject));
   };
@@ -3610,8 +3612,15 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,entries,su
   const toggleStudied=(id:string)=>{
     commitPlannerChange(prev=>{
       const cell={...getCell(id)};
-      const wasStudied=Boolean(cell.studiedWeeks?.length || cell.studiedWeek || (normalizeSubjectName(cell.subject) && studiedSubjectNamesThisWeek.has(normalizeSubjectName(cell.subject))));
-      const next={...cell,studiedWeeks:wasStudied?[]:Array.from(new Set([...(cell.studiedWeeks??[]),weekKey])),studiedClearedWeek:wasStudied?weekKey:undefined,studiedWeek:undefined};
+      const wasMarkedThisWeek=Boolean(cell.studiedWeeks?.includes(weekKey) || cell.studiedWeek===weekKey);
+      // Preserve all other weeks when toggling this week. Never clear the full history.
+      const priorWeeks=Array.from(new Set([...(cell.studiedWeeks??[]),...(cell.studiedWeek?[cell.studiedWeek]:[])])).filter(week=>week!==weekKey);
+      const next={
+        ...cell,
+        studiedWeeks:wasMarkedThisWeek?priorWeeks:Array.from(new Set([...priorWeeks,weekKey])),
+        studiedClearedWeek:wasMarkedThisWeek?weekKey:undefined,
+        studiedWeek:undefined
+      };
       return {...prev,cells:{...prev.cells,[id]:next}};
     });
   };
