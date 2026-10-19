@@ -3190,7 +3190,7 @@ function PlannerColorPalette({title,colors,onPick,onCustom}:{title:string;colors
 
 function Planner({userId,notify,defaultSmallColor,completedSmallColor,entries,subjects}:{userId:string;notify:(message:string)=>void;defaultSmallColor:string;completedSmallColor:string;entries:Entry[];subjects:Subject[];}) {
   type CellPartStyle = { bg:string; fg:string; bold:boolean; italic:boolean; underline:boolean; strike:boolean; size:number; fontFamily:string; align:"left"|"center"|"right"; vertical:"top"|"middle"|"bottom"; wrap:"overflow"|"wrap"|"clip" };
-  type Cell = { id:string; subject:string; text:string; studiedWeek?:string; studiedWeeks?:string[]; bg:string; fg:string; subjectBg:string; subjectFg:string; bold:boolean; italic:boolean; underline:boolean; strike:boolean; size:number; fontFamily:string; align:"left"|"center"|"right"; vertical:"top"|"middle"|"bottom"; wrap:"overflow"|"wrap"|"clip"; subjectStyle?:CellPartStyle; textStyle?:CellPartStyle };
+  type Cell = { id:string; subject:string; text:string; studiedWeek?:string; studiedWeeks?:string[]; studiedClearedWeek?:string; bg:string; fg:string; subjectBg:string; subjectFg:string; bold:boolean; italic:boolean; underline:boolean; strike:boolean; size:number; fontFamily:string; align:"left"|"center"|"right"; vertical:"top"|"middle"|"bottom"; wrap:"overflow"|"wrap"|"clip"; subjectStyle?:CellPartStyle; textStyle?:CellPartStyle };
   type PlannerData = { version:3; weekOffset:number; cols:number; rows:number; headers:string[]; colWidths:number[]; rowHeights:number[]; rowCellCounts:number[]; cells:Record<string,Cell> };
   const defaultHeaders=["SEGUNDA","TERÇA","QUARTA","QUINTA","SEXTA","SÁBADO","DOMINGO"];
   const defaultPartStyle=(kind:"subject"|"text"):CellPartStyle=>kind==="subject"?({bg:"#f7f8fa",fg:"#17202a",bold:true,italic:false,underline:false,strike:false,size:14,fontFamily:"Arial",align:"center",vertical:"top",wrap:"wrap"}):({bg:"#ffffff",fg:"#17202a",bold:true,italic:false,underline:false,strike:false,size:14,fontFamily:"Arial",align:"center",vertical:"top",wrap:"wrap"});
@@ -3590,7 +3590,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,entries,su
   useEffect(()=>{
     if(!plannerRemoteReady.current || studiedSubjectNamesThisWeek.size===0) return;
     const matchingIds=Object.entries(data.cells)
-      .filter(([,cell])=>Boolean(cell.subject.trim()) && studiedSubjectNamesThisWeek.has(normalizeSubjectName(cell.subject)))
+      .filter(([,cell])=>Boolean(cell.subject.trim()) && cell.studiedClearedWeek!==weekKey && studiedSubjectNamesThisWeek.has(normalizeSubjectName(cell.subject)))
       .map(([id])=>id);
     if(matchingIds.every(id=>data.cells[id]?.studiedWeeks?.includes(weekKey) || data.cells[id]?.studiedWeek===weekKey)) return;
     commitPlannerChange(prev=>{
@@ -3609,7 +3609,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,entries,su
     commitPlannerChange(prev=>{
       const cell={...getCell(id)};
       const wasStudied=Boolean(cell.studiedWeeks?.length || cell.studiedWeek || (normalizeSubjectName(cell.subject) && studiedSubjectNamesThisWeek.has(normalizeSubjectName(cell.subject))));
-      const next={...cell,studiedWeeks:wasStudied?[]:Array.from(new Set([...(cell.studiedWeeks??[]),weekKey])),studiedWeek:undefined};
+      const next={...cell,studiedWeeks:wasStudied?[]:Array.from(new Set([...(cell.studiedWeeks??[]),weekKey])),studiedClearedWeek:wasStudied?weekKey:undefined,studiedWeek:undefined};
       return {...prev,cells:{...prev.cells,[id]:next}};
     });
   };
@@ -4053,7 +4053,7 @@ function Planner({userId,notify,defaultSmallColor,completedSmallColor,entries,su
     headers.push("COLUNA "+(prev.cols+1));
     return {...prev,cols:prev.cols+1,headers,colWidths:[...prev.colWidths,190],rowCellCounts:prev.rowCellCounts.map(count=>count+1)};
   });
-  const resetPlanner=()=>{if(window.confirm("Limpar todo o conteúdo e o histórico de cores verdes do planejamento? Esta ação não apaga seus lançamentos de estudo.")){commitPlannerChange(prev=>({...prev,cells:Object.fromEntries(Object.entries(prev.cells).map(([id,cell])=>[id,{...cell,studiedWeek:undefined,studiedWeeks:[]}]))}));setSelected([]);}};
+  const resetPlanner=()=>{if(window.confirm("Limpar todo o conteúdo e o histórico de cores verdes do planejamento? Esta ação não apaga seus lançamentos de estudo.")){commitPlannerChange(prev=>({...prev,cells:Object.fromEntries(Object.entries(prev.cells).map(([id,cell])=>[id,{...cell,studiedWeek:undefined,studiedWeeks:[],studiedClearedWeek:weekKey}]))}));setSelected([]);}};
   const startNextCycle=()=>{
     commitPlannerChange(prev=>{
       const cells={...prev.cells};
