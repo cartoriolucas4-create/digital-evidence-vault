@@ -189,11 +189,12 @@ const dateOneMonthAgo = () => {
   return `${y}-${m}-${day}`;
 };
 
+const ALL_HISTORY_FROM = "2000-01-01";
 const emptyFilters = (): Filters => ({
   disciplineId: "",
   subjectId: "",
   sourceId: "",
-  from: dateOneMonthAgo(),
+  from: ALL_HISTORY_FROM,
   to: localDate(),
 });
 
@@ -339,7 +340,7 @@ function App() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [applied, setApplied] = useState<Filters>(emptyFilters);
-  const [periodPreset, setPeriodPreset] = useState<"7"|"30"|"90"|"custom">("30");
+  const [periodPreset, setPeriodPreset] = useState<"7"|"30"|"90"|"all"|"custom">("all");
   const [studentName, setStudentName] = useState("");
   const [dailyGoal, setDailyGoal] = useState(100);
   const [weeklyGoal, setWeeklyGoal] = useState(500);
@@ -1855,9 +1856,10 @@ function App() {
     if (key === "from" || key === "to") setPeriodPreset("custom");
   };
 
-  const setQuickPeriod = (preset: "7"|"30"|"90"|"custom") => {
+  const setQuickPeriod = (preset: "7"|"30"|"90"|"all"|"custom") => {
     setPeriodPreset(preset);
     if (preset === "custom") return;
+    if (preset === "all") { setFilters({ ...filters, from: ALL_HISTORY_FROM, to: localDate() }); return; }
     const days = Number(preset);
     const next = { ...filters, from: dateMinus(days - 1), to: localDate() };
     setFilters(next);
@@ -2397,7 +2399,7 @@ function App() {
               filters={filters} setFilter={setFilter} disciplines={disciplines} subjects={filteredSubjects} sources={sources}
               periodPreset={periodPreset} onPeriodChange={setQuickPeriod}
               onApply={() => { setApplied(filters); notify("Filtros aplicados."); }}
-              onClear={() => { const next = emptyFilters(); setFilters(next); setApplied(next); setPeriodPreset("30"); }}
+              onClear={() => { const next = emptyFilters(); setFilters(next); setApplied(next); setPeriodPreset("all"); }}
               totalQuestions={totalQuestions} totalCorrect={totalCorrect} totalErrors={totalErrors} accuracy={accuracy}
               daysStudied={daysStudied} todayQuestions={todayQuestions} todayCorrect={todayCorrect} dailyGoal={dailyGoal}
               byDiscipline={byDiscipline} bySubject={bySubject} attention={attention} targetAccuracy={targetAccuracy} entries={entries} onExportMonthly={exportMonthlyPdf}
@@ -2479,7 +2481,7 @@ function Dashboard(props: any) {
             <Field label="Disciplina"><select value={props.filters.disciplineId} onChange={(e) => props.setFilter("disciplineId", e.target.value)}><option value="">Todas</option>{props.disciplines.map((d: Discipline) => <option key={d.id} value={d.id}>{d.name}</option>)}</select></Field>
             <Field label="Assunto"><select value={props.filters.subjectId} disabled={!props.filters.disciplineId} onChange={(e) => props.setFilter("subjectId", e.target.value)}><option value="">{props.filters.disciplineId ? "Todos os assuntos" : "Selecione uma disciplina"}</option>{props.subjects.map((s: Subject) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
             <Field label="Banca / Origem"><select value={props.filters.sourceId} onChange={(e) => props.setFilter("sourceId", e.target.value)}><option value="">Todas</option>{props.sources.map((s: Source) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
-            <Field label="Período"><select value={props.periodPreset} onChange={(e) => props.onPeriodChange(e.target.value as "7"|"30"|"90"|"custom")}><option value="7">Últimos 7 dias</option><option value="30">Últimos 30 dias</option><option value="90">Últimos 90 dias</option><option value="custom">Personalizado</option></select></Field>
+            <Field label="Período"><select value={props.periodPreset} onChange={(e) => props.onPeriodChange(e.target.value as "7"|"30"|"90"|"all"|"custom")}><option value="all">Todo o histórico</option><option value="7">Últimos 7 dias</option><option value="30">Últimos 30 dias</option><option value="90">Últimos 90 dias</option><option value="custom">Personalizado</option></select></Field>
             {props.periodPreset === "custom" && <><Field label="Data inicial"><input type="date" value={props.filters.from} onChange={(e) => props.setFilter("from", e.target.value)}/></Field><Field label="Data final"><input type="date" value={props.filters.to} onChange={(e) => props.setFilter("to", e.target.value)}/></Field></>}
             <button className="btn primary" onClick={props.onApply}>Filtrar</button>
             <button className="btn" onClick={props.onClear}>Limpar</button>
