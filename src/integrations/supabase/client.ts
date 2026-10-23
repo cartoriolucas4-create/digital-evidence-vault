@@ -115,10 +115,10 @@ function brokeredPreviewStorage() {
 
 
 function createSupabaseClient() {
-  // Use import.meta.env for client-side (Vite build-time replacement)
-  // Fall back to process.env for SSR (server-side rendering)
-  const SUPABASE_URL = import.meta.env['VITE_SUPABASE_URL'] || process.env['SUPABASE_URL'] || 'https://gojjlppvdzijujrqsqww.supabase.co';
-  const SUPABASE_PUBLISHABLE_KEY = import.meta.env['VITE_SUPABASE_PUBLISHABLE_KEY'] || process.env['SUPABASE_PUBLISHABLE_KEY'] || 'sb_publishable_saC2eSfYJt7LxvJFKgodIw_FQrZUBTS';
+  // This is a static browser build for GitHub Pages, not SSR.
+  // Do not reference process.env: browsers do not define the Node.js process global.
+  const SUPABASE_URL = import.meta.env['VITE_SUPABASE_URL'] || 'https://gojjlppvdzijujrqsqww.supabase.co';
+  const SUPABASE_PUBLISHABLE_KEY = import.meta.env['VITE_SUPABASE_PUBLISHABLE_KEY'] || 'sb_publishable_saC2eSfYJt7LxvJFKgodIw_FQrZUBTS';
 
   if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
     const missing = [
