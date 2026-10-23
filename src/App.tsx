@@ -234,6 +234,10 @@ function AuthScreen({ initialNotice = "" }: { initialNotice?: string }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [recoverySent, setRecoverySent] = useState(false);
+  const [recoveryCode, setRecoveryCode] = useState("");
+  const [recoveryVerified, setRecoveryVerified] = useState(false);
+  const [recoveryPassword, setRecoveryPassword] = useState("");
+  const [recoveryPasswordConfirm, setRecoveryPasswordConfirm] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(initialNotice);
 
@@ -244,27 +248,57 @@ function AuthScreen({ initialNotice = "" }: { initialNotice?: string }) {
     try {
       const client = supabase;
       if (mode === "recovery") {
-        // Use the dedicated recovery endpoint. signInWithOtp is for passwordless
-        // sign-in and fails when the project's OTP provider is disabled.
-        setRecoverySent(false);
-        const redirectUrl = new URL(window.location.href);
-        redirectUrl.search = "";
-        redirectUrl.searchParams.set("reset-password", "1");
-        redirectUrl.hash = "";
-
         const recoveryEmail = email.trim().toLowerCase();
         if (/@gmail\.comr$/i.test(recoveryEmail)) {
           throw new Error("O e-mail digitado termina em .comr. Confira se o endereço correto termina em .com antes de solicitar a redefinição.");
         }
 
-        const { error: resetError } = await client.auth.resetPasswordForEmail(
-          recoveryEmail,
-          { redirectTo: redirectUrl.toString() }
-        );
-        if (resetError) throw resetError;
+        if (!recoverySent) {
+          // Password-recovery email is used (not passwordless sign-in OTP).
+          // The Supabase Recovery email template must include {{ .Token }} so
+          // the student receives a recovery code instead of only a generic link.
+          const redirectUrl = new URL(window.location.href);
+          redirectUrl.search = "";
+          redirectUrl.searchParams.set("reset-password", "1");
+          redirectUrl.hash = "";
+          const { error: resetError } = await client.auth.resetPasswordForEmail(
+            recoveryEmail,
+            { redirectTo: redirectUrl.toString() }
+          );
+          if (resetError) throw resetError;
+          setRecoverySent(true);
+          setError("Pedido enviado. Digite o código de recuperação recebido no e-mail. Confira também a caixa de spam.");
+          return;
+        }
 
-        setRecoverySent(true);
-        setError("Solicitação enviada. Se esse e-mail estiver cadastrado, você receberá uma mensagem com o link para criar uma nova senha. Confira também o spam.");
+        if (!recoveryVerified) {
+          if (!/^\d{6,8}$/.test(recoveryCode.trim())) {
+            throw new Error("Digite o código numérico de recuperação que chegou ao seu e-mail.");
+          }
+          const { data, error: verifyError } = await client.auth.verifyOtp({
+            email: recoveryEmail,
+            token: recoveryCode.trim(),
+            type: "recovery",
+          });
+          if (verifyError) throw verifyError;
+          if (!data.session) throw new Error("O código não criou uma sessão de recuperação. Solicite outro código e tente novamente.");
+          setRecoveryVerified(true);
+          setError("Código confirmado. Agora escolha uma nova senha.");
+          return;
+        }
+
+        if (recoveryPassword.length < 6) throw new Error("A nova senha precisa ter pelo menos 6 caracteres.");
+        if (recoveryPassword !== recoveryPasswordConfirm) throw new Error("As senhas não coincidem. Digite-as novamente.");
+        const { error: updateError } = await client.auth.updateUser({ password: recoveryPassword });
+        if (updateError) throw updateError;
+        setRecoverySent(false);
+        setRecoveryVerified(false);
+        setRecoveryCode("");
+        setRecoveryPassword("");
+        setRecoveryPasswordConfirm("");
+        setMode("login");
+        setPassword("");
+        setError("Senha alterada com sucesso. Entre usando sua nova senha.");
         return;
       }
 
@@ -295,12 +329,20 @@ function AuthScreen({ initialNotice = "" }: { initialNotice?: string }) {
     setEmail("");
     setPassword("");
     setRecoverySent(false);
+    setRecoveryVerified(false);
+    setRecoveryCode("");
+    setRecoveryPassword("");
+    setRecoveryPasswordConfirm("");
     setError("");
   };
 
   const backToLogin = () => {
     setMode("login");
     setRecoverySent(false);
+    setRecoveryVerified(false);
+    setRecoveryCode("");
+    setRecoveryPassword("");
+    setRecoveryPasswordConfirm("");
     setError("");
   };
 
@@ -310,9 +352,14 @@ function AuthScreen({ initialNotice = "" }: { initialNotice?: string }) {
       <p>{mode === "login" ? "Sua preparação para concursos sob controle." : mode === "signup" ? "Crie sua conta com e-mail e senha." : "Recupere o acesso sem apagar sua senha atual."}</p>
       <form onSubmit={submit} className="auth-form">
         <Field label="E-mail"><input required type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="voce@email.com" /></Field>
-        {mode !== "recovery" && <Field label="Senha"><input required minLength={6} type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" /></Field>}
-        {error && <div className={mode === "recovery" && recoverySent ? "auth-notice" : "auth-error"}>{error}</div>}
-        <button className="btn primary auth-submit" disabled={busy}>{busy ? "Aguarde..." : mode === "login" ? "Entrar" : mode === "signup" ? "Criar conta" : recoverySent ? "Reenviar link de redefinição" : "Enviar link para redefinir senha"}</button>
+        {(mode === "login" || mode === "signup") && <Field label="Senha"><input required minLength={6} type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" /></Field>}
+        {mode === "recovery" && recoverySent && !recoveryVerified && <Field label="Código temporário recebido por e-mail"><input required inputMode="numeric" autoComplete="one-time-code" maxLength={8} pattern="[0-9]{6,8}" value={recoveryCode} onChange={(e) => setRecoveryCode(e.target.value.replace(/\D/g, "").slice(0,8))} placeholder="Digite o código de recuperação" /></Field>}
+        {mode === "recovery" && recoveryVerified && <>
+          <Field label="Nova senha"><input required minLength={6} type="password" autoComplete="new-password" value={recoveryPassword} onChange={(e) => setRecoveryPassword(e.target.value)} placeholder="Pelo menos 6 caracteres" /></Field>
+          <Field label="Confirmar nova senha"><input required minLength={6} type="password" autoComplete="new-password" value={recoveryPasswordConfirm} onChange={(e) => setRecoveryPasswordConfirm(e.target.value)} placeholder="Repita a nova senha" /></Field>
+        </>}
+        {error && <div className={mode === "recovery" && (recoverySent || error.includes("sucesso")) ? "auth-notice" : "auth-error"}>{error}</div>}
+        <button className="btn primary auth-submit" disabled={busy}>{busy ? "Aguarde..." : mode === "login" ? "Entrar" : mode === "signup" ? "Criar conta" : !recoverySent ? "Enviar código temporário" : !recoveryVerified ? "Validar código" : "Salvar nova senha"}</button>
       </form>
 
       {mode === "login" && <button className="auth-switch auth-recovery-link" onClick={openRecovery}>Esqueci minha senha</button>}
