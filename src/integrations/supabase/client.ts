@@ -7,7 +7,7 @@ function isNewSupabaseApiKey(value: string): boolean {
 }
 
 function createSupabaseFetch(supabaseKey: string): typeof fetch {
-  return (input, init) => {
+  return async (input, init) => {
     const headers = new Headers(
       typeof Request !== 'undefined' && input instanceof Request ? input.headers : undefined,
     );
@@ -22,7 +22,24 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
     }
 
     headers.set('apikey', supabaseKey);
-    return fetch(input, { ...init, headers });
+
+    // A stalled auth refresh must not freeze login or data-saving requests forever.
+    // Preserve the caller's abort signal while adding a 15-second network ceiling.
+    const controller = new AbortController();
+    const callerSignal = init?.signal;
+    const abortFromCaller = () => controller.abort(callerSignal?.reason);
+    if (callerSignal?.aborted) abortFromCaller();
+    else callerSignal?.addEventListener('abort', abortFromCaller, { once: true });
+    const timeout = setTimeout(() => {
+      controller.abort(new DOMException('Tempo limite de conexão com o Supabase excedido.', 'TimeoutError'));
+    }, 15000);
+
+    try {
+      return await fetch(input, { ...init, headers, signal: controller.signal });
+    } finally {
+      clearTimeout(timeout);
+      callerSignal?.removeEventListener('abort', abortFromCaller);
+    }
   };
 }
 
