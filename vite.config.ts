@@ -1,11 +1,11 @@
-import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import { defineConfig } from "vite";
-import { nitro } from "nitro/vite";
 import react from "@vitejs/plugin-react";
 
+// GitHub Pages serves static files only. This app uses a client-side React
+// entry point (src/main.tsx), so do not enable TanStack Start/Nitro SSR here.
 export default defineConfig({
   base: process.env.GITHUB_ACTIONS ? "/digital-evidence-vault/" : "/",
-  plugins: [tanstackStart(), nitro(), react()],
+  plugins: [react()],
   server: {
     host: true,
   },
@@ -13,6 +13,8 @@ export default defineConfig({
     host: true,
   },
   build: {
+    outDir: "dist",
+    emptyOutDir: true,
     cssMinify: false,
   },
 });
