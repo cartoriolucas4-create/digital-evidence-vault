@@ -4403,6 +4403,21 @@ function SettingsPage({
 }
 
 export default function RootApp() {
-  if (typeof window !== "undefined" && (window.location.pathname === "/administrativo" || new URLSearchParams(window.location.search).get("admin") === "1")) return <AdminPage />;
+  if (typeof window !== "undefined") {
+    // GitHub Pages project sites include the repository prefix in pathname,
+    // e.g. /digital-evidence-vault/administrativo/. Match the configured Vite
+    // base as well as direct-hosting paths and slash/index variants.
+    const pathname = window.location.pathname.replace(/\\/+$/, "") || "/";
+    const basePath = (import.meta.env.BASE_URL || "/").replace(/\\/+$/, "");
+    const adminPaths = new Set([
+      "/administrativo",
+      "/administrativo/index.html",
+      `${basePath}/administrativo`,
+      `${basePath}/administrativo/index.html`,
+    ]);
+    if (adminPaths.has(pathname) || new URLSearchParams(window.location.search).get("admin") === "1") {
+      return <AdminPage />;
+    }
+  }
   return <AppErrorBoundary><App/></AppErrorBoundary>;
 }
