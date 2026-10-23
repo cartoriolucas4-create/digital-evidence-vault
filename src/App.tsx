@@ -291,6 +291,10 @@ function AuthScreen({ initialNotice = "" }: { initialNotice?: string }) {
         if (recoveryPassword !== recoveryPasswordConfirm) throw new Error("As senhas não coincidem. Digite-as novamente.");
         const { error: updateError } = await client.auth.updateUser({ password: recoveryPassword });
         if (updateError) throw updateError;
+        // End only the recovery session after the password changes, so the user
+        // lands back on the login form and can enter using the new password.
+        const { error: signOutError } = await client.auth.signOut({ scope: "local" });
+        if (signOutError) throw signOutError;
         setRecoverySent(false);
         setRecoveryVerified(false);
         setRecoveryCode("");
