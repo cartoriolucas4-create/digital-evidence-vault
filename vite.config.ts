@@ -5,17 +5,7 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   base: process.env.GITHUB_ACTIONS ? "/digital-evidence-vault/" : "/",
-  plugins: [
-    tanstackStart(),
-    nitro({
-      output: {
-        dir: "dist",
-        serverDir: "{{ output.dir }}/server",
-        publicDir: "{{ output.dir }}/client",
-      },
-    }),
-    react(),
-  ],
+  plugins: [tanstackStart(), nitro(), react()],
   server: {
     host: true,
   },

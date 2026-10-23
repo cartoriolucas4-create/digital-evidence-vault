@@ -8,5 +8,3 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
-
-- Keep the main Nitro build output in `dist/`, with `server/` and `client/` subdirectories, because the Lovable preview validates and deploys that directory; GitHub Pages retains its separate Vite configuration.
