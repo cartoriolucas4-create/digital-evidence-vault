@@ -4556,7 +4556,8 @@ function PasswordResetScreen() {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
       window.localStorage.removeItem("mcr_recovery_login");
-      window.sessionStorage.removeItem("mcr_valid_password_recovery");
+      // Keep the recovery route active until the user clicks "Voltar ao login".
+      // Otherwise the USER_UPDATED auth event could unmount this success screen.
       setPassword("");
       setConfirmPassword("");
       setStatus("success");
