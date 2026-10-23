@@ -588,21 +588,41 @@ function App() {
 
   useEffect(() => {
     let mounted = true;
-    supabase.auth.getSession().then(({ data, error }) => {
-      if (!mounted) return;
-      if (error) setAuthError(error.message);
-      setSession(data.session);
+    let settled = false;
+    const releaseLoading = (message?: string) => {
+      if (!mounted || settled) return;
+      settled = true;
+      window.clearTimeout(timeout);
+      if (message) setAuthError(message);
       setAuthLoading(false);
-    }).catch((error) => {
-      if (!mounted) return;
-      setAuthError(error instanceof Error ? error.message : "Erro ao carregar a sessão.");
-      setAuthLoading(false);
-    });
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession);
-      setAuthLoading(false);
-    });
-    return () => { mounted = false; listener.subscription.unsubscribe(); };
+    };
+    const timeout = window.setTimeout(() => {
+      releaseLoading("A conexão de autenticação demorou demais. Tente novamente. Seus dados não foram apagados.");
+    }, 8000);
+    try {
+      supabase.auth.getSession().then(({ data, error }) => {
+        if (!mounted) return;
+        if (error) setAuthError(error.message);
+        setSession(data.session);
+        releaseLoading();
+      }).catch((error) => {
+        releaseLoading(error instanceof Error ? error.message : "Não foi possível verificar sua sessão. Tente novamente.");
+      });
+      const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+        if (!mounted) return;
+        setSession(nextSession);
+        setAuthError("");
+        releaseLoading();
+      });
+      return () => {
+        mounted = false;
+        window.clearTimeout(timeout);
+        listener.subscription.unsubscribe();
+      };
+    } catch (error) {
+      releaseLoading(error instanceof Error ? error.message : "Falha ao iniciar autenticação.");
+      return () => { mounted = false; window.clearTimeout(timeout); };
+    }
   }, []);
 
   const exportMonthlyPdf = async () => {
