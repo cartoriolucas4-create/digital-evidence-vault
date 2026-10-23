@@ -252,8 +252,13 @@ function AuthScreen({ initialNotice = "" }: { initialNotice?: string }) {
         redirectUrl.searchParams.set("reset-password", "1");
         redirectUrl.hash = "";
 
+        const recoveryEmail = email.trim().toLowerCase();
+        if (/@gmail\.comr$/i.test(recoveryEmail)) {
+          throw new Error("O e-mail digitado termina em .comr. Confira se o endereço correto termina em .com antes de solicitar a redefinição.");
+        }
+
         const { error: resetError } = await client.auth.resetPasswordForEmail(
-          email.trim().toLowerCase(),
+          recoveryEmail,
           { redirectTo: redirectUrl.toString() }
         );
         if (resetError) throw resetError;
