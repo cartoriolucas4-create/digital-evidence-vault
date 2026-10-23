@@ -69,33 +69,27 @@ export default function AdminPage() {
     // O login administrativo usa diretamente o endpoint REST do PostgREST.
     // Assim evitamos qualquer diferença de tipagem/cache do supabase-js.
     try {
-      // The GitHub Pages workflow is a static build and does not inject
-      // GitHub Actions secrets as VITE_* variables. Use the same public
-      // project configuration as the normal Supabase client.
-      const url = import.meta.env["VITE_SUPABASE_URL"] || "https://gojjlppvdzijujrqsqww.supabase.co";
-      const key = import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"] || "sb_publishable_saC2eSfYJt7LxvJFKgodIw_FQrZUBTS";
-      const controller = new AbortController();
-      const requestTimeout = window.setTimeout(() => controller.abort(), 15000);
+      const url = import.meta.env["VITE_SUPABASE_URL"];
+      const key = import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"];
 
-      let response: Response;
-      try {
-        response = await fetch(`${url}/rest/v1/rpc/admin_login`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "apikey": key,
-            "Accept": "application/json",
-          },
-          body: JSON.stringify({
-            p_username: username.trim(),
-            p_password: password,
-          }),
-          cache: "no-store",
-          signal: controller.signal,
-        });
-      } finally {
-        window.clearTimeout(requestTimeout);
+      if (!url || !key) {
+        setError("Configuração do Supabase ausente nesta publicação.");
+        return;
       }
+
+      const response = await fetch(`${url}/rest/v1/rpc/admin_login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": key,
+          "Accept": "application/json",
+        },
+        body: JSON.stringify({
+          p_username: username.trim(),
+          p_password: password,
+        }),
+        cache: "no-store",
+      });
 
       const raw = await response.text();
       let result: any = null;

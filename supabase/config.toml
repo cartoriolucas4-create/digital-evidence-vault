@@ -1,5 +1,1 @@
-project_id = "gojjlppvdzijujrqsqww"
-
-[auth.email.template.recovery]
-subject = "Seu código temporário para recuperar a senha do MCR"
-content_path = "./supabase/templates/recovery-code.html"
+project_id = "krulxfcxalaxosebmiyh"

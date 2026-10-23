@@ -7,8 +7,8 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
-    <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20261023-2" />
-    <link rel="apple-touch-icon" href="./favicon.svg?v=20261023-2" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=mcr-logo-20260925" />
+    <link rel="apple-touch-icon" href="./favicon.svg?v=mcr-logo-20260925" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -17,24 +17,9 @@
     <meta name="robots" content="noarchive" />
     <title>Central de Desempenho — Concursos</title>
     <meta name="description" content="Controle de questões, desempenho e metas para concursos públicos." />
-    <style>
-      html, body { min-height: 100%; margin: 0; }
-      #startup-fallback { min-height: 100vh; display: grid; place-content: center; padding: 24px; box-sizing: border-box; font: 16px/1.5 system-ui, sans-serif; color: #20202a; text-align: center; }
-      #startup-fallback h1 { margin: 0 0 8px; font-size: 1.25rem; }
-      #startup-fallback p { max-width: 36rem; margin: 0 auto 12px; }
-    </style>
   </head>
   <body>
-    <div id="root"><main id="startup-fallback"><h1>Carregando o MCR…</h1><p>Estamos iniciando o sistema. Se esta mensagem permanecer, o aplicativo não conseguiu iniciar.</p><p>Recarregue esta página. Se continuar, abra o link de diagnóstico na conversa de suporte.</p></main></div>
-    <script>
-      window.setTimeout(function () {
-        var root = document.getElementById("root");
-        var fallback = document.getElementById("startup-fallback");
-        if (root && fallback && fallback.isConnected) {
-          fallback.innerHTML = "<h1>O sistema não conseguiu iniciar</h1><p>Os arquivos do aplicativo não carregaram corretamente. Atualize a página. Se o problema continuar, informe o horário e esta mensagem ao suporte.</p>";
-        }
-      }, 12000);
-    </script>
-    <script type="module" src="./src/main.tsx?v=20261023-02"></script>
+    <div id="root"></div>
+    <script type="module" src="./src/main.tsx?v=fix-20260920-03"></script>
   </body>
 </html>

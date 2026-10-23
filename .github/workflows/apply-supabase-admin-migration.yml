@@ -28,5 +28,5 @@ jobs:
             echo "Missing SUPABASE_ACCESS_TOKEN or SUPABASE_DB_PASSWORD repository secrets."
             exit 1
           fi
-          supabase link --project-ref gojjlppvdzijujrqsqww --password "$SUPABASE_DB_PASSWORD"
+          supabase link --project-ref krulxfcxalaxosebmiyh --password "$SUPABASE_DB_PASSWORD"
           supabase db push

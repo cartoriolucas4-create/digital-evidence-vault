@@ -8,10 +8,6 @@ import type { Session } from "@supabase/supabase-js";
 import { MCR_LOGO } from "./mcrLogo";
 import AdminPage from "./Admin";
 
-// Capture the initial recovery fragment before the Supabase client finishes
-// consuming it from the URL during startup.
-const INITIAL_AUTH_HASH = typeof window !== "undefined" ? window.location.hash : "";
-
 const STORE = {
   disciplines: "dev_disciplines",
   subjects: "dev_subjects",
@@ -229,17 +225,14 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error
   }
 }
 
-function AuthScreen({ initialNotice = "" }: { initialNotice?: string }) {
+function AuthScreen() {
   const [mode, setMode] = useState<"login" | "signup" | "recovery">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [temporaryCode, setTemporaryCode] = useState("");
   const [recoverySent, setRecoverySent] = useState(false);
-  const [recoveryCode, setRecoveryCode] = useState("");
-  const [recoveryVerified, setRecoveryVerified] = useState(false);
-  const [recoveryPassword, setRecoveryPassword] = useState("");
-  const [recoveryPasswordConfirm, setRecoveryPasswordConfirm] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(initialNotice);
+  const [error, setError] = useState("");
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -248,64 +241,25 @@ function AuthScreen({ initialNotice = "" }: { initialNotice?: string }) {
     try {
       const client = supabase;
       if (mode === "recovery") {
-        const recoveryEmail = email.trim().toLowerCase();
-        if (/@gmail\.comr$/i.test(recoveryEmail)) {
-          throw new Error("O e-mail digitado termina em .comr. Confira se o endereço correto termina em .com antes de solicitar a redefinição.");
-        }
-
         if (!recoverySent) {
-          // Password-recovery email is used (not passwordless sign-in OTP).
-          // The Supabase Recovery email template must include {{ .Token }} so
-          // the student receives a recovery code instead of only a generic link.
-          const redirectUrl = new URL(window.location.href);
-          redirectUrl.search = "";
-          redirectUrl.searchParams.set("reset-password", "1");
-          redirectUrl.hash = "";
-          const { error: resetError } = await client.auth.resetPasswordForEmail(
-            recoveryEmail,
-            { redirectTo: redirectUrl.toString() }
-          );
-          if (resetError) throw resetError;
+          const { error: otpError } = await client.auth.signInWithOtp({
+            email: email.trim(),
+            options: { shouldCreateUser: false },
+          });
+          if (otpError) throw otpError;
           setRecoverySent(true);
-          setError("Pedido enviado. Digite o código de recuperação recebido no e-mail. Confira também a caixa de spam.");
-          return;
-        }
-
-        if (!recoveryVerified) {
-          if (!/^\d{6,8}$/.test(recoveryCode.trim())) {
-            throw new Error("Digite o código numérico de recuperação que chegou ao seu e-mail.");
-          }
-          // Mark the in-app recovery route before verifying; verifyOtp creates a
-          // session, and App must keep the user on the password-reset screen.
-          window.sessionStorage.setItem("mcr_valid_password_recovery", "true");
+          setError("Se este e-mail tiver um cadastro no MCR, enviamos um código temporário de acesso. Verifique sua caixa de entrada e o spam.");
+        } else {
           const { data, error: verifyError } = await client.auth.verifyOtp({
-            email: recoveryEmail,
-            token: recoveryCode.trim(),
-            type: "recovery",
+            email: email.trim(),
+            token: temporaryCode.trim(),
+            type: "email",
           });
           if (verifyError) throw verifyError;
-          if (!data.session) throw new Error("O código não criou uma sessão de recuperação. Solicite outro código e tente novamente.");
-          setRecoveryVerified(true);
-          setError("Código confirmado. Agora escolha uma nova senha.");
-          return;
+          if (!data.session) throw new Error("Não foi possível criar a sessão com o código informado.");
+          window.localStorage.setItem("mcr_recovery_login", "true");
+          setError("");
         }
-
-        if (recoveryPassword.length < 6) throw new Error("A nova senha precisa ter pelo menos 6 caracteres.");
-        if (recoveryPassword !== recoveryPasswordConfirm) throw new Error("As senhas não coincidem. Digite-as novamente.");
-        const { error: updateError } = await client.auth.updateUser({ password: recoveryPassword });
-        if (updateError) throw updateError;
-        // End only the recovery session after the password changes, so the user
-        // lands back on the login form and can enter using the new password.
-        const { error: signOutError } = await client.auth.signOut({ scope: "local" });
-        if (signOutError) throw signOutError;
-        setRecoverySent(false);
-        setRecoveryVerified(false);
-        setRecoveryCode("");
-        setRecoveryPassword("");
-        setRecoveryPasswordConfirm("");
-        setMode("login");
-        setPassword("");
-        setError("Senha alterada com sucesso. Entre usando sua nova senha.");
         return;
       }
 
@@ -324,9 +278,6 @@ function AuthScreen({ initialNotice = "" }: { initialNotice?: string }) {
         setError("");
       }
     } catch (err) {
-      if (mode === "recovery" && !recoveryVerified) {
-        window.sessionStorage.removeItem("mcr_valid_password_recovery");
-      }
       const message = err instanceof Error ? err.message : "Não foi possível autenticar.";
       setError(message);
     } finally {
@@ -338,21 +289,15 @@ function AuthScreen({ initialNotice = "" }: { initialNotice?: string }) {
     setMode("recovery");
     setEmail("");
     setPassword("");
+    setTemporaryCode("");
     setRecoverySent(false);
-    setRecoveryVerified(false);
-    setRecoveryCode("");
-    setRecoveryPassword("");
-    setRecoveryPasswordConfirm("");
     setError("");
   };
 
   const backToLogin = () => {
     setMode("login");
+    setTemporaryCode("");
     setRecoverySent(false);
-    setRecoveryVerified(false);
-    setRecoveryCode("");
-    setRecoveryPassword("");
-    setRecoveryPasswordConfirm("");
     setError("");
   };
 
@@ -362,14 +307,10 @@ function AuthScreen({ initialNotice = "" }: { initialNotice?: string }) {
       <p>{mode === "login" ? "Sua preparação para concursos sob controle." : mode === "signup" ? "Crie sua conta com e-mail e senha." : "Recupere o acesso sem apagar sua senha atual."}</p>
       <form onSubmit={submit} className="auth-form">
         <Field label="E-mail"><input required type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="voce@email.com" /></Field>
-        {(mode === "login" || mode === "signup") && <Field label="Senha"><input required minLength={6} type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" /></Field>}
-        {mode === "recovery" && recoverySent && !recoveryVerified && <Field label="Código temporário recebido por e-mail"><input required inputMode="numeric" autoComplete="one-time-code" maxLength={8} pattern="[0-9]{6,8}" value={recoveryCode} onChange={(e) => setRecoveryCode(e.target.value.replace(/\D/g, "").slice(0,8))} placeholder="Digite o código de recuperação" /></Field>}
-        {mode === "recovery" && recoveryVerified && <>
-          <Field label="Nova senha"><input required minLength={6} type="password" autoComplete="new-password" value={recoveryPassword} onChange={(e) => setRecoveryPassword(e.target.value)} placeholder="Pelo menos 6 caracteres" /></Field>
-          <Field label="Confirmar nova senha"><input required minLength={6} type="password" autoComplete="new-password" value={recoveryPasswordConfirm} onChange={(e) => setRecoveryPasswordConfirm(e.target.value)} placeholder="Repita a nova senha" /></Field>
-        </>}
-        {error && <div className={mode === "recovery" && (recoverySent || error.includes("sucesso")) ? "auth-notice" : "auth-error"}>{error}</div>}
-        <button className="btn primary auth-submit" disabled={busy}>{busy ? "Aguarde..." : mode === "login" ? "Entrar" : mode === "signup" ? "Criar conta" : !recoverySent ? "Enviar código temporário" : !recoveryVerified ? "Validar código" : "Salvar nova senha"}</button>
+        {mode !== "recovery" && <Field label="Senha"><input required minLength={6} type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" /></Field>}
+        {mode === "recovery" && recoverySent && <Field label="Senha temporária"><input required inputMode="numeric" autoComplete="one-time-code" maxLength={10} value={temporaryCode} onChange={(e) => setTemporaryCode(e.target.value.replace(/\D/g, ""))} placeholder="Digite o código recebido por e-mail" /></Field>}
+        {error && <div className={mode === "recovery" && recoverySent && !temporaryCode ? "auth-notice" : "auth-error"}>{error}</div>}
+        <button className="btn primary auth-submit" disabled={busy}>{busy ? "Aguarde..." : mode === "login" ? "Entrar" : mode === "signup" ? "Criar conta" : recoverySent ? "Entrar com senha temporária" : "Enviar senha temporária"}</button>
       </form>
 
       {mode === "login" && <button className="auth-switch auth-recovery-link" onClick={openRecovery}>Esqueci minha senha</button>}
@@ -647,60 +588,21 @@ function App() {
 
   useEffect(() => {
     let mounted = true;
-    let listener: ReturnType<typeof supabase.auth.onAuthStateChange>["data"] | undefined;
-    let initialized = false;
-
-    // Give the stored session one chance to resolve, but never leave the user
-    // without the login form. Crucially, subscribe only AFTER getSession finishes:
-    // registering both in the same tick can deadlock some Supabase auth versions
-    // when a stored access token is close to expiry.
-    const timeout = window.setTimeout(() => {
-      if (!mounted || initialized) return;
-      setAuthError("A sessão automática não respondeu. Entre com seu e-mail e senha; seus dados foram preservados.");
-      setAuthLoading(false);
-    }, 3000);
-
-    const initializeAuth = async () => {
-      try {
-        const { data, error } = await supabase.auth.getSession();
-        if (!mounted) return;
-        if (error) setAuthError(error.message);
-        else setAuthError("");
-        setSession(data.session);
-        initialized = true;
-        window.clearTimeout(timeout);
-        setAuthLoading(false);
-      } catch (error) {
-        if (!mounted) return;
-        setAuthError(error instanceof Error ? error.message : "Não foi possível verificar sua sessão. Tente entrar novamente.");
-        initialized = true;
-        window.clearTimeout(timeout);
-        setAuthLoading(false);
-      }
-
+    supabase.auth.getSession().then(({ data, error }) => {
       if (!mounted) return;
-      try {
-        const result = supabase.auth.onAuthStateChange((_event, nextSession) => {
-          if (!mounted) return;
-          setSession(nextSession);
-          setAuthError("");
-          setAuthLoading(false);
-        });
-        listener = result.data;
-      } catch (error) {
-        if (mounted) {
-          setAuthError(error instanceof Error ? error.message : "Não foi possível acompanhar a sessão. Você ainda pode tentar entrar.");
-          setAuthLoading(false);
-        }
-      }
-    };
-
-    void initializeAuth();
-    return () => {
-      mounted = false;
-      window.clearTimeout(timeout);
-      listener?.subscription.unsubscribe();
-    };
+      if (error) setAuthError(error.message);
+      setSession(data.session);
+      setAuthLoading(false);
+    }).catch((error) => {
+      if (!mounted) return;
+      setAuthError(error instanceof Error ? error.message : "Erro ao carregar a sessão.");
+      setAuthLoading(false);
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+      setAuthLoading(false);
+    });
+    return () => { mounted = false; listener.subscription.unsubscribe(); };
   }, []);
 
   const exportMonthlyPdf = async () => {
@@ -2381,11 +2283,9 @@ function App() {
     await savePerformanceNotificationsFallback(next);
   };
 
-  if (authLoading) return <div className="fatal"><div className="fatal-card"><img className="mcr-logo mcr-logo-fatal" src={MCR_LOGO} alt="MCR — Meu Controle de Rendimento" /><p>Preparando seu acesso…</p><p style={{fontSize:12,opacity:0.75}}>Se demorar, o formulário de login será liberado automaticamente.</p></div></div>;
-  if (!session) return <AuthScreen initialNotice={authError} />;
-  if (typeof window !== "undefined" && window.sessionStorage.getItem("mcr_valid_password_recovery") === "true") {
-    return <PasswordResetScreen />;
-  }
+  if (authLoading) return <div className="fatal"><div className="fatal-card"><img className="mcr-logo mcr-logo-fatal" src={MCR_LOGO} alt="MCR — Meu Controle de Rendimento" /><p>Carregando sua sessão…</p></div></div>;
+  if (authError && !session) return <div className="fatal"><div className="fatal-card"><img className="mcr-logo mcr-logo-fatal" src={MCR_LOGO} alt="MCR — Meu Controle de Rendimento" /><p>{authError}</p><button className="btn primary" onClick={() => window.location.reload()}>Tentar novamente</button></div></div>;
+  if (!session) return <AuthScreen />;
 
   return (
     <div className={"app " + (mobileMenuOpen ? "mobile-menu-is-open" : "")}>
@@ -4483,144 +4383,7 @@ function SettingsPage({
   </>;
 }
 
-function PasswordResetScreen() {
-  const [status, setStatus] = useState<"checking" | "ready" | "saving" | "success" | "error">("checking");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [message, setMessage] = useState("Validando o link de recuperação...");
-
-  useEffect(() => {
-    let active = true;
-    const query = new URLSearchParams(window.location.search);
-    const fragment = new URLSearchParams((INITIAL_AUTH_HASH || window.location.hash).replace(/^#/, ""));
-    const isRecoveryLink =
-      fragment.get("type") === "recovery" ||
-      query.has("code") ||
-      window.sessionStorage.getItem("mcr_valid_password_recovery") === "true";
-    const accessToken = fragment.get("access_token");
-    const refreshToken = fragment.get("refresh_token");
-
-    const initialize = async () => {
-      try {
-        if (!isRecoveryLink) {
-          throw new Error("Este link de redefinição não é válido. Volte ao login e solicite um novo e-mail.");
-        }
-
-        const { data, error } = await supabase.auth.getSession();
-        if (error) throw error;
-        let session = data.session;
-
-        // The browser SDK normally consumes the recovery fragment automatically.
-        // If it has not done so yet, establish the session from the recovery tokens.
-        if (!session && accessToken && refreshToken) {
-          const { data: restored, error: restoreError } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken,
-          });
-          if (restoreError) throw restoreError;
-          session = restored.session;
-        }
-
-        if (!session) {
-          throw new Error("O link expirou ou já foi utilizado. Solicite um novo e-mail de recuperação.");
-        }
-        window.sessionStorage.setItem("mcr_valid_password_recovery", "true");
-        if (active) {
-          setStatus("ready");
-          setMessage("Crie sua nova senha. Ela só será alterada depois que você confirmar.");
-        }
-      } catch (error) {
-        if (!active) return;
-        setStatus("error");
-        setMessage(error instanceof Error ? error.message : "Não foi possível validar o link. Solicite outro e-mail.");
-      }
-    };
-
-    void initialize();
-    return () => { active = false; };
-  }, []);
-
-  const submitNewPassword = async (event: FormEvent) => {
-    event.preventDefault();
-    if (password.length < 6) {
-      setMessage("A nova senha precisa ter pelo menos 6 caracteres.");
-      return;
-    }
-    if (password !== confirmPassword) {
-      setMessage("As senhas não coincidem. Confira os dois campos.");
-      return;
-    }
-    setStatus("saving");
-    setMessage("Salvando a nova senha...");
-    try {
-      const { error } = await supabase.auth.updateUser({ password });
-      if (error) throw error;
-      window.localStorage.removeItem("mcr_recovery_login");
-      // Keep the recovery route active until the user clicks "Voltar ao login".
-      // Otherwise the USER_UPDATED auth event could unmount this success screen.
-      setPassword("");
-      setConfirmPassword("");
-      setStatus("success");
-      setMessage("Senha redefinida com sucesso. Agora volte ao login e entre com sua nova senha.");
-    } catch (error) {
-      setStatus("ready");
-      setMessage(error instanceof Error ? error.message : "Não foi possível salvar a nova senha. Solicite outro link e tente novamente.");
-    }
-  };
-
-  const returnToLogin = async () => {
-    window.sessionStorage.removeItem("mcr_valid_password_recovery");
-    try { await supabase.auth.signOut({ scope: "local" }); } catch { /* continue to login */ }
-    const url = new URL(window.location.href);
-    url.search = "";
-    url.hash = "";
-    window.location.replace(url.toString());
-  };
-
-  return <div className="auth-page">
-    <div className="auth-card">
-      <img className="mcr-logo mcr-logo-auth" src={MCR_LOGO} alt="MCR — Meu Controle de Rendimento" />
-      <p>Redefinir sua senha</p>
-      {status === "ready" || status === "saving" ? (
-        <form className="auth-form" onSubmit={submitNewPassword}>
-          <Field label="Nova senha">
-            <input required minLength={6} type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Pelo menos 6 caracteres" />
-          </Field>
-          <Field label="Confirmar nova senha">
-            <input required minLength={6} type="password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Digite a senha novamente" />
-          </Field>
-          <div className={status === "saving" ? "auth-notice" : "auth-error"}>{message}</div>
-          <button className="btn primary auth-submit" disabled={status === "saving"}>{status === "saving" ? "Salvando..." : "Salvar nova senha"}</button>
-        </form>
-      ) : (
-        <>
-          <div className={status === "error" ? "auth-error" : "auth-notice"}>{message}</div>
-          <button className="btn primary auth-submit" onClick={returnToLogin}>{status === "success" ? "Voltar ao login" : "Ir para o login"}</button>
-        </>
-      )}
-    </div>
-  </div>;
-}
-
 export default function RootApp() {
-  if (typeof window !== "undefined") {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("reset-password") === "1") return <PasswordResetScreen />;
-
-    // GitHub Pages project sites include the repository prefix in pathname,
-    // e.g. /digital-evidence-vault/administrativo/. Match the configured Vite
-    // base as well as direct-hosting paths and slash/index variants.
-    const pathname = window.location.pathname.replace(/\/+$/, "") || "/";
-    const basePath = (import.meta.env.BASE_URL || "/").replace(/\/+$/, "");
-    const adminPaths = new Set([
-      "/administrativo",
-      "/administrativo/index.html",
-      `${basePath}/administrativo`,
-      `${basePath}/administrativo/index.html`,
-    ]);
-    if (adminPaths.has(pathname) || new URLSearchParams(window.location.search).get("admin") === "1") {
-      return <AdminPage />;
-    }
-  }
+  if (typeof window !== "undefined" && (window.location.pathname === "/administrativo" || new URLSearchParams(window.location.search).get("admin") === "1")) return <AdminPage />;
   return <AppErrorBoundary><App/></AppErrorBoundary>;
 }

@@ -10,32 +10,18 @@ if (!rootElement) {
   throw new Error("Elemento #root não encontrado.");
 }
 
-// GitHub Pages must always load the newest static bundle. Unregister any
-// previously installed worker for this app so an older deployment cannot
-// keep controlling the page after an update.
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    const appPath = new URL(import.meta.env.BASE_URL || "/", window.location.origin).pathname;
-    navigator.serviceWorker.getRegistrations()
-      .then((registrations) => Promise.all(
-        registrations
-          .filter((registration) => {
-            const scopePath = new URL(registration.scope).pathname;
-            return scopePath === appPath || scopePath.startsWith(appPath);
-          })
-          .map((registration) => registration.unregister()),
-      ))
-      .catch((error) => console.warn("[MCR] Não foi possível limpar o service worker antigo:", error));
+    const baseUrl = import.meta.env.BASE_URL || "/";
+    const swUrl = new URL("sw.js", window.location.origin + baseUrl).toString();
+    navigator.serviceWorker
+      .register(swUrl, {
+        scope: new URL(baseUrl, window.location.origin).pathname,
+        updateViaCache: "none",
+      })
+      .catch((error) => console.warn("MCR Service Worker", error));
   });
 }
-
-// Show a visible diagnostic instead of leaving a blank screen if startup fails.
-window.addEventListener("error", (event) => {
-  console.error("[MCR] Erro de inicialização:", event.error || event.message);
-});
-window.addEventListener("unhandledrejection", (event) => {
-  console.error("[MCR] Falha assíncrona:", event.reason);
-});
 
 createRoot(rootElement).render(
   <StrictMode>

@@ -7,7 +7,7 @@ function isNewSupabaseApiKey(value: string): boolean {
 }
 
 function createSupabaseFetch(supabaseKey: string): typeof fetch {
-  return async (input, init) => {
+  return (input, init) => {
     const headers = new Headers(
       typeof Request !== 'undefined' && input instanceof Request ? input.headers : undefined,
     );
@@ -22,24 +22,7 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
     }
 
     headers.set('apikey', supabaseKey);
-
-    // A stalled auth refresh must not freeze login or data-saving requests forever.
-    // Preserve the caller's abort signal while adding a 15-second network ceiling.
-    const controller = new AbortController();
-    const callerSignal = init?.signal;
-    const abortFromCaller = () => controller.abort(callerSignal?.reason);
-    if (callerSignal?.aborted) abortFromCaller();
-    else callerSignal?.addEventListener('abort', abortFromCaller, { once: true });
-    const timeout = setTimeout(() => {
-      controller.abort(new DOMException('Tempo limite de conexão com o Supabase excedido.', 'TimeoutError'));
-    }, 15000);
-
-    try {
-      return await fetch(input, { ...init, headers, signal: controller.signal });
-    } finally {
-      clearTimeout(timeout);
-      callerSignal?.removeEventListener('abort', abortFromCaller);
-    }
+    return fetch(input, { ...init, headers });
   };
 }
 
@@ -132,10 +115,10 @@ function brokeredPreviewStorage() {
 
 
 function createSupabaseClient() {
-  // This is a static browser build for GitHub Pages, not SSR.
-  // Do not reference process.env: browsers do not define the Node.js process global.
-  const SUPABASE_URL = import.meta.env['VITE_SUPABASE_URL'] || 'https://gojjlppvdzijujrqsqww.supabase.co';
-  const SUPABASE_PUBLISHABLE_KEY = import.meta.env['VITE_SUPABASE_PUBLISHABLE_KEY'] || 'sb_publishable_saC2eSfYJt7LxvJFKgodIw_FQrZUBTS';
+  // Use import.meta.env for client-side (Vite build-time replacement)
+  // Fall back to process.env for SSR (server-side rendering)
+  const SUPABASE_URL = import.meta.env['VITE_SUPABASE_URL'] || process.env['SUPABASE_URL'];
+  const SUPABASE_PUBLISHABLE_KEY = import.meta.env['VITE_SUPABASE_PUBLISHABLE_KEY'] || process.env['SUPABASE_PUBLISHABLE_KEY'];
 
   if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
     const missing = [
