@@ -24,9 +24,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
       - name: Build site
         run: npm run build
       - name: Prepare Pages artifact
@@ -38,14 +37,13 @@ jobs:
           elif [ -d "dist" ]; then
             OUT="dist"
           else
-            echo "Build completed but no static output directory (.output/public or dist) was found."
-            find . -maxdepth 3 -type d \( -name public -o -name dist \) -print
+            echo "No static output directory found."
+            find . -maxdepth 4 -type d \( -name public -o -name dist \) -print
             exit 1
           fi
+          test -f "$OUT/index.html" || { echo "index.html missing from $OUT"; exit 1; }
           touch "$OUT/.nojekyll"
-          if [ -f "$OUT/index.html" ] && [ ! -f "$OUT/404.html" ]; then
-            cp "$OUT/index.html" "$OUT/404.html"
-          fi
+          cp "$OUT/index.html" "$OUT/404.html"
           echo "PAGES_OUTPUT=$OUT" >> "$GITHUB_ENV"
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
