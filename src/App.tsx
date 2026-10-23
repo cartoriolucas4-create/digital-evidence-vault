@@ -275,6 +275,9 @@ function AuthScreen({ initialNotice = "" }: { initialNotice?: string }) {
           if (!/^\d{6,8}$/.test(recoveryCode.trim())) {
             throw new Error("Digite o código numérico de recuperação que chegou ao seu e-mail.");
           }
+          // Mark the in-app recovery route before verifying; verifyOtp creates a
+          // session, and App must keep the user on the password-reset screen.
+          window.sessionStorage.setItem("mcr_valid_password_recovery", "true");
           const { data, error: verifyError } = await client.auth.verifyOtp({
             email: recoveryEmail,
             token: recoveryCode.trim(),
@@ -321,6 +324,9 @@ function AuthScreen({ initialNotice = "" }: { initialNotice?: string }) {
         setError("");
       }
     } catch (err) {
+      if (mode === "recovery" && !recoveryVerified) {
+        window.sessionStorage.removeItem("mcr_valid_password_recovery");
+      }
       const message = err instanceof Error ? err.message : "Não foi possível autenticar.";
       setError(message);
     } finally {
@@ -2377,6 +2383,9 @@ function App() {
 
   if (authLoading) return <div className="fatal"><div className="fatal-card"><img className="mcr-logo mcr-logo-fatal" src={MCR_LOGO} alt="MCR — Meu Controle de Rendimento" /><p>Preparando seu acesso…</p><p style={{fontSize:12,opacity:0.75}}>Se demorar, o formulário de login será liberado automaticamente.</p></div></div>;
   if (!session) return <AuthScreen initialNotice={authError} />;
+  if (typeof window !== "undefined" && window.sessionStorage.getItem("mcr_valid_password_recovery") === "true") {
+    return <PasswordResetScreen />;
+  }
 
   return (
     <div className={"app " + (mobileMenuOpen ? "mobile-menu-is-open" : "")}>
