@@ -229,7 +229,6 @@ function AuthScreen({ initialNotice = "" }: { initialNotice?: string }) {
   const [mode, setMode] = useState<"login" | "signup" | "recovery">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [temporaryCode, setTemporaryCode] = useState("");
   const [recoverySent, setRecoverySent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(initialNotice);
@@ -241,25 +240,23 @@ function AuthScreen({ initialNotice = "" }: { initialNotice?: string }) {
     try {
       const client = supabase;
       if (mode === "recovery") {
-        if (!recoverySent) {
-          const { error: otpError } = await client.auth.signInWithOtp({
-            email: email.trim(),
-            options: { shouldCreateUser: false },
-          });
-          if (otpError) throw otpError;
-          setRecoverySent(true);
-          setError("Se este e-mail tiver um cadastro no MCR, enviamos um código temporário de acesso. Verifique sua caixa de entrada e o spam.");
-        } else {
-          const { data, error: verifyError } = await client.auth.verifyOtp({
-            email: email.trim(),
-            token: temporaryCode.trim(),
-            type: "email",
-          });
-          if (verifyError) throw verifyError;
-          if (!data.session) throw new Error("Não foi possível criar a sessão com o código informado.");
-          window.localStorage.setItem("mcr_recovery_login", "true");
-          setError("");
-        }
+        // Use the dedicated recovery endpoint. signInWithOtp is for passwordless
+        // sign-in and fails when the project's OTP provider is disabled.
+        setRecoverySent(false);
+        const redirectUrl = new URL(window.location.href);
+        redirectUrl.search = "";
+        redirectUrl.searchParams.set("reset-password", "1");
+        redirectUrl.searchParams.set("type", "recovery");
+        redirectUrl.hash = "";
+
+        const { error: resetError } = await client.auth.resetPasswordForEmail(
+          email.trim().toLowerCase(),
+          { redirectTo: redirectUrl.toString() }
+        );
+        if (resetError) throw resetError;
+
+        setRecoverySent(true);
+        setError("Solicitação enviada. Se esse e-mail estiver cadastrado, você receberá uma mensagem com o link para criar uma nova senha. Confira também o spam.");
         return;
       }
 
@@ -289,14 +286,12 @@ function AuthScreen({ initialNotice = "" }: { initialNotice?: string }) {
     setMode("recovery");
     setEmail("");
     setPassword("");
-    setTemporaryCode("");
     setRecoverySent(false);
     setError("");
   };
 
   const backToLogin = () => {
     setMode("login");
-    setTemporaryCode("");
     setRecoverySent(false);
     setError("");
   };
@@ -308,9 +303,8 @@ function AuthScreen({ initialNotice = "" }: { initialNotice?: string }) {
       <form onSubmit={submit} className="auth-form">
         <Field label="E-mail"><input required type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="voce@email.com" /></Field>
         {mode !== "recovery" && <Field label="Senha"><input required minLength={6} type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" /></Field>}
-        {mode === "recovery" && recoverySent && <Field label="Senha temporária"><input required inputMode="numeric" autoComplete="one-time-code" maxLength={10} value={temporaryCode} onChange={(e) => setTemporaryCode(e.target.value.replace(/\D/g, ""))} placeholder="Digite o código recebido por e-mail" /></Field>}
-        {error && <div className={mode === "recovery" && recoverySent && !temporaryCode ? "auth-notice" : "auth-error"}>{error}</div>}
-        <button className="btn primary auth-submit" disabled={busy}>{busy ? "Aguarde..." : mode === "login" ? "Entrar" : mode === "signup" ? "Criar conta" : recoverySent ? "Entrar com senha temporária" : "Enviar senha temporária"}</button>
+        {error && <div className={mode === "recovery" && recoverySent ? "auth-notice" : "auth-error"}>{error}</div>}
+        <button className="btn primary auth-submit" disabled={busy}>{busy ? "Aguarde..." : mode === "login" ? "Entrar" : mode === "signup" ? "Criar conta" : recoverySent ? "Reenviar link de redefinição" : "Enviar link para redefinir senha"}</button>
       </form>
 
       {mode === "login" && <button className="auth-switch auth-recovery-link" onClick={openRecovery}>Esqueci minha senha</button>}
@@ -4421,8 +4415,126 @@ function SettingsPage({
   </>;
 }
 
+function PasswordResetScreen() {
+  const [status, setStatus] = useState<"checking" | "ready" | "saving" | "success" | "error">("checking");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [message, setMessage] = useState("Validando o link de recuperação...");
+
+  useEffect(() => {
+    let active = true;
+    const query = new URLSearchParams(window.location.search);
+    const fragment = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const isRecoveryLink =
+      query.get("type") === "recovery" ||
+      fragment.get("type") === "recovery" ||
+      query.has("code");
+    const accessToken = fragment.get("access_token");
+    const refreshToken = fragment.get("refresh_token");
+
+    const initialize = async () => {
+      try {
+        if (!isRecoveryLink) {
+          throw new Error("Este link de redefinição não é válido. Volte ao login e solicite um novo e-mail.");
+        }
+
+        const { data, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        let session = data.session;
+
+        // The browser SDK normally consumes the recovery fragment automatically.
+        // If it has not done so yet, establish the session from the recovery tokens.
+        if (!session && accessToken && refreshToken) {
+          const { data: restored, error: restoreError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+          if (restoreError) throw restoreError;
+          session = restored.session;
+        }
+
+        if (!session) {
+          throw new Error("O link expirou ou já foi utilizado. Solicite um novo e-mail de recuperação.");
+        }
+        if (active) {
+          setStatus("ready");
+          setMessage("Crie sua nova senha. Ela só será alterada depois que você confirmar.");
+        }
+      } catch (error) {
+        if (!active) return;
+        setStatus("error");
+        setMessage(error instanceof Error ? error.message : "Não foi possível validar o link. Solicite outro e-mail.");
+      }
+    };
+
+    void initialize();
+    return () => { active = false; };
+  }, []);
+
+  const submitNewPassword = async (event: FormEvent) => {
+    event.preventDefault();
+    if (password.length < 6) {
+      setMessage("A nova senha precisa ter pelo menos 6 caracteres.");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setMessage("As senhas não coincidem. Confira os dois campos.");
+      return;
+    }
+    setStatus("saving");
+    setMessage("Salvando a nova senha...");
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) throw error;
+      window.localStorage.removeItem("mcr_recovery_login");
+      setPassword("");
+      setConfirmPassword("");
+      setStatus("success");
+      setMessage("Senha redefinida com sucesso. Agora volte ao login e entre com sua nova senha.");
+    } catch (error) {
+      setStatus("ready");
+      setMessage(error instanceof Error ? error.message : "Não foi possível salvar a nova senha. Solicite outro link e tente novamente.");
+    }
+  };
+
+  const returnToLogin = async () => {
+    try { await supabase.auth.signOut({ scope: "local" }); } catch { /* continue to login */ }
+    const url = new URL(window.location.href);
+    url.search = "";
+    url.hash = "";
+    window.location.replace(url.toString());
+  };
+
+  return <div className="auth-page">
+    <div className="auth-card">
+      <img className="mcr-logo mcr-logo-auth" src={MCR_LOGO} alt="MCR — Meu Controle de Rendimento" />
+      <p>Redefinir sua senha</p>
+      {status === "ready" || status === "saving" ? (
+        <form className="auth-form" onSubmit={submitNewPassword}>
+          <Field label="Nova senha">
+            <input required minLength={6} type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Pelo menos 6 caracteres" />
+          </Field>
+          <Field label="Confirmar nova senha">
+            <input required minLength={6} type="password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Digite a senha novamente" />
+          </Field>
+          <div className={status === "saving" ? "auth-notice" : "auth-error"}>{message}</div>
+          <button className="btn primary auth-submit" disabled={status === "saving"}>{status === "saving" ? "Salvando..." : "Salvar nova senha"}</button>
+        </form>
+      ) : (
+        <>
+          <div className={status === "error" ? "auth-error" : "auth-notice"}>{message}</div>
+          <button className="btn primary auth-submit" onClick={returnToLogin}>{status === "success" ? "Voltar ao login" : "Ir para o login"}</button>
+        </>
+      )}
+    </div>
+  </div>;
+}
+
 export default function RootApp() {
   if (typeof window !== "undefined") {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("reset-password") === "1") return <PasswordResetScreen />;
+
     // GitHub Pages project sites include the repository prefix in pathname,
     // e.g. /digital-evidence-vault/administrativo/. Match the configured Vite
     // base as well as direct-hosting paths and slash/index variants.
