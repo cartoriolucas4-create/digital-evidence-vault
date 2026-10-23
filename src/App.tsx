@@ -588,21 +588,43 @@ function App() {
 
   useEffect(() => {
     let mounted = true;
-    supabase.auth.getSession().then(({ data, error }) => {
+    let authStateObserved = false;
+
+    // Never leave the entire app stuck on the session splash screen if Cloud
+    // is paused or the auth endpoint is unreachable. The login form can still
+    // render and show the real error when the user submits credentials.
+    const authTimeout = window.setTimeout(() => {
       if (!mounted) return;
-      if (error) setAuthError(error.message);
-      setSession(data.session);
+      console.warn("MCR: session check timed out; showing login screen.");
       setAuthLoading(false);
-    }).catch((error) => {
-      if (!mounted) return;
-      setAuthError(error instanceof Error ? error.message : "Erro ao carregar a sessão.");
-      setAuthLoading(false);
-    });
+    }, 5000);
+
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      authStateObserved = true;
       setSession(nextSession);
       setAuthLoading(false);
     });
-    return () => { mounted = false; listener.subscription.unsubscribe(); };
+
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (!mounted) return;
+      window.clearTimeout(authTimeout);
+      if (error) console.warn("MCR: unable to restore existing session:", error.message);
+      // A login event may have completed while the initial session check was
+      // slow. Do not overwrite the newer auth state with an older result.
+      if (!authStateObserved) setSession(data.session);
+      setAuthLoading(false);
+    }).catch((error) => {
+      if (!mounted) return;
+      window.clearTimeout(authTimeout);
+      console.warn("MCR: failed to restore session:", error);
+      setAuthLoading(false);
+    });
+
+    return () => {
+      mounted = false;
+      window.clearTimeout(authTimeout);
+      listener.subscription.unsubscribe();
+    };
   }, []);
 
   const exportMonthlyPdf = async () => {
