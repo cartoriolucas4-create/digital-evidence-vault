@@ -1,0 +1,29 @@
+name: Temporary MCR auth endpoint check
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/temporary-auth-endpoint-check.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  endpoint-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check public auth endpoint reachability (no credentials)
+        shell: bash
+        run: |
+          set +e
+          for project in krulxfcxalaxosebmiyh gojjlppvdzijujrqsqww; do
+            body="$(mktemp)"
+            status="$(curl --silent --show-error --location --connect-timeout 8 --max-time 15 -o "$body" -w '%{http_code}' "https://${project}.supabase.co/auth/v1/settings" 2>/tmp/curl-error)"
+            result=$?
+            echo "PROJECT_REF=${project} HTTP_STATUS=${status:-000} CURL_EXIT=${result}"
+            if [ "$result" -ne 0 ]; then cat /tmp/curl-error; fi
+            head -c 180 "$body" | tr '\n' ' '
+            echo
+            rm -f "$body"
+          done
