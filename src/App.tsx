@@ -225,14 +225,14 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error
   }
 }
 
-function AuthScreen() {
+function AuthScreen({ initialNotice = "" }: { initialNotice?: string }) {
   const [mode, setMode] = useState<"login" | "signup" | "recovery">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [temporaryCode, setTemporaryCode] = useState("");
   const [recoverySent, setRecoverySent] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(initialNotice);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -597,8 +597,8 @@ function App() {
       setAuthLoading(false);
     };
     const timeout = window.setTimeout(() => {
-      releaseLoading("A conexão de autenticação demorou demais. Tente novamente. Seus dados não foram apagados.");
-    }, 8000);
+      releaseLoading("Não foi possível recuperar a sessão automaticamente. Entre com seu e-mail e senha. Seus dados dos alunos foram preservados.");
+    }, 3000);
     try {
       supabase.auth.getSession().then(({ data, error }) => {
         if (!mounted) return;
@@ -2303,9 +2303,8 @@ function App() {
     await savePerformanceNotificationsFallback(next);
   };
 
-  if (authLoading) return <div className="fatal"><div className="fatal-card"><img className="mcr-logo mcr-logo-fatal" src={MCR_LOGO} alt="MCR — Meu Controle de Rendimento" /><p>Carregando sua sessão…</p></div></div>;
-  if (authError && !session) return <div className="fatal"><div className="fatal-card"><img className="mcr-logo mcr-logo-fatal" src={MCR_LOGO} alt="MCR — Meu Controle de Rendimento" /><p>{authError}</p><button className="btn primary" onClick={() => window.location.reload()}>Tentar novamente</button></div></div>;
-  if (!session) return <AuthScreen />;
+  if (authLoading) return <div className="fatal"><div className="fatal-card"><img className="mcr-logo mcr-logo-fatal" src={MCR_LOGO} alt="MCR — Meu Controle de Rendimento" /><p>Preparando seu acesso…</p><p style={{fontSize:12,opacity:0.75}}>Se demorar, o formulário de login será liberado automaticamente.</p></div></div>;
+  if (!session) return <AuthScreen initialNotice={authError} />;
 
   return (
     <div className={"app " + (mobileMenuOpen ? "mobile-menu-is-open" : "")}>
