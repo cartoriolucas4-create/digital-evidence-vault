@@ -8,6 +8,10 @@ import type { Session } from "@supabase/supabase-js";
 import { MCR_LOGO } from "./mcrLogo";
 import AdminPage from "./Admin";
 
+// Capture the initial recovery fragment before the Supabase client finishes
+// consuming it from the URL during startup.
+const INITIAL_AUTH_HASH = typeof window !== "undefined" ? window.location.hash : "";
+
 const STORE = {
   disciplines: "dev_disciplines",
   subjects: "dev_subjects",
@@ -246,7 +250,6 @@ function AuthScreen({ initialNotice = "" }: { initialNotice?: string }) {
         const redirectUrl = new URL(window.location.href);
         redirectUrl.search = "";
         redirectUrl.searchParams.set("reset-password", "1");
-        redirectUrl.searchParams.set("type", "recovery");
         redirectUrl.hash = "";
 
         const { error: resetError } = await client.auth.resetPasswordForEmail(
@@ -4424,11 +4427,11 @@ function PasswordResetScreen() {
   useEffect(() => {
     let active = true;
     const query = new URLSearchParams(window.location.search);
-    const fragment = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const fragment = new URLSearchParams((INITIAL_AUTH_HASH || window.location.hash).replace(/^#/, ""));
     const isRecoveryLink =
-      query.get("type") === "recovery" ||
       fragment.get("type") === "recovery" ||
-      query.has("code");
+      query.has("code") ||
+      window.sessionStorage.getItem("mcr_valid_password_recovery") === "true";
     const accessToken = fragment.get("access_token");
     const refreshToken = fragment.get("refresh_token");
 
@@ -4456,6 +4459,7 @@ function PasswordResetScreen() {
         if (!session) {
           throw new Error("O link expirou ou já foi utilizado. Solicite um novo e-mail de recuperação.");
         }
+        window.sessionStorage.setItem("mcr_valid_password_recovery", "true");
         if (active) {
           setStatus("ready");
           setMessage("Crie sua nova senha. Ela só será alterada depois que você confirmar.");
@@ -4487,6 +4491,7 @@ function PasswordResetScreen() {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
       window.localStorage.removeItem("mcr_recovery_login");
+      window.sessionStorage.removeItem("mcr_valid_password_recovery");
       setPassword("");
       setConfirmPassword("");
       setStatus("success");
@@ -4498,6 +4503,7 @@ function PasswordResetScreen() {
   };
 
   const returnToLogin = async () => {
+    window.sessionStorage.removeItem("mcr_valid_password_recovery");
     try { await supabase.auth.signOut({ scope: "local" }); } catch { /* continue to login */ }
     const url = new URL(window.location.href);
     url.search = "";
