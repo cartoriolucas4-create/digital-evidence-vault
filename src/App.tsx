@@ -588,41 +588,60 @@ function App() {
 
   useEffect(() => {
     let mounted = true;
-    let settled = false;
-    const releaseLoading = (message?: string) => {
-      if (!mounted || settled) return;
-      settled = true;
-      window.clearTimeout(timeout);
-      if (message) setAuthError(message);
-      setAuthLoading(false);
-    };
+    let listener: ReturnType<typeof supabase.auth.onAuthStateChange>["data"] | undefined;
+    let initialized = false;
+
+    // Give the stored session one chance to resolve, but never leave the user
+    // without the login form. Crucially, subscribe only AFTER getSession finishes:
+    // registering both in the same tick can deadlock some Supabase auth versions
+    // when a stored access token is close to expiry.
     const timeout = window.setTimeout(() => {
-      releaseLoading("Não foi possível recuperar a sessão automaticamente. Entre com seu e-mail e senha. Seus dados dos alunos foram preservados.");
+      if (!mounted || initialized) return;
+      setAuthError("A sessão automática não respondeu. Entre com seu e-mail e senha; seus dados foram preservados.");
+      setAuthLoading(false);
     }, 3000);
-    try {
-      supabase.auth.getSession().then(({ data, error }) => {
+
+    const initializeAuth = async () => {
+      try {
+        const { data, error } = await supabase.auth.getSession();
         if (!mounted) return;
         if (error) setAuthError(error.message);
+        else setAuthError("");
         setSession(data.session);
-        releaseLoading();
-      }).catch((error) => {
-        releaseLoading(error instanceof Error ? error.message : "Não foi possível verificar sua sessão. Tente novamente.");
-      });
-      const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-        if (!mounted) return;
-        setSession(nextSession);
-        setAuthError("");
-        releaseLoading();
-      });
-      return () => {
-        mounted = false;
+        initialized = true;
         window.clearTimeout(timeout);
-        listener.subscription.unsubscribe();
-      };
-    } catch (error) {
-      releaseLoading(error instanceof Error ? error.message : "Falha ao iniciar autenticação.");
-      return () => { mounted = false; window.clearTimeout(timeout); };
-    }
+        setAuthLoading(false);
+      } catch (error) {
+        if (!mounted) return;
+        setAuthError(error instanceof Error ? error.message : "Não foi possível verificar sua sessão. Tente entrar novamente.");
+        initialized = true;
+        window.clearTimeout(timeout);
+        setAuthLoading(false);
+      }
+
+      if (!mounted) return;
+      try {
+        const result = supabase.auth.onAuthStateChange((_event, nextSession) => {
+          if (!mounted) return;
+          setSession(nextSession);
+          setAuthError("");
+          setAuthLoading(false);
+        });
+        listener = result.data;
+      } catch (error) {
+        if (mounted) {
+          setAuthError(error instanceof Error ? error.message : "Não foi possível acompanhar a sessão. Você ainda pode tentar entrar.");
+          setAuthLoading(false);
+        }
+      }
+    };
+
+    void initializeAuth();
+    return () => {
+      mounted = false;
+      window.clearTimeout(timeout);
+      listener?.subscription.unsubscribe();
+    };
   }, []);
 
   const exportMonthlyPdf = async () => {
